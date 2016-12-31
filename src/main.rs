@@ -56,18 +56,18 @@ impl Tuple for SimpleTuple {
 }
 
 /// dumb
-trait DataSource {
-    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>>;
-}
-
-struct CsvDataSource {
-}
-
-impl DataSource for CsvDataSource {
-    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>> {
-        Err(From::from("not implemented yet"))
-    }
-}
+//trait DataSource {
+//    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>>;
+//}
+//
+//struct CsvDataSource {
+//}
+//
+//impl DataSource for CsvDataSource {
+//    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>> {
+//        Err(From::from("not implemented yet"))
+//    }
+//}
 
 #[derive(Debug)]
 enum Operator {
@@ -121,14 +121,13 @@ fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std
 
 fn main() {
 
+    // define schema for data source (csv file)
     let tt = TupleType {
         columns: vec![
             ColumnMeta { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
             ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
         ]
     };
-
-    println!("Tuple type: {:?}", tt);
 
     // create simple filter expression for "id = 2"
     let filter_expr = Expr::BinaryExpr {
@@ -137,27 +136,24 @@ fn main() {
         right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
     };
 
-    println!("Expression: {:?}", filter_expr);
-
     // execute scan with filter expr against csv file
     let mut rdr = csv::Reader::from_file("people.csv").unwrap();
     let mut records = rdr.records();
 
-    // <Option<Result<Vec<String>>>
+    // iterate over data
     while let Some(row) = records.next() {
         let data : Vec<String> = row.unwrap();
         println!("Row: {:?}", data);
 
-        // for now, do an expensive translation of strings to the specific tuple type
+        // for now, do an expensive translation of strings to the specific tuple type for
+        // every single column
         let mut converted : Vec<Value> = vec![];
-
         for i in 0..data.len() {
             converted.push(match tt.columns[i].data_type {
                     DataType::UnsignedLong => Value::UnsignedLong(data[i].parse::<u64>().unwrap()),
                     DataType::String => Value::String(data[i].clone()),
             });
         }
-
         let tuple = SimpleTuple { values: converted };
 
         let is_match = evaluate(&tuple, &tt, &filter_expr).unwrap();
