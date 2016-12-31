@@ -25,7 +25,7 @@ struct TupleType {
 }
 
 /// Value holder for all supported data types
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,PartialOrd)]
 enum Value {
     UnsignedLong(u64),
     String(String),
@@ -72,33 +72,30 @@ enum Expr {
     BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
 }
 
-#[derive(Debug)]
-enum PlanNode {
+//#[derive(Debug)]
+//enum PlanNode {
 //    TableScan,
 //    IndexScan,
-    Filter(Expr),
+//    Filter(Expr),Expr
 //    Sort,
 //    Project,
 //    Join
-}
+//}
 
 fn evaluate(tuple: &Box<Tuple>, tt: &TupleType, expr: &Expr) -> Result<Value, Box<Error>> {
 
     match expr {
         &Expr::BinaryExpr { box ref left, ref op, box ref right } => {
+            //TODO: remove use of unwrap() here
             let left_value = evaluate(tuple, tt, left).unwrap();
             let right_value = evaluate(tuple, tt, right).unwrap();
             match op {
-                &Operator::Eq => {
-                    match left_value {
-                        Value::UnsignedLong(l) => match right_value {
-                            Value::UnsignedLong(r) => Ok(Value::Boolean(l == r)),
-                            _ => Err(From::from("oops"))
-                        },
-                        _ => Err(From::from("oops"))
-                    }
-                },
-                _ => Err(From::from("oops"))
+                &Operator::Eq => Ok(Value::Boolean(left_value == right_value)),
+                &Operator::NotEq => Ok(Value::Boolean(left_value != right_value)),
+                &Operator::Lt => Ok(Value::Boolean(left_value < right_value)),
+                &Operator::LtEq => Ok(Value::Boolean(left_value <= right_value)),
+                &Operator::Gt => Ok(Value::Boolean(left_value > right_value)),
+                &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
             }
         },
         &Expr::TupleValue(index) => tuple.get_value(index),
@@ -124,17 +121,17 @@ fn main() {
     ];
 
     // create simple filter expression for "id = 2"
-    let filterExpr = Expr::BinaryExpr {
+    let filter_expr = Expr::BinaryExpr {
         left: Box::new(Expr::TupleValue(0)),
         op: Operator::Eq,
         right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
     };
 
-    println!("Expression: {:?}", filterExpr);
+    println!("Expression: {:?}", filter_expr);
 
     // iterate over tuples and evaluate the expression
     for tuple in &data {
-        let x = evaluate(tuple, &tt, &filterExpr).unwrap();
+        let x = evaluate(tuple, &tt, &filter_expr).unwrap();
 
         println!("filter expr evaluates to {:?}", x);
     }
