@@ -2,6 +2,9 @@
 
 use std::error::Error;
 
+extern crate csv;
+use csv::{Reader, StringRecords};
+
 /// The data types supported by this database. Currently just u64 and string but others
 /// will be added later, including complex types
 #[derive(Debug,Clone)]
@@ -35,7 +38,7 @@ enum Value {
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
 /// specific implementations for different data sources
 trait Tuple {
-    fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
+    fn get_value(&self, index: usize) -> Result<Value, Box<std::error::Error>>;
 }
 
 /// A simple tuple implementation for testing and initial prototyping
@@ -46,10 +49,24 @@ struct SimpleTuple {
 
 impl Tuple for SimpleTuple {
 
-    fn get_value(&self, index: usize) -> Result<Value, Box<Error>> {
+    fn get_value(&self, index: usize) -> Result<Value, Box<std::error::Error>> {
         Ok(self.values[index].clone())
     }
 
+}
+
+/// dumb
+trait DataSource {
+    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>>;
+}
+
+struct CsvDataSource {
+}
+
+impl DataSource for CsvDataSource {
+    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>> {
+        Err(From::from("not implemented yet"))
+    }
 }
 
 #[derive(Debug)]
@@ -72,17 +89,15 @@ enum Expr {
     BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
 }
 
-//#[derive(Debug)]
-//enum PlanNode {
-//    TableScan,
-//    IndexScan,
-//    Filter(Expr),Expr
-//    Sort,
-//    Project,
-//    Join
-//}
+/// Query plan
+#[derive(Debug)]
+enum PlanNode {
+    TableScan,
+    Filter(Expr),
+    Project(Vec<Expr>),
+}
 
-fn evaluate(tuple: &Box<Tuple>, tt: &TupleType, expr: &Expr) -> Result<Value, Box<Error>> {
+fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std::error::Error>> {
 
     match expr {
         &Expr::BinaryExpr { box ref left, ref op, box ref right } => {
@@ -115,11 +130,6 @@ fn main() {
 
     println!("Tuple type: {:?}", tt);
 
-    let data : Vec<Box<Tuple>> = vec![
-        Box::new(SimpleTuple { values: vec![ Value::UnsignedLong(1), Value::String(String::from("Alice")) ] }),
-        Box::new(SimpleTuple { values: vec![ Value::UnsignedLong(2), Value::String(String::from("Bob")) ] }),
-    ];
-
     // create simple filter expression for "id = 2"
     let filter_expr = Expr::BinaryExpr {
         left: Box::new(Expr::TupleValue(0)),
@@ -129,11 +139,29 @@ fn main() {
 
     println!("Expression: {:?}", filter_expr);
 
-    // iterate over tuples and evaluate the expression
-    for tuple in &data {
-        let x = evaluate(tuple, &tt, &filter_expr).unwrap();
+    // execute scan with filter expr against csv file
+    let mut rdr = csv::Reader::from_file("people.csv").unwrap();
+    let mut records = rdr.records();
 
-        println!("filter expr evaluates to {:?}", x);
+    // <Option<Result<Vec<String>>>
+    while let Some(row) = records.next() {
+        let data : Vec<String> = row.unwrap();
+        println!("Row: {:?}", data);
+
+        // for now, do an expensive translation of strings to the specific tuple type
+        let mut converted : Vec<Value> = vec![];
+
+        for i in 0..data.len() {
+            converted.push(match tt.columns[i].data_type {
+                    DataType::UnsignedLong => Value::UnsignedLong(data[i].parse::<u64>().unwrap()),
+                    DataType::String => Value::String(data[i].clone()),
+            });
+        }
+
+        let tuple = SimpleTuple { values: converted };
+
+        let is_match = evaluate(&tuple, &tt, &filter_expr).unwrap();
+        println!("filter expr evaluates to {:?}", is_match);
     }
 
 }
