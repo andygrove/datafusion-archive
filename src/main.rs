@@ -2,24 +2,29 @@
 
 use std::error::Error;
 
-#[derive(Debug)]
+/// The data types supported by this database. Currently just u64 and string but others
+/// will be added later, including complex types
+#[derive(Debug,Clone)]
 enum DataType {
     UnsignedLong,
     String
 }
 
-#[derive(Debug)]
-struct ColumnType {
+/// Definition of a column in a relation (data set).
+#[derive(Debug,Clone)]
+struct ColumnMeta {
     name: String,
     data_type: DataType,
     nullable: bool
 }
 
-#[derive(Debug)]
+/// Definition of a relation (data set) consisting of one or more columns.
+#[derive(Debug,Clone)]
 struct TupleType {
-    columns: Vec<ColumnType>
+    columns: Vec<ColumnMeta>
 }
 
+/// Value holder for all supported data types
 #[derive(Debug,Clone)]
 enum Value {
     UnsignedLong(u64),
@@ -27,11 +32,13 @@ enum Value {
     Boolean(bool)
 }
 
-/// The tuple trait provides type-safe access to individual values within the tuple
+/// A tuple represents one row within a relation and is implemented as a trait to allow for
+/// specific implementations for different data sources
 trait Tuple {
     fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
 }
 
+/// A simple tuple implementation for testing and initial prototyping
 #[derive(Debug)]
 struct SimpleTuple {
     values: Vec<Value>
@@ -45,6 +52,7 @@ impl Tuple for SimpleTuple {
 
 }
 
+#[derive(Debug)]
 enum Operator {
     Eq,
     NotEq,
@@ -54,6 +62,7 @@ enum Operator {
     GtEq,
 }
 
+#[derive(Debug)]
 enum Expr {
     /// index into a value within the tuple
     TupleValue(usize),
@@ -63,6 +72,7 @@ enum Expr {
     BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
 }
 
+#[derive(Debug)]
 enum PlanNode {
 //    TableScan,
 //    IndexScan,
@@ -101,8 +111,8 @@ fn main() {
 
     let tt = TupleType {
         columns: vec![
-            ColumnType { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
-            ColumnType { name: String::from("name"), data_type: DataType::String, nullable: false }
+            ColumnMeta { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
+            ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
         ]
     };
 
@@ -113,20 +123,20 @@ fn main() {
         Box::new(SimpleTuple { values: vec![ Value::UnsignedLong(2), Value::String(String::from("Bob")) ] }),
     ];
 
-    // create simple filter expression
+    // create simple filter expression for "id = 2"
     let filterExpr = Expr::BinaryExpr {
         left: Box::new(Expr::TupleValue(0)),
         op: Operator::Eq,
         right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
     };
 
-    //let plan = PlanNode::Filter(filterExpr);
+    println!("Expression: {:?}", filterExpr);
 
-    // iterate over tuples and evaluate the plan
+    // iterate over tuples and evaluate the expression
     for tuple in &data {
         let x = evaluate(tuple, &tt, &filterExpr).unwrap();
 
-        print!("filter expr evaluates to {:?}", x);
+        println!("filter expr evaluates to {:?}", x);
     }
 
 }
