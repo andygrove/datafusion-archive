@@ -56,6 +56,13 @@ impl Tuple for SimpleTuple {
 
 }
 
+fn print_tuple(tuple_type: &TupleType, tuple: &Tuple) {
+    for i in 0..tuple_type.columns.len() {
+        print!("{:?}", tuple.get_value(i));
+    }
+    println!();
+}
+
 #[derive(Debug)]
 enum Operator {
     Eq,
@@ -111,23 +118,41 @@ trait TupleConsumer {
 }
 
 struct DebugConsumer {
+    tuple_type: TupleType,
 }
 
 impl TupleConsumer for DebugConsumer {
     fn process(&self, tuple: &Tuple) {
-        //println!("Tuple: {:?}", tuple);
+        print_tuple(&self.tuple_type, tuple);
     }
 }
 
-struct FilterConsumer {
+struct FilterConsumer<'a> {
     tuple_type: TupleType,
-    filter_expr: Expr
+    filter_expr: Expr,
+    next_consumer: Option<&'a TupleConsumer>
 }
 
-impl TupleConsumer for FilterConsumer {
+impl<'a> TupleConsumer for FilterConsumer<'a> {
     fn process(&self, tuple: &Tuple) {
         let x = evaluate(tuple, &self.tuple_type, &self.filter_expr);
         println!("Filter expr evaluates to {:?}", x);
+
+        match x {
+            Ok(v) => match v {
+                Value::Boolean(b) => {
+                    if (b) {
+                        match self.next_consumer {
+                            Some(c) => c.process(tuple),
+                            None => {}
+                        }
+                    }
+                },
+                _ => {}
+            },
+            _ => {}
+        }
+
     }
 }
 
@@ -139,23 +164,17 @@ struct CsvRelation {
     filename: String,
     tuple_type: TupleType,
     reader: csv::Reader<File>,
-    //records: Option<csv::StringRecords<'a, File>>
 }
 
 impl CsvRelation {
     fn open(filename: String, tuple_type: TupleType) -> Self {
-        let mut rdr = csv::Reader::from_file(&filename).unwrap();
+        let rdr = csv::Reader::from_file(&filename).unwrap();
         CsvRelation {
             filename: filename,
             tuple_type: tuple_type,
             reader: rdr,
-            //      records: None,
         }
     }
-
-    //    fn init(&self) {
-    //        self.records = Some(self.reader.records());
-    //    }
 }
 
 impl Relation for CsvRelation {
@@ -205,7 +224,13 @@ fn main() {
         right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
     };
 
-    let filter_consumer = FilterConsumer { tuple_type: tt.clone(), filter_expr: filter_expr };
+    let debug_consumer = DebugConsumer { tuple_type: tt.clone() };
+
+    let filter_consumer = FilterConsumer {
+        tuple_type: tt.clone(),
+        filter_expr: filter_expr,
+        next_consumer: Some(&debug_consumer)
+    };
 
     csv.scan(&filter_consumer);
 }
