@@ -114,20 +114,23 @@ struct CsvRelation<'a> {
     filename: String,
     tuple_type: TupleType,
     reader: csv::Reader<File>,
-    records: csv::StringRecords<'a, File>
+    records: Option<csv::StringRecords<'a, File>>
 }
 
 impl<'a> CsvRelation<'a> {
 
     fn open(filename: String, tuple_type: TupleType) -> Self {
         let mut rdr = csv::Reader::from_file(&filename).unwrap();
-        let records = rdr.records();
         CsvRelation {
             filename: filename,
             tuple_type: tuple_type,
             reader: rdr,
-            records: records,
+            records: None,
         }
+    }
+
+    fn init(&self) {
+        self.records = Some(self.reader.records());
     }
 
 }
