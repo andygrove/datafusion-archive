@@ -135,10 +135,7 @@ struct FilterConsumer<'a> {
 
 impl<'a> TupleConsumer for FilterConsumer<'a> {
     fn process(&self, tuple: &Tuple) {
-        let x = evaluate(tuple, &self.tuple_type, &self.filter_expr);
-        println!("Filter expr evaluates to {:?}", x);
-
-        match x {
+        match evaluate(tuple, &self.tuple_type, &self.filter_expr) {
             Ok(v) => match v {
                 Value::Boolean(b) => {
                     if (b) {
@@ -148,11 +145,11 @@ impl<'a> TupleConsumer for FilterConsumer<'a> {
                         }
                     }
                 },
+                //TODO: this should be an error - filter expressions should return boolean
                 _ => {}
             },
             _ => {}
         }
-
     }
 }
 
