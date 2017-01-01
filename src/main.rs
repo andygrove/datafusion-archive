@@ -1,6 +1,7 @@
 #![feature(box_patterns)]
 
 use std::error::Error;
+use std::fs::File;
 
 extern crate csv;
 use csv::{Reader, StringRecords};
@@ -55,20 +56,6 @@ impl Tuple for SimpleTuple {
 
 }
 
-/// dumb
-//trait DataSource {
-//    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>>;
-//}
-//
-//struct CsvDataSource {
-//}
-//
-//impl DataSource for CsvDataSource {
-//    fn scan(&self) -> Result<Box<Iterator<Item=Tuple>>, Box<Error>> {
-//        Err(From::from("not implemented yet"))
-//    }
-//}
-
 #[derive(Debug)]
 enum Operator {
     Eq,
@@ -92,9 +79,9 @@ enum Expr {
 /// Query plan
 #[derive(Debug)]
 enum PlanNode {
-    TableScan,
-    Filter(Expr),
-    Project(Vec<Expr>),
+    TableScan { schema: String, table: String },
+    Filter { expr: Expr, input: Box<PlanNode> },
+    Project { expr: Vec<Expr>, input: Box<PlanNode> }
 }
 
 fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std::error::Error>> {
@@ -118,6 +105,71 @@ fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std
     }
 
 }
+
+trait Relation {
+    fn next(&self) -> Result<Option<Box<Tuple>>, Box<Error>>;
+}
+
+struct CsvRelation {
+    filename: String,
+    tuple_type: TupleType,
+    reader: csv::Reader<File>,
+//    records: &'a csv::StringRecords
+}
+
+impl CsvRelation {
+
+    fn open(filename: String, tuple_type: TupleType) -> Self {
+        let mut rdr = csv::Reader::from_file(&filename).unwrap();
+        CsvRelation {
+            filename: filename,
+            tuple_type: tuple_type,
+            reader: rdr,
+//            records: &rdr.records()
+        }
+    }
+
+}
+
+//impl Relation for CsvRelation {
+
+//    fn next(&self) -> Result<Option<Box<Tuple>>, Box<Error>> {
+//        match self.records.next() {
+//            Ok(Some(row)) => {
+//                let data: Vec<String> = row.unwrap();
+//                println!("Row: {:?}", data);
+//
+//                // for now, do an expensive translation of strings to the specific tuple type for
+//                // every single column
+//                let mut converted: Vec<Value> = vec![];
+//                for i in 0..data.len() {
+//                    converted.push(match self.tuple_type.columns[i].data_type {
+//                        DataType::UnsignedLong => Value::UnsignedLong(data[i].parse::<u64>().unwrap()),
+//                        DataType::String => Value::String(data[i].clone()),
+//                    });
+//                }
+//                Ok(Some(Box::new(SimpleTuple { values: converted })));
+//            },
+//            Ok(None) => Ok(None),
+//            Err(e) => Err(e)
+//        }
+//        Ok(None)
+//    }
+//}
+
+//fn execute(node: &PlanNode) {
+//    match node {
+//        &PlanNode::TableScan { schema, table } => {
+//
+//        },
+//        &PlanNode::Filter { expr, input } => {
+//
+//        },
+//        &PlanNode::Project { expr, input } => {
+//
+//        }
+//    }
+//}
 
 fn main() {
 
