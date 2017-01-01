@@ -110,22 +110,23 @@ trait Relation {
     fn next(&self) -> Result<Option<Box<Tuple>>, Box<Error>>;
 }
 
-struct CsvRelation {
+struct CsvRelation<'a> {
     filename: String,
     tuple_type: TupleType,
     reader: csv::Reader<File>,
-//    records: &'a csv::StringRecords
+    records: csv::StringRecords<'a, File>
 }
 
-impl CsvRelation {
+impl<'a> CsvRelation<'a> {
 
     fn open(filename: String, tuple_type: TupleType) -> Self {
         let mut rdr = csv::Reader::from_file(&filename).unwrap();
+        let records = rdr.records();
         CsvRelation {
             filename: filename,
             tuple_type: tuple_type,
             reader: rdr,
-//            records: &rdr.records()
+            records: records,
         }
     }
 
