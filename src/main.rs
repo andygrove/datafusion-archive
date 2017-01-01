@@ -106,18 +106,56 @@ fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std
 
 }
 
+trait TupleConsumer {
+    fn process(&self, tuple: &Tuple);
+}
+
+struct DebugConsumer {
+}
+
+impl TupleConsumer for DebugConsumer {
+    fn process(&self, tuple: &Tuple) {
+        //println!("Tuple: {:?}", tuple);
+    }
+}
+
+struct FilterConsumer {
+    tuple_type: TupleType,
+    filter_expr: Expr
+}
+
+impl TupleConsumer for FilterConsumer {
+    fn process(&self, tuple: &Tuple) {
+        let x = evaluate(tuple, &self.tuple_type, &self.filter_expr);
+        println!("Filter expr evaluates to {:?}", x);
+//        match  {
+//            Ok(v) => {
+//                match v {
+//                    Value::
+//                }
+//
+//            },
+//            Err(e) => {
+//
+//            }
+//
+//        }
+
+    }
+}
+
 trait Relation {
     fn next(&self) -> Result<Option<Box<Tuple>>, Box<Error>>;
 }
 
-struct CsvRelation<'a> {
+struct CsvRelation {
     filename: String,
     tuple_type: TupleType,
     reader: csv::Reader<File>,
-    records: Option<csv::StringRecords<'a, File>>
+    //records: Option<csv::StringRecords<'a, File>>
 }
 
-impl<'a> CsvRelation<'a> {
+impl CsvRelation {
 
     fn open(filename: String, tuple_type: TupleType) -> Self {
         let mut rdr = csv::Reader::from_file(&filename).unwrap();
@@ -125,12 +163,35 @@ impl<'a> CsvRelation<'a> {
             filename: filename,
             tuple_type: tuple_type,
             reader: rdr,
-            records: None,
+      //      records: None,
         }
     }
 
-    fn init(&self) {
-        self.records = Some(self.reader.records());
+//    fn init(&self) {
+//        self.records = Some(self.reader.records());
+//    }
+
+    fn scan(&mut self, consumer: &TupleConsumer) {
+        // iterate over data
+        let mut records = self.reader.records();
+        while let Some(row) = records.next() {
+            let data : Vec<String> = row.unwrap();
+
+            // for now, do an expensive translation of strings to the specific tuple type for
+            // every single column
+            let mut converted : Vec<Value> = vec![];
+            for i in 0..data.len() {
+                converted.push(match self.tuple_type.columns[i].data_type {
+                    DataType::UnsignedLong => Value::UnsignedLong(data[i].parse::<u64>().unwrap()),
+                    DataType::String => Value::String(data[i].clone()),
+                });
+            }
+            let tuple = SimpleTuple { values: converted };
+
+            consumer.process(&tuple);
+
+        }
+
     }
 
 }
@@ -192,28 +253,35 @@ fn main() {
         right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
     };
 
+//    let consumer = DebugConsumer {};
+
+    let filter_consumer = FilterConsumer { tuple_type: tt.clone(), filter_expr: filter_expr };
+
+    let mut csv = CsvRelation::open(String::from("people.csv"), tt);
+    csv.scan(&filter_consumer);
+
     // execute scan with filter expr against csv file
-    let mut rdr = csv::Reader::from_file("people.csv").unwrap();
-    let mut records = rdr.records();
-
-    // iterate over data
-    while let Some(row) = records.next() {
-        let data : Vec<String> = row.unwrap();
-        println!("Row: {:?}", data);
-
-        // for now, do an expensive translation of strings to the specific tuple type for
-        // every single column
-        let mut converted : Vec<Value> = vec![];
-        for i in 0..data.len() {
-            converted.push(match tt.columns[i].data_type {
-                    DataType::UnsignedLong => Value::UnsignedLong(data[i].parse::<u64>().unwrap()),
-                    DataType::String => Value::String(data[i].clone()),
-            });
-        }
-        let tuple = SimpleTuple { values: converted };
-
-        let is_match = evaluate(&tuple, &tt, &filter_expr).unwrap();
-        println!("filter expr evaluates to {:?}", is_match);
-    }
-
+//    let mut rdr = csv::Reader::from_file("people.csv").unwrap();
+//    let mut records = rdr.records();
+//
+//    // iterate over data
+//    while let Some(row) = records.next() {
+//        let data : Vec<String> = row.unwrap();
+//        println!("Row: {:?}", data);
+//
+//        // for now, do an expensive translation of strings to the specific tuple type for
+//        // every single column
+//        let mut converted : Vec<Value> = vec![];
+//        for i in 0..data.len() {
+//            converted.push(match tt.columns[i].data_type {
+//                    DataType::UnsignedLong => Value::UnsignedLong(data[i].parse::<u64>().unwrap()),
+//                    DataType::String => Value::String(data[i].clone()),
+//            });
+//        }
+//        let tuple = SimpleTuple { values: converted };
+//
+//        let is_match = evaluate(&tuple, &tt, &filter_expr).unwrap();
+//        println!("filter expr evaluates to {:?}", is_match);
+//    }
+//
 }
