@@ -1,9 +1,11 @@
-# CuckooDB
+# query-planner-rs
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-CuckooDB - because building your own database is crazy!
+This project aims to provide a SQL parser, relational query planner, and query execution in the Rust programming language.
 
-This is a personal research project where I get to experiment with database internals in the Rust programming language.
+The goal is to be able work with any data source by implementing some traits for that data source.
 
-At this time, I have no plans to turn this into an actual product, since the world has enough database products already, but I do expect to produce a fully working SQL database (with extremely limited functionality).
+This is a personal research project and is in a very early stage of development.
+
+This project is very much inspired by Apache Calcite.
