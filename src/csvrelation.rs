@@ -43,7 +43,7 @@ fn create_tuple(v: Vec<String>, types: &Vec<DataType>) -> Tuple {
 
 impl Relation for CsvRelation {
 
-    fn scan(&mut self) -> Box<Iterator<Item=Tuple>> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item=Tuple> + 'a> {
 
         let types : Vec<DataType> = self.tuple_type
             .columns
@@ -54,8 +54,8 @@ impl Relation for CsvRelation {
         let records = self.reader.records();
 
         // create iterator over tuples
-        let tuple_iter = records.map(|x| match x {
-            Ok(v) => create_tuple(v, &types),
+        let tuple_iter = records.map(move |x| match x {
+            Ok(v) => /*create_tuple(v, &types)*/ Value::String(v),
             Err(_) => Tuple { values: vec![] } //TODO: real error handling
         });
 
@@ -63,9 +63,9 @@ impl Relation for CsvRelation {
 //        let data = tuple_iter.collect::<Vec<Tuple>>();
 
         // but I want to return the iterator
-//        Box::new(tuple_iter)
+        Box::new(tuple_iter)
 
-        panic!("")
+//        panic!("")
     }
 
 }
