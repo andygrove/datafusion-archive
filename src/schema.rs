@@ -33,4 +33,17 @@ pub enum Value {
     Boolean(bool)
 }
 
+/// A tuple represents one row within a relation and is implemented as a trait to allow for
+/// specific implementations for different data sources
+//pub trait Tuple {
+//    fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
+//}
+pub struct Tuple<'a> {
+    pub values: &'a Vec<Value>
+}
+
+pub trait Relation {
+    fn scan(&mut self) -> Box<Iterator<Item=Tuple>>;
+}
+
 
