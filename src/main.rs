@@ -9,6 +9,9 @@ use csv::{Reader, StringRecords};
 mod schema;
 use schema::*;
 
+mod plan;
+use plan::*;
+
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
 /// specific implementations for different data sources
 trait Tuple {
@@ -36,33 +39,6 @@ fn print_tuple(tuple_type: &TupleType, tuple: &Tuple) {
     println!();
 }
 
-#[derive(Debug)]
-enum Operator {
-    Eq,
-    NotEq,
-    Lt,
-    LtEq,
-    Gt,
-    GtEq,
-}
-
-#[derive(Debug)]
-enum Expr {
-    /// index into a value within the tuple
-    TupleValue(usize),
-    /// literal value
-    Literal(Value),
-    /// binary expression e.g. "age > 21"
-    BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
-}
-
-/// Query plan
-#[derive(Debug)]
-enum PlanNode {
-    TableScan { schema: String, table: String },
-    Filter { expr: Expr, input: Box<PlanNode> },
-    Project { expr: Vec<Expr>, input: Box<PlanNode> }
-}
 
 fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std::error::Error>> {
 
