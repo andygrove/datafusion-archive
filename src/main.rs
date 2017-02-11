@@ -9,73 +9,11 @@ use schema::*;
 mod plan;
 use plan::*;
 
+mod exec;
+use exec::*;
+
 mod csvrelation;
 use csvrelation::*;
-
-//
-//
-//fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std::error::Error>> {
-//
-//    match expr {
-//        &Expr::BinaryExpr { box ref left, ref op, box ref right } => {
-//            //TODO: remove use of unwrap() here
-//            let left_value = evaluate(tuple, tt, left).unwrap();
-//            let right_value = evaluate(tuple, tt, right).unwrap();
-//            match op {
-//                &Operator::Eq => Ok(Value::Boolean(left_value == right_value)),
-//                &Operator::NotEq => Ok(Value::Boolean(left_value != right_value)),
-//                &Operator::Lt => Ok(Value::Boolean(left_value < right_value)),
-//                &Operator::LtEq => Ok(Value::Boolean(left_value <= right_value)),
-//                &Operator::Gt => Ok(Value::Boolean(left_value > right_value)),
-//                &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
-//            }
-//        },
-//        &Expr::TupleValue(index) => tuple.get_value(index),
-//        &Expr::Literal(ref value) => Ok(value.clone()),
-//    }
-//
-//}
-//
-//trait TupleConsumer {
-//    fn process(&self, tuple: &Tuple);
-//}
-//
-//struct DebugConsumer {
-//    tuple_type: TupleType,
-//}
-//
-//impl TupleConsumer for DebugConsumer {
-//    fn process(&self, tuple: &Tuple) {
-//        print_tuple(&self.tuple_type, tuple);
-//    }
-//}
-//
-//struct FilterConsumer<'a> {
-//    tuple_type: TupleType,
-//    filter_expr: Expr,
-//    next_consumer: Option<&'a TupleConsumer>
-//}
-//
-//impl<'a> TupleConsumer for FilterConsumer<'a> {
-//    fn process(&self, tuple: &Tuple) {
-//        match evaluate(tuple, &self.tuple_type, &self.filter_expr) {
-//            Ok(v) => match v {
-//                Value::Boolean(b) => {
-//                    if (b) {
-//                        match self.next_consumer {
-//                            Some(c) => c.process(tuple),
-//                            None => {}
-//                        }
-//                    }
-//                },
-//                //TODO: this should be an error - filter expressions should return boolean
-//                _ => {}
-//            },
-//            _ => {}
-//        }
-//    }
-//}
-
 
 fn main() {
 
@@ -90,26 +28,22 @@ fn main() {
     // open csv file
     let mut csv = CsvRelation::open(String::from("people.csv"), tt.clone());
 
+    // create simple filter expression for "id = 2"
+    let filter_expr = Expr::BinaryExpr {
+        left: Box::new(Expr::TupleValue(0)),
+        op: Operator::Eq,
+        right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
+    };
+
+    // get iterator over data
     let mut it = csv.scan();
 
+    // filter out rows matching the predicate
     while let Some(t) = it.next() {
-        println!("{:?}", t);
+        match evaluate(&t, &tt, &filter_expr) {
+            Ok(Value::Boolean(true)) => println!("{:?}", t),
+            _ => {}
+        }
     }
 
-//    // create simple filter expression for "id = 2"
-//    let filter_expr = Expr::BinaryExpr {
-//        left: Box::new(Expr::TupleValue(0)),
-//        op: Operator::Eq,
-//        right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
-//    };
-//
-//    let debug_consumer = DebugConsumer { tuple_type: tt.clone() };
-//
-//    let filter_consumer = FilterConsumer {
-//        tuple_type: tt.clone(),
-//        filter_expr: filter_expr,
-//        next_consumer: Some(&debug_consumer)
-//    };
-//
-//    csv.scan(&filter_consumer);
 }
