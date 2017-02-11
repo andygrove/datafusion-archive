@@ -10,41 +10,38 @@ use super::schema::*;
 extern crate csv;
 use self::csv::{Reader, StringRecords};
 
-struct CsvRelation {
+struct CsvRelation<'a> {
     filename: String,
     tuple_type: TupleType,
-    reader: csv::Reader<File>,
+    reader: &'a csv::Reader<File>,
 }
 
-impl CsvRelation {
+impl<'a> CsvRelation<'a> {
 
     fn open(filename: String, tuple_type: TupleType) -> Self {
         let rdr = csv::Reader::from_file(&filename).unwrap();
         CsvRelation {
             filename: filename,
             tuple_type: tuple_type,
-            reader: rdr,
+            reader: &rdr,
         }
     }
 
 }
 
-struct CsvIterator<'a> {
-    current_tuple: &'a Tuple
-}
-
-impl<'a> Iterator for CsvIterator<'a> {
-
-    type Item = Tuple;
-
-    fn next(&mut self) -> Option<Self::Item> {
-
-        None
+fn create_tuple(v: Vec<String>, types: &Vec<DataType>) -> Tuple {
+    let mut converted : Vec<Value> = vec![];
+    //TODO: should be able to use zip() instead of a loop
+    for i in 0..v.len() {
+        converted.push(match types[i] {
+            DataType::UnsignedLong => Value::UnsignedLong(v[i].parse::<u64>().unwrap()),
+            DataType::String => Value::String(v[i].clone()),
+        });
     }
-
+    Tuple { values: converted }
 }
 
-impl Relation for CsvRelation {
+impl<'a> Relation for CsvRelation<'a> {
 
     fn scan(&mut self) -> Box<Iterator<Item=Tuple>> {
 
@@ -54,29 +51,14 @@ impl Relation for CsvRelation {
             .map(|c| c.data_type.clone())
             .collect();
 
-        let a = &self.reader.records().map(|x| match x {
-            Ok(stringVec) => {
-                let mut converted : Vec<Value> = vec![];
-                for i in 0..stringVec.len() {
-                    converted.push(match types[i] {
-                        DataType::UnsignedLong => Value::UnsignedLong(stringVec[i].parse::<u64>().unwrap()),
-                        DataType::String => Value::String(stringVec[i].clone()),
-                    });
-                }
-                Tuple { values: converted }
-            },
+        let records = &self.reader.records();
+
+        let tuple_iter = records.map(|x| match x {
+            Ok(v) => create_tuple(v, &types),
             Err(_) => Tuple { values: vec![] }
         });
-        
-        //.collect::<Vec<Tuple>>()
 
-        //let c : &Vec<Tuple> = &a.collect();
-
-
-        // iterate over data
-        //Box::new(it.iter())
-
-        panic!("not implemented")
+        Box::new(tuple_iter)
     }
 
 }
