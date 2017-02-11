@@ -43,8 +43,8 @@ pub struct Tuple {
     pub values: Vec<Value>
 }
 
-pub trait Relation {
-    fn scan(&mut self) -> Box<Iterator<Item=Tuple>>;
+pub trait Relation<'a> {
+    fn scan(&'a mut self) -> Box<Iterator<Item=Tuple> + 'a>;
 }
 
 
