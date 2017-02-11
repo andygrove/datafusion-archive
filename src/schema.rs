@@ -38,8 +38,9 @@ pub enum Value {
 //pub trait Tuple {
 //    fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
 //}
-pub struct Tuple<'a> {
-    pub values: &'a Vec<Value>
+
+pub struct Tuple {
+    pub values: Vec<Value>
 }
 
 pub trait Relation {
