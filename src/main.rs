@@ -6,35 +6,8 @@ use std::fs::File;
 extern crate csv;
 use csv::{Reader, StringRecords};
 
-/// The data types supported by this database. Currently just u64 and string but others
-/// will be added later, including complex types
-#[derive(Debug,Clone)]
-enum DataType {
-    UnsignedLong,
-    String
-}
-
-/// Definition of a column in a relation (data set).
-#[derive(Debug,Clone)]
-struct ColumnMeta {
-    name: String,
-    data_type: DataType,
-    nullable: bool
-}
-
-/// Definition of a relation (data set) consisting of one or more columns.
-#[derive(Debug,Clone)]
-struct TupleType {
-    columns: Vec<ColumnMeta>
-}
-
-/// Value holder for all supported data types
-#[derive(Debug,Clone,PartialEq,PartialOrd)]
-enum Value {
-    UnsignedLong(u64),
-    String(String),
-    Boolean(bool)
-}
+mod schema;
+use schema::*;
 
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
 /// specific implementations for different data sources
