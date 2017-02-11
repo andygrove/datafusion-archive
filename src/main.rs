@@ -13,13 +13,6 @@ mod csvrelation;
 use csvrelation::*;
 
 //
-//fn print_tuple(tuple_type: &TupleType, tuple: &Tuple) {
-//    for i in 0..tuple_type.columns.len() {
-//        print!("{:?}", tuple.get_value(i));
-//    }
-//    println!();
-//}
-//
 //
 //fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<std::error::Error>> {
 //
@@ -94,9 +87,15 @@ fn main() {
         ]
     };
 
-//    // open csv file
-//    let mut csv = CsvRelation::open(String::from("people.csv"), tt.clone());
-//
+    // open csv file
+    let mut csv = CsvRelation::open(String::from("people.csv"), tt.clone());
+
+    let mut it = csv.scan();
+
+    while let Some(t) = it.next() {
+        println!("{:?}", t);
+    }
+
 //    // create simple filter expression for "id = 2"
 //    let filter_expr = Expr::BinaryExpr {
 //        left: Box::new(Expr::TupleValue(0)),

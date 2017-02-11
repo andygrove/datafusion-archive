@@ -39,6 +39,7 @@ pub enum Value {
 //    fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
 //}
 
+#[derive(Debug,Clone)]
 pub struct Tuple {
     pub values: Vec<Value>
 }

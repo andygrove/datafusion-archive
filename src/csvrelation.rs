@@ -10,7 +10,7 @@ use super::schema::*;
 extern crate csv;
 use self::csv::{Reader, StringRecords};
 
-struct CsvRelation {
+pub struct CsvRelation {
     filename: String,
     tuple_type: TupleType,
     reader: csv::Reader<File>,
@@ -18,7 +18,7 @@ struct CsvRelation {
 
 impl CsvRelation {
 
-    fn open(filename: String, tuple_type: TupleType) -> Self {
+    pub fn open(filename: String, tuple_type: TupleType) -> Self {
         let rdr = csv::Reader::from_file(&filename).unwrap();
         CsvRelation {
             filename: filename,
