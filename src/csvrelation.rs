@@ -10,20 +10,20 @@ use super::schema::*;
 extern crate csv;
 use self::csv::{Reader, StringRecords};
 
-struct CsvRelation<'a> {
+struct CsvRelation {
     filename: String,
     tuple_type: TupleType,
-    reader: &'a csv::Reader<File>,
+    reader: csv::Reader<File>,
 }
 
-impl<'a> CsvRelation<'a> {
+impl CsvRelation {
 
     fn open(filename: String, tuple_type: TupleType) -> Self {
         let rdr = csv::Reader::from_file(&filename).unwrap();
         CsvRelation {
             filename: filename,
             tuple_type: tuple_type,
-            reader: &rdr,
+            reader: rdr,
         }
     }
 
@@ -41,7 +41,7 @@ fn create_tuple(v: Vec<String>, types: &Vec<DataType>) -> Tuple {
     Tuple { values: converted }
 }
 
-impl<'a> Relation for CsvRelation<'a> {
+impl Relation for CsvRelation {
 
     fn scan(&mut self) -> Box<Iterator<Item=Tuple>> {
 
@@ -51,14 +51,21 @@ impl<'a> Relation for CsvRelation<'a> {
             .map(|c| c.data_type.clone())
             .collect();
 
-        let records = &self.reader.records();
+        let records = self.reader.records();
 
+        // create iterator over tuples
         let tuple_iter = records.map(|x| match x {
             Ok(v) => create_tuple(v, &types),
-            Err(_) => Tuple { values: vec![] }
+            Err(_) => Tuple { values: vec![] } //TODO: real error handling
         });
 
-        Box::new(tuple_iter)
+        // this works
+//        let data = tuple_iter.collect::<Vec<Tuple>>();
+
+        // but I want to return the iterator
+//        Box::new(tuple_iter)
+
+        panic!("")
     }
 
 }
