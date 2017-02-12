@@ -1,10 +1,10 @@
 use std::error::Error;
 use std::fs::File;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug,Clone,PartialEq)]
 pub enum ASTNode {
     SQLIdentifier{id: String, parts: Vec<String>},
-    SQLBinary{left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode>},
+    SQLBinaryExpr{left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode>},
     SQLNested(Box<ASTNode>),
     SQLUnary{operator: SQLOperator, Rex: Box<ASTNode>},
 //    SQLLiteral(usize),

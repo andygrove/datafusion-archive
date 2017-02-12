@@ -174,7 +174,9 @@ impl Parser {
                 break;
             }
 
-            expr = self.parse_infix(expr, next_precedence)?;
+            if let Some(new_expr) = self.parse_infix(expr.clone(), next_precedence)? {
+                expr = new_expr;
+            }
         }
 
         Ok(expr)
@@ -185,17 +187,30 @@ impl Parser {
             Some(Token::Keyword(k)) => {
                 match k.to_uppercase().as_ref() {
                     "SELECT" => Ok(self.parse_select()?),
-                    _ => Err(ParserError::TokenizerError(
+                    _ => Err(ParserError::ParserError(
                         format!("No prefix parser for keyword {}", k))),
                 }
             },
-            _ => Err(ParserError::TokenizerError(
+            _ => Err(ParserError::ParserError(
                 format!("Prefix parser expected a keyword")))
         }
     }
 
-    fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
-        Err(ParserError::ParserError(String::from("parse_infix() not implemented yet")))
+    fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<Option<ASTNode>, ParserError> {
+        match self.next_token() {
+            Some(tok) => {
+                match tok {
+                    Token::Eq => Ok(Some(ASTNode::SQLBinaryExpr {
+                        left: Box::new(expr),
+                        op: SQLOperator::EQ,
+                        right: Box::new(self.parse_expr(precedence)?)
+                    })),
+                    _ => Err(ParserError::ParserError(
+                        format!("No infix parser for token {:?}", tok))),
+                }
+            },
+            None => Ok(None)
+        }
     }
 
     fn get_precedence(&self, tok: &Token) -> Result<u8, ParserError> {
@@ -204,7 +219,7 @@ impl Parser {
             &Token::Neq | &Token::Gt | & Token::GtEq => Ok(20),
             &Token::Plus | &Token::Minus => Ok(30),
             &Token::Mult | &Token::Div => Ok(40),
-            _ => Err(ParserError::TokenizerError(String::from("invalid token for get_precendence")))
+            _ => Err(ParserError::TokenizerError(String::from("invalid token for get_precedence")))
         }
     }
 
@@ -228,6 +243,12 @@ impl Parser {
     // specific methods
 
     fn parse_select(&self) -> Result<ASTNode, ParserError> {
+
+        //TODO: parse expression list
+        //TODO: parse FROM
+        //TODO: parse relation
+        //TODO: parse WHERE
+
         Ok(ASTNode::SQLSelect {
             projection: vec![],
             selection: None,
