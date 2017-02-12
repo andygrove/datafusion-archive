@@ -9,8 +9,8 @@ use schema::*;
 mod sql;
 use sql::*;
 
-mod plan;
-use plan::*;
+mod rel;
+use rel::*;
 
 mod sqltorel;
 use sqltorel::*;

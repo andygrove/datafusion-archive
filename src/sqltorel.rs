@@ -4,7 +4,7 @@ use std::string::String;
 use std::ops::Deref;
 
 use super::sql::*;
-use super::plan::*;
+use super::rel::*;
 use super::schema::*;
 
 pub struct SqlToRel {
@@ -16,6 +16,7 @@ impl SqlToRel {
     pub fn sql_to_rel(&self, sql: &ASTNode, tt: &TupleType) -> Box<Rel> {
         match sql {
             &ASTNode::SQLSelect { ref projection, .. } => {
+
                 let expr : Vec<Rex> = projection.iter()
                     .map(|e| self.sql_to_rex(&e, tt))
                     .collect();

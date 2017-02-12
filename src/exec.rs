@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs::File;
 
 use super::schema::*;
-use super::plan::*;
+use super::rel::*;
 
 ///// A simple tuple implementation for testing and initial prototyping
 //#[derive(Debug)]
