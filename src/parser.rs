@@ -11,6 +11,7 @@ use super::sql::*;
 //    Where
 //}
 
+#[derive(Debug,Clone)]
 pub enum Token {
     Identifier(String),
     Keyword(String),
@@ -57,4 +58,18 @@ impl Tokenizer {
 
 }
 
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn tokenize_simple_select()  {
+        let sql = String::from("SELECT 1");
+        let mut tokenizer = Tokenizer { query: sql };
+        let tokens = tokenizer.tokenize().unwrap();
+        println!("tokens = {:?}", tokens);
+        assert_eq!(2, tokens.len());
+    }
+}
 
