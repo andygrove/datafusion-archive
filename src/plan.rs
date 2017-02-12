@@ -1,5 +1,3 @@
-#![feature(box_patterns)]
-
 use std::error::Error;
 use std::fs::File;
 
@@ -15,20 +13,22 @@ pub enum Operator {
     GtEq,
 }
 
+/// Relation Expression
 #[derive(Debug)]
-pub enum Expr {
+pub enum Rex {
     /// index into a value within the tuple
     TupleValue(usize),
     /// literal value
     Literal(Value),
     /// binary expression e.g. "age > 21"
-    BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
+    BinaryExpr { left: Box<Rex>, op: Operator, right: Box<Rex> },
 }
 
-/// Query plan
+/// Relations
 #[derive(Debug)]
-pub enum PlanNode {
+pub enum Rel {
     TableScan { schema: String, table: String },
-    Filter { expr: Expr, input: Box<PlanNode> },
-    Project { expr: Vec<Expr>, input: Box<PlanNode> }
+    Filter { Rex: Rex, input: Box<Rel> },
+    Project { Rex: Vec<Rex>, input: Box<Rel> }
 }
+

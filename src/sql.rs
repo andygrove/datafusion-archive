@@ -1,5 +1,3 @@
-#![feature(box_patterns)]
-
 use std::error::Error;
 use std::fs::File;
 
@@ -8,14 +6,13 @@ pub enum ASTNode {
     SQLIdentifier{id: String, parts: Vec<String>},
     SQLBinary{left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode>},
     SQLNested(Box<ASTNode>),
-    SQLUnary{operator: SQLOperator, expr: Box<ASTNode>},
+    SQLUnary{operator: SQLOperator, Rex: Box<ASTNode>},
 //    SQLLiteral(usize),
 //    SQLBoundParam(u32),
-//    SQLAlias{expr: Box<ASTNode>, alias: Box<ASTNode>},
-//    SQLExprList(Vec<ASTNode>),
-//    SQLOrderBy{expr: Box<ASTNode>, is_asc: bool},
+//    SQLAlias{Rex: Box<ASTNode>, alias: Box<ASTNode>},
+//    SQLOrderBy{Rex: Box<ASTNode>, is_asc: bool},
     SQLSelect{
-        expr_list: Box<ASTNode>,
+        projection: Vec<ASTNode>,
         relation: Option<Box<ASTNode>>,
         selection: Option<Box<ASTNode>>,
         order: Option<Box<ASTNode>>,

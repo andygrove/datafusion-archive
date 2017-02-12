@@ -1,5 +1,3 @@
-#![feature(box_patterns)]
-
 use std::error::Error;
 use std::iter::Iterator;
 use std::string::String;

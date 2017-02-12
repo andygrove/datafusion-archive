@@ -12,6 +12,9 @@ use sql::*;
 mod plan;
 use plan::*;
 
+mod sqltorel;
+use sqltorel::*;
+
 mod exec;
 use exec::*;
 
@@ -32,10 +35,10 @@ fn main() {
     let mut csv = CsvRelation::open(String::from("people.csv"), tt.clone());
 
     // create simple filter expression for "id = 2"
-    let filter_expr = Expr::BinaryExpr {
-        left: Box::new(Expr::TupleValue(0)),
+    let filter_expr = Rex::BinaryExpr {
+        left: Box::new(Rex::TupleValue(0)),
         op: Operator::Eq,
-        right: Box::new(Expr::Literal(Value::UnsignedLong(2)))
+        right: Box::new(Rex::Literal(Value::UnsignedLong(2)))
     };
 
     // get iterator over data

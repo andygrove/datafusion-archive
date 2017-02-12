@@ -1,5 +1,3 @@
-#![feature(box_patterns)]
-
 use std::error::Error;
 use std::fs::File;
 

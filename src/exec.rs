@@ -1,5 +1,3 @@
-#![feature(box_patterns)]
-
 use std::error::Error;
 use std::fs::File;
 
@@ -20,10 +18,10 @@ use super::plan::*;
 //
 //}
 
-pub fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box<Error>> {
+pub fn evaluate(tuple: &Tuple, tt: &TupleType, Rex: &Rex) -> Result<Value, Box<Error>> {
 
-    match expr {
-        &Expr::BinaryExpr { box ref left, ref op, box ref right } => {
+    match Rex {
+        &Rex::BinaryExpr { box ref left, ref op, box ref right } => {
             //TODO: remove use of unwrap() here
             let left_value = evaluate(tuple, tt, left).unwrap();
             let right_value = evaluate(tuple, tt, right).unwrap();
@@ -36,8 +34,8 @@ pub fn evaluate(tuple: &Tuple, tt: &TupleType, expr: &Expr) -> Result<Value, Box
                 &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
             }
         },
-        &Expr::TupleValue(index) => Ok(tuple.values[index].clone()),
-        &Expr::Literal(ref value) => Ok(value.clone()),
+        &Rex::TupleValue(index) => Ok(tuple.values[index].clone()),
+        &Rex::Literal(ref value) => Ok(value.clone()),
     }
 
 }
