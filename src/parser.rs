@@ -17,7 +17,22 @@ pub enum Token {
     Keyword(String),
     Operator(String),
     Number(String),
-    Whitespace
+    Comma,
+    Whitespace,
+    Eq,
+    Neq,
+    Lt,
+    Gt,
+    LtEq,
+    GtEq,
+    Plus,
+    Minus,
+    Mult,
+    Div,
+    LParen,
+    RParen,
+
+    //Operator(String)
 }
 
 #[derive(Debug,Clone)]
@@ -83,6 +98,42 @@ impl Tokenizer {
                     }
                     Ok(Some(Token::Number(s)))
                 },
+                // operators
+                '+' => { chars.next(); Ok(Some(Token::Plus)) },
+                '-' => { chars.next(); Ok(Some(Token::Minus)) },
+                '*' => { chars.next(); Ok(Some(Token::Mult)) },
+                '/' => { chars.next(); Ok(Some(Token::Div)) },
+                '=' => { chars.next(); Ok(Some(Token::Eq)) },
+                '<' => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some(&ch) => match ch {
+                            '=' => {
+                                chars.next();
+                                Ok(Some(Token::LtEq))
+                            },
+                            '>' => {
+                                chars.next();
+                                Ok(Some(Token::Neq))
+                            },
+                            _ => Ok(Some(Token::Lt))
+                        },
+                        None => Ok(Some(Token::Lt))
+                    }
+                },
+                '>' => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some(&ch) => match ch {
+                            '=' => {
+                                chars.next();
+                                Ok(Some(Token::GtEq))
+                            },
+                            _ => Ok(Some(Token::Gt))
+                        },
+                        None => Ok(Some(Token::Gt))
+                    }
+                },
                 _ => Err(ParserError::TokenizerError(
                     String::from(format!("unhandled char '{}' in tokenizer", ch))))
             },
@@ -99,7 +150,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tokenize_simple_select()  {
+    fn tokenize_select_1()  {
         let sql = String::from("SELECT 1");
         let mut tokenizer = Tokenizer { query: sql };
         let tokens = tokenizer.tokenize().unwrap();
@@ -107,6 +158,23 @@ mod tests {
         assert_eq!(2, tokens.len());
         assert_eq!(Token::Identifier(String::from("SELECT")), tokens[0]);
         assert_eq!(Token::Number(String::from("1")), tokens[1]);
+    }
+
+    #[test]
+    fn tokenize_simple_select()  {
+        let sql = String::from("SELECT * FROM customer WHERE id = 1");
+        let mut tokenizer = Tokenizer { query: sql };
+        let tokens = tokenizer.tokenize().unwrap();
+        println!("tokens = {:?}", tokens);
+        assert_eq!(8, tokens.len());
+        assert_eq!(Token::Identifier(String::from("SELECT")), tokens[0]);
+        assert_eq!(Token::Mult, tokens[1]);
+        assert_eq!(Token::Identifier(String::from("FROM")), tokens[2]);
+        assert_eq!(Token::Identifier(String::from("customer")), tokens[3]);
+        assert_eq!(Token::Identifier(String::from("WHERE")), tokens[4]);
+        assert_eq!(Token::Identifier(String::from("id")), tokens[5]);
+        assert_eq!(Token::Eq, tokens[6]);
+        assert_eq!(Token::Number(String::from("1")), tokens[7]);
     }
 }
 
