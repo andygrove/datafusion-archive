@@ -82,7 +82,12 @@ impl Tokenizer {
                             _ => break
                         }
                     }
-                    Ok(Some(Token::Identifier(s)))
+                    match s.to_uppercase().as_ref() {
+                        "SELECT" | "FROM" | "WHERE" | "LIMIT" | "ORDER" | "GROUP" | "BY" |
+                        "UNION" | "ALL"| "UPDATE" | "DELETE" | "IN" | "NOT" | "NULL" |
+                        "SET" => Ok(Some(Token::Keyword(s))),
+                        _ => Ok(Some(Token::Identifier(s))),
+                    }
                 },
                 // numbers
                 '0' ... '9' => {
@@ -156,7 +161,7 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         println!("tokens = {:?}", tokens);
         assert_eq!(2, tokens.len());
-        assert_eq!(Token::Identifier(String::from("SELECT")), tokens[0]);
+        assert_eq!(Token::Keyword(String::from("SELECT")), tokens[0]);
         assert_eq!(Token::Number(String::from("1")), tokens[1]);
     }
 
@@ -167,11 +172,11 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         println!("tokens = {:?}", tokens);
         assert_eq!(8, tokens.len());
-        assert_eq!(Token::Identifier(String::from("SELECT")), tokens[0]);
+        assert_eq!(Token::Keyword(String::from("SELECT")), tokens[0]);
         assert_eq!(Token::Mult, tokens[1]);
-        assert_eq!(Token::Identifier(String::from("FROM")), tokens[2]);
+        assert_eq!(Token::Keyword(String::from("FROM")), tokens[2]);
         assert_eq!(Token::Identifier(String::from("customer")), tokens[3]);
-        assert_eq!(Token::Identifier(String::from("WHERE")), tokens[4]);
+        assert_eq!(Token::Keyword(String::from("WHERE")), tokens[4]);
         assert_eq!(Token::Identifier(String::from("id")), tokens[5]);
         assert_eq!(Token::Eq, tokens[6]);
         assert_eq!(Token::Number(String::from("1")), tokens[7]);
