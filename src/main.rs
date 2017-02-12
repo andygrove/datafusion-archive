@@ -6,6 +6,9 @@ use std::fs::File;
 mod schema;
 use schema::*;
 
+mod sql;
+use sql::*;
+
 mod plan;
 use plan::*;
 
