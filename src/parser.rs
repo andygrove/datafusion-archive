@@ -37,7 +37,8 @@ pub enum Token {
 
 #[derive(Debug,Clone)]
 pub enum ParserError {
-    TokenizerError(String)
+    TokenizerError(String),
+    ParserError(String),
 }
 
 struct Tokenizer {
@@ -145,7 +146,66 @@ impl Tokenizer {
             None => Ok(None)
         }
     }
+}
 
+pub struct Parser {
+    tokens: Vec<Token>,
+    index: usize
+}
+
+impl Parser {
+
+    pub fn new(tokens: Vec<Token>) -> Self {
+        Parser { tokens: tokens, index: 0 }
+    }
+
+    pub fn parse(&mut self) -> Result<ASTNode, ParserError> {
+        self.parse_expr(0)
+    }
+
+    fn parse_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
+
+        let mut expr = self.parse_prefix()?;
+
+        while let Some(tok) = self.next_token() {
+
+            let next_precedence = self.get_precedence(&tok)?;
+            if precedence >= next_precedence {
+                break;
+            }
+
+            expr = self.parse_infix(expr, next_precedence)?;
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
+        Err(ParserError::TokenizerError(String::from("not implemented yet")))
+    }
+
+    fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
+        Err(ParserError::TokenizerError(String::from("not implemented yet")))
+    }
+
+    fn get_precedence(&self, tok: &Token) -> Result<u8, ParserError> {
+        match tok {
+            &Token::Eq | &Token::Lt | & Token::LtEq |
+            &Token::Neq | &Token::Gt | & Token::GtEq => Ok(20),
+            &Token::Plus | &Token::Minus => Ok(30),
+            &Token::Mult | &Token::Div => Ok(40),
+            _ => Err(ParserError::TokenizerError(String::from("invalid token for get_precendence")))
+        }
+    }
+
+    fn next_token(&mut self) -> Option<Token> {
+        if self.index < self.tokens.len() {
+            self.index = self.index + 1;
+            Some(self.tokens[self.index-1].clone())
+        } else {
+            None
+        }
+    }
 
 }
 
