@@ -1,5 +1,7 @@
 use std::error::Error;
 use std::fs::File;
+use std::iter::Peekable;
+use std::str::Chars;
 
 use super::sql::*;
 
@@ -13,6 +15,7 @@ pub enum Token {
     Identifier(String),
     Keyword(String),
     Operator(String),
+    Whitespace
 }
 
 #[derive(Debug,Clone)]
@@ -21,7 +24,7 @@ pub enum ParserError {
 }
 
 struct Tokenizer {
-    query: String
+    query: String,
 }
 
 impl Tokenizer {
@@ -30,7 +33,26 @@ impl Tokenizer {
 
         let mut peekable = self.query.chars().peekable();
 
-        Err(ParserError::TokenizerError(String::from("not implemented yet")))
+        let mut tokens : Vec<Token> = vec![];
+
+        while let Some(token) = self.next_token(&mut peekable)? {
+            tokens.push(token);
+        }
+
+        Ok(tokens)
+    }
+
+    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token>, ParserError> {
+        match chars.peek() {
+            Some(&ch) => match ch {
+                ' ' | '\t' | '\n' => {
+                    chars.next();
+                    Ok(Some(Token::Whitespace))
+                },
+                _ => Err(ParserError::TokenizerError(String::from("unhandled case in tokenizer")))
+            },
+            None => Ok(None)
+        }
     }
 
 }
