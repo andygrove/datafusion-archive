@@ -15,17 +15,23 @@ impl SqlToRel {
 
     pub fn sql_to_rel(&self, sql: &ASTNode, tt: &TupleType) -> Box<Rel> {
         match sql {
-            &ASTNode::SQLSelect { ref projection, .. } => {
+            &ASTNode::SQLSelect { ref projection, ref relation, .. } => {
 
                 let expr : Vec<Rex> = projection.iter()
                     .map(|e| self.sql_to_rex(&e, tt))
                     .collect();
 
+                let input = match relation {
+                    &Some(ref r) => Some(self.sql_to_rel(r, tt)),
+                    &None => None
+                };
+
                 Box::new(Rel::Projection {
                     expr: expr,
-                    input: None
+                    input: input
                 })
             },
+
             _ => panic!("not implemented")
         }
     }

@@ -9,6 +9,9 @@ use schema::*;
 mod sql;
 use sql::*;
 
+mod parser;
+use parser::*;
+
 mod rel;
 use rel::*;
 
