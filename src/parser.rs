@@ -181,11 +181,21 @@ impl Parser {
     }
 
     fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
-        Err(ParserError::TokenizerError(String::from("not implemented yet")))
+        match self.next_token() {
+            Some(Token::Keyword(k)) => {
+                match k.to_uppercase().as_ref() {
+                    "SELECT" => Ok(self.parse_select()?),
+                    _ => Err(ParserError::TokenizerError(
+                        format!("No prefix parser for keyword {}", k))),
+                }
+            },
+            _ => Err(ParserError::TokenizerError(
+                format!("Prefix parser expected a keyword")))
+        }
     }
 
     fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
-        Err(ParserError::TokenizerError(String::from("not implemented yet")))
+        Err(ParserError::ParserError(String::from("parse_infix() not implemented yet")))
     }
 
     fn get_precedence(&self, tok: &Token) -> Result<u8, ParserError> {
@@ -198,6 +208,14 @@ impl Parser {
         }
     }
 
+    fn peek_token(&mut self) -> Option<Token> {
+        if self.index < self.tokens.len() {
+            Some(self.tokens[self.index].clone())
+        } else {
+            None
+        }
+    }
+
     fn next_token(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
             self.index = self.index + 1;
@@ -205,6 +223,18 @@ impl Parser {
         } else {
             None
         }
+    }
+
+    // specific methods
+
+    fn parse_select(&self) -> Result<ASTNode, ParserError> {
+        Ok(ASTNode::SQLSelect {
+            projection: vec![],
+            selection: None,
+            relation: None,
+            limit: None,
+            order: None,
+        })
     }
 
 }
@@ -240,6 +270,16 @@ mod tests {
         assert_eq!(Token::Identifier(String::from("id")), tokens[5]);
         assert_eq!(Token::Eq, tokens[6]);
         assert_eq!(Token::Number(String::from("1")), tokens[7]);
+    }
+
+    #[test]
+    fn parse_simple_select() {
+        let sql = String::from("SELECT * FROM customer WHERE id = 1");
+        let mut tokenizer = Tokenizer { query: sql };
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        println!("AST = {:?}", ast);
     }
 }
 
