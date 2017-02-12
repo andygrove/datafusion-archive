@@ -27,8 +27,8 @@ pub enum Rex {
 /// Relations
 #[derive(Debug)]
 pub enum Rel {
+    Projection { expr: Vec<Rex>, input: Option<Box<Rel>> },
+    Selection { expr: Rex, input: Box<Rel> },
     TableScan { schema: String, table: String },
-    Filter { Rex: Rex, input: Box<Rel> },
-    Project { Rex: Vec<Rex>, input: Box<Rel> }
 }
 
