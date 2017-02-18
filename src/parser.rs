@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fs::File;
 use std::iter::Peekable;
 use std::str::Chars;
+use std::ascii::AsciiExt;
 
 use super::sql::*;
 
@@ -199,6 +200,8 @@ impl Parser {
                     },
                     Token::Identifier(id) =>
                         Ok(ASTNode::SQLIdentifier { id: id, parts: vec![] }),
+                    Token::Number(n) =>
+                        Ok(ASTNode::SQLLiteralInt(0)), //TODO: parse the number
                     _ => Err(ParserError::ParserError(
                         format!("Prefix parser expected a keyword but found {:?}", t)))
                 }
@@ -254,23 +257,74 @@ impl Parser {
         }
     }
 
+//    fn next_keyword(&mut self) -> Result<Option<Token>, Err> {
+//        match self.next_token()? {
+//            Some(t) => match t {
+//                Token::Keyword => Ok(Some(t)),
+//                _ => Err(ParserError::ParserError(
+//                    format!("Expected keyword, found {:?}", t)))
+//            },
+//            None => Ok(None)
+//        }
+//    }
+
+    fn parse_keyword(&mut self, expected: &'static str) -> bool {
+        match self.peek_token() {
+            Some(Token::Keyword(k)) => {
+                if expected.eq_ignore_ascii_case(k.as_str()) {
+                    self.next_token();
+                    true
+                } else {
+                    false
+                }
+            },
+            _ => false
+        }
+    }
+
+//    fn parse_identifier(&mut self) -> Result<ASTNode::SQLIdentifier, Err> {
+//        let expr = self.parse_expr()?;
+//        match expr {
+//            Some(ASTNode::SQLIdentifier { .. }) => Ok(expr),
+//            _ => Err(ParserError::ParserError(format!("Expected identifier but found {:?}", expr)))
+//        }
+//    }
+
     // specific methods
 
     fn parse_select(&mut self) -> Result<ASTNode, ParserError> {
 
         let projection = self.parse_expr_list()?;
 
-        //TODO: parse FROM
-        //TODO: parse relation
-        //TODO: parse WHERE
+        let relation : Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
+            //TODO: add support for JOIN
+            Some(Box::new(self.parse_expr(0)?))
+        } else {
+            None
+        };
 
-        Ok(ASTNode::SQLSelect {
-            projection: projection,
-            selection: None,
-            relation: None,
-            limit: None,
-            order: None,
-        })
+        let selection = if self.parse_keyword("WHERE") {
+            Some(Box::new(self.parse_expr(0)?))
+        } else {
+            None
+        };
+
+        //TODO: parse GROUP BY
+        //TODO: parse HAVING
+        //TODO: parse ORDER BY
+        //TODO: parse LIMIT
+
+        if let Some(next_token) = self.peek_token() {
+            Err(ParserError::ParserError(format!("Unexpected token at end of SELECT: {:?}", next_token)))
+        } else {
+            Ok(ASTNode::SQLSelect {
+                projection: projection,
+                selection: selection,
+                relation: relation,
+                limit: None,
+                order: None,
+            })
+        }
     }
 
     fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
