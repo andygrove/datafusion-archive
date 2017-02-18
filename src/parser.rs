@@ -104,6 +104,10 @@ impl Tokenizer {
                     }
                     Ok(Some(Token::Number(s)))
                 },
+                // punctuation
+                ',' => { chars.next(); Ok(Some(Token::Comma)) },
+                '(' => { chars.next(); Ok(Some(Token::LParen)) },
+                ')' => { chars.next(); Ok(Some(Token::RParen)) },
                 // operators
                 '+' => { chars.next(); Ok(Some(Token::Plus)) },
                 '-' => { chars.next(); Ok(Some(Token::Minus)) },
@@ -167,7 +171,7 @@ impl Parser {
 
         let mut expr = self.parse_prefix()?;
 
-        while let Some(tok) = self.next_token() {
+        while let Some(tok) = self.peek_token() {
 
             let next_precedence = self.get_precedence(&tok)?;
             if precedence >= next_precedence {
@@ -184,15 +188,23 @@ impl Parser {
 
     fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
         match self.next_token() {
-            Some(Token::Keyword(k)) => {
-                match k.to_uppercase().as_ref() {
-                    "SELECT" => Ok(self.parse_select()?),
+            Some(t) => {
+                match t {
+                    Token::Keyword(k) => {
+                        match k.to_uppercase().as_ref() {
+                            "SELECT" => Ok(self.parse_select()?),
+                            _ => Err(ParserError::ParserError(
+                                format!("No prefix parser for keyword {}", k))),
+                        }
+                    },
+                    Token::Identifier(id) =>
+                        Ok(ASTNode::SQLIdentifier { id: id, parts: vec![] }),
                     _ => Err(ParserError::ParserError(
-                        format!("No prefix parser for keyword {}", k))),
+                        format!("Prefix parser expected a keyword but found {:?}", t)))
                 }
             },
-            _ => Err(ParserError::ParserError(
-                format!("Prefix parser expected a keyword")))
+            None => Err(ParserError::ParserError(
+                format!("Prefix parser expected a keyword but hit EOF")))
         }
     }
 
@@ -219,7 +231,9 @@ impl Parser {
             &Token::Neq | &Token::Gt | & Token::GtEq => Ok(20),
             &Token::Plus | &Token::Minus => Ok(30),
             &Token::Mult | &Token::Div => Ok(40),
-            _ => Err(ParserError::TokenizerError(String::from("invalid token for get_precedence")))
+            _ => Ok(0)
+                /*Err(ParserError::TokenizerError(
+                format!("invalid token {:?} for get_precedence", tok)))*/
         }
     }
 
@@ -242,20 +256,39 @@ impl Parser {
 
     // specific methods
 
-    fn parse_select(&self) -> Result<ASTNode, ParserError> {
+    fn parse_select(&mut self) -> Result<ASTNode, ParserError> {
 
-        //TODO: parse expression list
+        let projection = self.parse_expr_list()?;
+
         //TODO: parse FROM
         //TODO: parse relation
         //TODO: parse WHERE
 
         Ok(ASTNode::SQLSelect {
-            projection: vec![],
+            projection: projection,
             selection: None,
             relation: None,
             limit: None,
             order: None,
         })
+    }
+
+    fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
+        println!("parse_expr_list()");
+        let mut expr_list : Vec<ASTNode> = vec![];
+        loop {
+            println!("parse_expr_list() top of loop");
+            expr_list.push(self.parse_expr(0)?);
+            if let Some(t) = self.peek_token() {
+                if t == Token::Comma {
+                    self.next_token();
+                } else {
+                    println!("parse_expr_list() BREAK on token={:?}", t);
+                    break;
+                }
+            }
+        }
+        Ok(expr_list)
     }
 
 }
@@ -295,12 +328,18 @@ mod tests {
 
     #[test]
     fn parse_simple_select() {
-        let sql = String::from("SELECT * FROM customer WHERE id = 1");
+        let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
         let mut tokenizer = Tokenizer { query: sql };
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
         println!("AST = {:?}", ast);
+        match ast {
+            ASTNode::SQLSelect { projection, .. } => {
+                assert_eq!(3, projection.len());
+            },
+            _ => assert!(false)
+        }
     }
 }
 
