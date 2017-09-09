@@ -1,28 +1,10 @@
 #![feature(box_patterns)]
 
-use std::error::Error;
-use std::fs::File;
-
-mod schema;
-use schema::*;
-
-mod sql;
-use sql::*;
-
-mod parser;
-use parser::*;
-
-mod rel;
-use rel::*;
-
-mod sqltorel;
-use sqltorel::*;
-
-mod exec;
-use exec::*;
-
-mod csvrelation;
-use csvrelation::*;
+extern crate query_planner;
+use query_planner::rel::*;
+use query_planner::schema::*;
+use query_planner::csvrelation::*;
+use query_planner::exec::*;
 
 fn main() {
 

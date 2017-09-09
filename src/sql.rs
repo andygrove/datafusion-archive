@@ -1,12 +1,10 @@
-use std::error::Error;
-use std::fs::File;
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum ASTNode {
     SQLIdentifier{id: String, parts: Vec<String>},
     SQLBinaryExpr{left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode>},
     SQLNested(Box<ASTNode>),
-    SQLUnary{operator: SQLOperator, Rex: Box<ASTNode>},
+    SQLUnary{operator: SQLOperator, rex: Box<ASTNode>},
     SQLLiteralInt(i64),
 //    SQLBoundParam(u32),
 //    SQLAlias{Rex: Box<ASTNode>, alias: Box<ASTNode>},
