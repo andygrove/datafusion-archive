@@ -8,4 +8,4 @@ The goal is to be able work with any data source by implementing some traits for
 
 This is a personal research project and is in a very early stage of development.
 
-This project is very much inspired by Apache Calcite.
+This project is very much inspired by Apache Calcite although the design of the relational plan and related optimizations is closer to Apache Spark.
