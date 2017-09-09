@@ -1,4 +1,12 @@
-.idea
+# rust
 out
 target
+
+# IntelliJ
+.idea/
 *.iml
+*.ipr
+*.iws
+
+# vscode
+.vscode/
