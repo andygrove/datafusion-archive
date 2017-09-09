@@ -6,63 +6,13 @@ pub enum ASTNode {
     SQLNested(Box<ASTNode>),
     SQLUnary{operator: SQLOperator, rex: Box<ASTNode>},
     SQLLiteralInt(i64),
-//    SQLBoundParam(u32),
-//    SQLAlias{Rex: Box<ASTNode>, alias: Box<ASTNode>},
-//    SQLOrderBy{Rex: Box<ASTNode>, is_asc: bool},
     SQLSelect{
         projection: Vec<ASTNode>,
         relation: Option<Box<ASTNode>>,
         selection: Option<Box<ASTNode>>,
         order: Option<Box<ASTNode>>,
         limit: Option<Box<ASTNode>>,
-//        for_update: bool,
     },
-//    SQLInsert {
-//        table: Box<ASTNode>,
-//        insert_mode: InsertMode,
-//        column_list: Box<ASTNode>,
-//        values_list: Vec<ASTNode>
-//    },
-//    SQLUpdate {
-//        table: Box<ASTNode>,
-//        assignments: Box<ASTNode>,
-//        selection: Option<Box<ASTNode>>
-//    },
-//    SQLDelete {
-//        table: Box<ASTNode>,
-//        selection: Option<Box<ASTNode>>
-//    },
-//    SQLUnion{left: Box<ASTNode>, union_type: UnionType, right: Box<ASTNode>},
-//    SQLJoin{left: Box<ASTNode>, join_type: JoinType, right: Box<ASTNode>, on_expr: Option<Box<ASTNode>>},
-//    SQLFunctionCall{identifier: Box<ASTNode>, args: Vec<ASTNode>},
-//
-//    // MySQL
-//    MySQLCreateDatabase {
-//        database: Box<ASTNode>,
-//    },
-//    MySQLDropDatabase {
-//        database: Box<ASTNode>,
-//        if_exists: bool,
-//    },
-//    MySQLDropTable {
-//        temporary: bool,
-//        if_exists: bool,
-//        restrict: bool,
-//        cascade: bool,
-//        tables: Vec<ASTNode>
-//    },
-//    MySQLCreateTable{
-//        table: Box<ASTNode>,
-//        column_list: Vec<ASTNode>,
-//        keys: Vec<ASTNode>,
-//        table_options: Vec<ASTNode>
-//    },
-//    MySQLColumnDef{column: Box<ASTNode>, data_type: Box<ASTNode>, qualifiers: Option<Vec<ASTNode>>},
-//    MySQLKeyDef(MySQLKeyDef),
-//    MySQLColumnQualifier(MySQLColumnQualifier),
-//    MySQLDataType(MySQLDataType),
-//    MySQLTableOption(MySQLTableOption),
-//    MySQLUse(Box<ASTNode>)
 }
 
 #[derive(Debug, PartialEq, Clone)]

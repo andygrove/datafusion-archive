@@ -3,20 +3,6 @@ use std::error::Error;
 use super::schema::*;
 use super::rel::*;
 
-///// A simple tuple implementation for testing and initial prototyping
-//#[derive(Debug)]
-//struct SimpleTuple {
-//    values: Vec<Value>
-//}
-//
-//impl Tuple for SimpleTuple {
-//
-//    fn get_value(&self, index: usize) -> Result<Value, Box<Error>> {
-//        Ok(self.values[index].clone())
-//    }
-//
-//}
-
 pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<Error>> {
 
     match rex {

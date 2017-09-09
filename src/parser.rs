@@ -4,12 +4,6 @@ use std::ascii::AsciiExt;
 
 use super::sql::*;
 
-//pub enum Keyword {
-//    Select,
-//    From,
-//    Where
-//}
-
 #[derive(Debug,Clone,PartialEq)]
 pub enum Token {
     Identifier(String),
