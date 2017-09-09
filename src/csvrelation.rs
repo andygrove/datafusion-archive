@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::iter::Iterator;
 use std::string::String;
 use std::fs::File;
@@ -6,7 +5,6 @@ use std::fs::File;
 use super::schema::*;
 
 extern crate csv;
-use self::csv::{Reader, StringRecords};
 
 pub struct CsvRelation {
     filename: String,

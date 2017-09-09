@@ -1,5 +1,3 @@
-use std::error::Error;
-use std::fs::File;
 
 /// The data types supported by this database. Currently just u64 and string but others
 /// will be added later, including complex types

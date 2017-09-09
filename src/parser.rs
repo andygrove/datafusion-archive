@@ -1,5 +1,3 @@
-use std::error::Error;
-use std::fs::File;
 use std::iter::Peekable;
 use std::str::Chars;
 use std::ascii::AsciiExt;

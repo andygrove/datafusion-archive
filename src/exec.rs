@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::fs::File;
 
 use super::schema::*;
 use super::rel::*;
@@ -18,9 +17,9 @@ use super::rel::*;
 //
 //}
 
-pub fn evaluate(tuple: &Tuple, tt: &TupleType, Rex: &Rex) -> Result<Value, Box<Error>> {
+pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<Error>> {
 
-    match Rex {
+    match rex {
         &Rex::BinaryExpr { box ref left, ref op, box ref right } => {
             //TODO: remove use of unwrap() here
             let left_value = evaluate(tuple, tt, left).unwrap();
