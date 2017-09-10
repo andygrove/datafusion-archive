@@ -33,6 +33,10 @@ impl SqlToRel {
                 }))
             },
 
+            &ASTNode::SQLIdentifier { ref id, .. } => {
+                Ok(Box::new(Rel::TableScan { schema: String::from("default"), table: id.clone() }))
+            },
+
             _ => Err(format!("sql_to_rel does not support this relation: {:?}", sql))
         }
     }
