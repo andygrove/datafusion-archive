@@ -156,6 +156,13 @@ impl Parser {
         Parser { tokens: tokens, index: 0 }
     }
 
+    pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
+        let mut tokenizer = Tokenizer { query: sql };
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        parser.parse()
+    }
+
     pub fn parse(&mut self) -> Result<ASTNode, ParserError> {
         self.parse_expr(0)
     }

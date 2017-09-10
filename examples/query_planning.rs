@@ -9,6 +9,9 @@ use query_planner::sqltorel::*;
 
 fn main() {
 
+    // parse sql - this needs to be made much more concise
+    let ast = Parser::parse_sql(String::from("SELECT id, name FROM people")).unwrap();
+
     // define schema for data source (csv file)
     let tt = TupleType {
         columns: vec![
@@ -16,16 +19,6 @@ fn main() {
             ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
         ]
     };
-
-    // open csv file
-    let mut csv = CsvRelation::open(String::from("people.csv"), tt.clone());
-
-    // parse sql - this needs to be made much more concise
-    let sql = String::from("SELECT id, name FROM people");
-    let mut tokenizer = Tokenizer { query: sql };
-    let tokens = tokenizer.tokenize().unwrap();
-    let mut parser = Parser::new(tokens);
-    let ast = parser.parse().unwrap();
 
     // create a logical plan
     let plan = SqlToRel::new().sql_to_rel(&ast, &tt);

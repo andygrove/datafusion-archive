@@ -33,7 +33,7 @@ impl SqlToRel {
                 }))
             },
 
-            _ => panic!("not implemented")
+            _ => Err(format!("sql_to_rel does not support this relation: {:?}", sql))
         }
     }
 
