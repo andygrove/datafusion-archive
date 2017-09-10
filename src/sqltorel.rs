@@ -10,6 +10,10 @@ pub struct SqlToRel {
 
 impl SqlToRel {
 
+    pub fn new() -> Self {
+        SqlToRel { default_schema: None }
+    }
+
     pub fn sql_to_rel(&self, sql: &ASTNode, tt: &TupleType) -> Result<Box<Rel>, String> {
         match sql {
             &ASTNode::SQLSelect { ref projection, ref relation, .. } => {

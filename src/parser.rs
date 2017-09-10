@@ -34,8 +34,8 @@ pub enum ParserError {
     ParserError(String),
 }
 
-struct Tokenizer {
-    query: String,
+pub struct Tokenizer {
+    pub query: String,
 }
 
 impl Tokenizer {
