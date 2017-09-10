@@ -1,6 +1,7 @@
 # rust
 out
 target
+Cargo.lock
 
 # IntelliJ
 .idea/
