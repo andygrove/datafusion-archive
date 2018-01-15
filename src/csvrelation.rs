@@ -32,6 +32,7 @@ fn create_tuple(v: Vec<String>, types: &Vec<DataType>) -> Tuple {
         converted.push(match types[i] {
             DataType::UnsignedLong => Value::UnsignedLong(v[i].parse::<u64>().unwrap()),
             DataType::String => Value::String(v[i].clone()),
+            DataType::Double => Value::Double(v[i].parse::<f64>().unwrap()),
         });
     }
     Tuple { values: converted }

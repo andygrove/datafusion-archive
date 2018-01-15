@@ -4,7 +4,8 @@
 #[derive(Debug,Clone)]
 pub enum DataType {
     UnsignedLong,
-    String
+    String,
+    Double
 }
 
 /// Definition of a column in a relation (data set).
@@ -26,7 +27,8 @@ pub struct TupleType {
 pub enum Value {
     UnsignedLong(u64),
     String(String),
-    Boolean(bool)
+    Boolean(bool),
+    Double(f64)
 }
 
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
@@ -42,6 +44,12 @@ pub struct Tuple {
 
 pub trait Relation<'a> {
     fn scan(&'a mut self) -> Box<Iterator<Item=Tuple> + 'a>;
+}
+
+pub trait DataFrame<T> {
+    fn select(&mut self, column_names: Vec<String>) -> Box<Self>;
+
+
 }
 
 
