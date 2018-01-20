@@ -3,5 +3,19 @@ name = "query_planner"
 version = "0.1.0"
 authors = ["Andy Grove <andygrove73@gmail.com>", "bgardner@squarelabs.net"]
 
+[lib]
+name = "query_planner"
+path = "src/lib.rs"
+
+[[bin]]
+name = "worker"
+path = "src/worker.rs"
+
 [dependencies]
 csv = "*"
+futures = "0.1.14"
+hyper = "0.11.2"
+serde_derive = "1.0"
+serde = "1.0"
+serde_json = "1.0"
+etcd = "0.8.0"

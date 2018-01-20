@@ -3,6 +3,7 @@ use std::string::String;
 use std::fs::File;
 
 use super::schema::*;
+use super::rel::*;
 
 extern crate csv;
 

@@ -1,3 +1,4 @@
+use super::rel::*;
 
 /// The data types supported by this database. Currently just u64 and string but others
 /// will be added later, including complex types
@@ -22,14 +23,6 @@ pub struct TupleType {
     pub columns: Vec<ColumnMeta>
 }
 
-/// Value holder for all supported data types
-#[derive(Debug,Clone,PartialEq,PartialOrd)]
-pub enum Value {
-    UnsignedLong(u64),
-    String(String),
-    Boolean(bool),
-    Double(f64)
-}
 
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
 /// specific implementations for different data sources
