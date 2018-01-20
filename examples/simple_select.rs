@@ -2,7 +2,6 @@
 
 extern crate query_planner;
 use query_planner::rel::*;
-use query_planner::schema::*;
 use query_planner::csvrelation::*;
 use query_planner::exec::*;
 
@@ -17,7 +16,7 @@ fn main() {
     };
 
     // open csv file
-    let mut csv = CsvRelation::open(String::from("people.csv"), tt.clone());
+    let mut csv = CsvRelation::open(String::from("test/people.csv"), tt.clone());
 
     // create simple filter expression for "id = 2"
     let filter_expr = Rex::BinaryExpr {
