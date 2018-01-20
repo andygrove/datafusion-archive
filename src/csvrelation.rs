@@ -2,7 +2,6 @@ use std::iter::Iterator;
 use std::string::String;
 use std::fs::File;
 
-use super::schema::*;
 use super::rel::*;
 
 extern crate csv;
@@ -41,6 +40,8 @@ fn create_tuple(v: Vec<String>, types: &Vec<DataType>) -> Tuple {
 
 impl<'a> Relation<'a> for CsvRelation {
 
+
+
     fn scan(&'a mut self) -> Box<Iterator<Item=Tuple> + 'a> {
 
         let types : Vec<DataType> = self.tuple_type
@@ -54,10 +55,13 @@ impl<'a> Relation<'a> for CsvRelation {
         // create iterator over tuples
         let tuple_iter = records.map(move |x| match x {
             Ok(v) => create_tuple(v, &types),
-            Err(_) => Tuple { values: vec![] } //TODO: real error handling
+            Err(_) => panic!("error parsing tuple") //TODO: real error handling
         });
 
         Box::new(tuple_iter)
     }
 
+    fn schema(&'a self) -> TupleType {
+        self.tuple_type.clone()
+    }
 }

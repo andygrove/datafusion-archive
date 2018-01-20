@@ -2,7 +2,6 @@ use std::string::String;
 
 use super::sql::*;
 use super::rel::*;
-use super::schema::*;
 
 pub struct SqlToRel {
     default_schema: Option<String>

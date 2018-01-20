@@ -1,6 +1,5 @@
 #![feature(box_patterns)]
 
-pub mod schema;
 pub mod sql;
 pub mod parser;
 pub mod rel;

@@ -19,7 +19,7 @@ use hyper::server::{Http, Request, Response, Service};
 pub mod rel;
 use rel::*;
 
-struct HelloWorld;
+struct Worker;
 
 fn reverse(chunk: Chunk) -> Response {
     let body_bytes = chunk.iter()
@@ -39,7 +39,7 @@ fn reverse(chunk: Chunk) -> Response {
     }
 }
 
-impl Service for HelloWorld {
+impl Service for Worker {
     // boilerplate hooking up hyper's server types
     type Request = Request;
     type Response = Response;
@@ -84,6 +84,6 @@ fn main() {
 
     println!("Worker listening on {}", addr);
 
-    let server = Http::new().bind(&addr, || Ok(HelloWorld)).unwrap();
+    let server = Http::new().bind(&addr, || Ok(Worker)).unwrap();
     server.run().unwrap();
 }

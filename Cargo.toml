@@ -1,5 +1,5 @@
 [package]
-name = "query_planner"
+name = "distributed-query"
 version = "0.1.0"
 authors = ["Andy Grove <andygrove73@gmail.com>", "bgardner@squarelabs.net"]
 
@@ -18,4 +18,4 @@ hyper = "0.11.2"
 serde_derive = "1.0"
 serde = "1.0"
 serde_json = "1.0"
-etcd = "0.8.0"
+#etcd = "0.8.0"
