@@ -2,7 +2,6 @@
 
 extern crate query_planner;
 use query_planner::rel::*;
-use query_planner::csvrelation::*;
 use query_planner::exec::*;
 
 fn main() {

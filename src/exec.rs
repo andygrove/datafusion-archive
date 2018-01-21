@@ -6,14 +6,12 @@ use std::fs::File;
 use std::path::Path;
 use std::string::String;
 use std::convert::*;
-use exec::csv::StringRecords;
 
+extern crate csv; // TODO:why do I need to this here as well as top level lib.rs ??
 
-extern crate csv;
-//use super::csv::StringRecords;
+use super::csv::StringRecord;
 
 use super::rel::*;
-use super::csvrelation::CsvRelation;
 
 enum ExecutionError {
     IoError(Error),
@@ -47,31 +45,24 @@ impl SimpleRelation for InMemoryRelation {
     }
 }
 
-struct FileRelation {
+struct CsvRelation {
     iter: Box<Iterator<Item=Result<Tuple,ExecutionError>>>,
 }
 
-impl FileRelation {
+impl CsvRelation {
 
-    fn new(filename: &str, schema: TupleType) -> Result<Self, ExecutionError> {
-        match csv::Reader::from_file(&filename) {
-            Ok(mut r) => {
+//    fn new(records: &StringRecord<File>, schema: TupleType) -> Result<Self, ExecutionError> {
+//        // map the csv iterator into an iterator over tuples
+//        let iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(records
+//            .map(|r| match r {
+//                Ok(v) => CsvRelation::create_tuple(&v, &schema),
+//                Err(_) => Err(ExecutionError::Custom("CSV error".to_string())) //TODO: improve error handling
+//            }));
+//
+//        Ok(CsvRelation { iter: iter })
+//    }
 
-                // map the csv iterator into an iterator over tuples
-                let records = r.records();
-                let iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(records
-                    .map(|r| match r {
-                        Ok(v) => FileRelation::create_tuple(&v, &schema),
-                        Err(_) => Err(ExecutionError::Custom("CSV error".to_string())) //TODO: improve error handling
-                    }));
-
-                Ok(FileRelation { iter: iter })
-            },
-            Err(_) => panic!("oops") //TODO
-        }
-    }
-
-    fn create_tuple(v: &Vec<String>, schema: &TupleType) -> Result<Tuple,ExecutionError> {
+    fn create_tuple(r: &StringRecord, schema: &TupleType) -> Result<Tuple,ExecutionError> {
         //TODO: re-implement this in a more functional way
 //        v.map(|r| r.map( |s| {
 //
@@ -93,9 +84,27 @@ impl FileRelation {
     }
 }
 
+fn create_csv_relation(filename: &str, schema: &TupleType) -> Result<CsvRelation,ExecutionError> {
 
+    let file = File::open("foo.bar").unwrap();
+    let buf_reader = BufReader::new(&file);
+    let csv_reader = csv::Reader::from_reader(buf_reader);
+    let record_iter = csv_reader.into_records();
 
-impl SimpleRelation for FileRelation {
+    let tuple_iter = record_iter.map(|r| match r {
+        Ok(record) => CsvRelation::create_tuple(&record, schema),
+        Err(_) => Err(ExecutionError::Custom("TODO".to_string()))
+    });
+
+//    match csv::Reader::from_reader(buf_reader) {
+//        Ok(mut r) => CsvRelation::new(& r.records(), schema),
+//        Err(_) => panic ! ("") //TODO
+//    }
+
+    unimplemented!()
+}
+
+impl SimpleRelation for CsvRelation {
     fn next(&mut self) -> Result<Option<&Tuple>, ExecutionError> {
 
 //        self.reader.read_
@@ -106,21 +115,22 @@ impl SimpleRelation for FileRelation {
 
 
 fn execute(plan: &Rel) -> Result<Box<Relation>,String> {
-    match plan {
-        &Rel::CsvFile { ref filename, ref schema } =>
-            Ok(Box::new(CsvRelation::open(filename.to_string(), schema.clone()))),
-
-        &Rel::Selection { ref expr, ref input } => {
-//            let input_rel = execute(&input)?;
-//            Ok(Box::new(FilterRelation {
-//                input: input_rel,
-//                schema: input_rel.schema().clone()
-//            }))
-                unimplemented!("selection")
-        },
-
-        _ => Err("not implemented".to_string())
-    }
+//    match plan {
+//        &Rel::CsvFile { ref filename, ref schema } =>
+//            Ok(Box::new(CsvRelation::open(filename.to_string(), schema.clone()))),
+//
+//        &Rel::Selection { ref expr, ref input } => {
+////            let input_rel = execute(&input)?;
+////            Ok(Box::new(FilterRelation {
+////                input: input_rel,
+////                schema: input_rel.schema().clone()
+////            }))
+//                unimplemented!("selection")
+//        },
+//
+//        _ => Err("not implemented".to_string())
+//    }
+    unimplemented!()
 }
 
 struct FilterRelation<'a> {
