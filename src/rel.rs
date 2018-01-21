@@ -22,6 +22,7 @@ pub struct TupleType {
 }
 
 
+
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
 /// specific implementations for different data sources
 //pub trait Tuple {
@@ -55,7 +56,7 @@ pub enum Value {
     Double(f64)
 }
 
-#[derive(Debug,Serialize,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum Operator {
     Eq,
     NotEq,
@@ -66,7 +67,7 @@ pub enum Operator {
 }
 
 /// Relation Expression
-#[derive(Debug,Serialize, Deserialize)]
+#[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Rex {
     /// index into a value within the tuple
     TupleValue(usize),
@@ -77,7 +78,7 @@ pub enum Rex {
 }
 
 /// Relations
-#[derive(Debug,Serialize, Deserialize)]
+#[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Rel {
     Projection { expr: Vec<Rex>, input: Option<Box<Rel>> },
     Selection { expr: Rex, input: Box<Rel>, schema: TupleType },
@@ -104,7 +105,7 @@ mod tests {
             ]
         };
 
-        let csv = CsvFile { filename: "test/people.csv".to_string(), schema: tt };
+        let csv = CsvFile { filename: "test/people.csv".to_string(), schema: tt.clone() };
 
         let filter_expr = BinaryExpr {
             left: Box::new(TupleValue(0)),
@@ -114,7 +115,9 @@ mod tests {
 
         let plan = Selection {
             expr: filter_expr,
-            input: Box::new(csv)
+            input: Box::new(csv),
+            schema: tt.clone()
+
         };
 
         let s = serde_json::to_string(&plan).unwrap();

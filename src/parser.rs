@@ -214,9 +214,9 @@ impl Parser {
         match self.next_token() {
             Some(tok) => {
                 match tok {
-                    Token::Eq => Ok(Some(ASTNode::SQLBinaryExpr {
+                    Token::Eq | Token::Gt => Ok(Some(ASTNode::SQLBinaryExpr {
                         left: Box::new(expr),
-                        op: SQLOperator::EQ,
+                        op: self.to_sql_operator(&tok)?,
                         right: Box::new(self.parse_expr(precedence)?)
                     })),
                     _ => Err(ParserError::ParserError(
@@ -224,6 +224,18 @@ impl Parser {
                 }
             },
             None => Ok(None)
+        }
+    }
+
+    fn to_sql_operator(&self, tok: &Token) -> Result<SQLOperator, ParserError> {
+        match tok {
+            &Token::Eq => Ok(SQLOperator::EQ),
+            &Token::Lt => Ok(SQLOperator::LT),
+            &Token::LtEq => Ok(SQLOperator::LTEQ),
+            &Token::Gt => Ok(SQLOperator::GT),
+            &Token::GtEq => Ok(SQLOperator::GTEQ),
+            //TODO: the rest
+            _ => Err(ParserError::ParserError(format!("Unsupported operator {:?}", tok)))
         }
     }
 

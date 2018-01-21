@@ -16,23 +16,24 @@ fn main() {
         ]
     };
 
-    let csv_file = Rel::CsvFile { filename: "test/people.csv".to_string(), schema };
+    let csv_file = Rel::CsvFile {
+        filename: "test/people.csv".to_string(),
+        schema: schema.clone()
+    };
 
     // create simple filter expression for "id = 2"
-//    let filter_expr = Rex::BinaryExpr {
-//        left: Box::new(Rex::TupleValue(0)),
-//        op: Operator::Eq,
-//        right: Box::new(Rex::Literal(Value::UnsignedLong(2)))
-//    };
+    let filter_expr = Rex::BinaryExpr {
+        left: Box::new(Rex::TupleValue(0)),
+        op: Operator::Eq,
+        right: Box::new(Rex::Literal(Value::UnsignedLong(2)))
+    };
 
     // create the selection part of the relational plan, referencing the filter expression
-//    let plan = Rel::Selection {
-//        expr: filter_expr,
-//        input: Box::new(csv_file),
-//        schema: &schema
-//    };
-
-    let plan = csv_file;
+    let plan = Rel::Selection {
+        expr: filter_expr,
+        input: Box::new(csv_file),
+        schema: schema.clone()
+    };
 
     let rel_str = serde_json::to_string_pretty(&plan).unwrap();
 
@@ -40,9 +41,8 @@ fn main() {
 
     // create execution plan
     let execution_plan = create_execution_plan(&plan).unwrap();
-//      ^^^^^^^^^^^^^^ borrowed value does not live long enough
 
-// execute the query
+    // execute the query
     let it = execution_plan.scan();
     it.for_each(|t| {
         match t {
