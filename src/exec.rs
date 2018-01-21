@@ -48,7 +48,7 @@ impl SimpleRelation for InMemoryRelation {
 }
 
 struct FileRelation {
-    reader: csv::Reader<File>,
+    iter: Box<Iterator<Item=Result<Tuple,ExecutionError>>>,
 }
 
 impl FileRelation {
@@ -58,15 +58,14 @@ impl FileRelation {
             Ok(mut r) => {
 
                 // map the csv iterator into an iterator over tuples
-                let iter : Iterator<Item=Result<Tuple,ExecutionError>> = r.records()
+                let records = r.records();
+                let iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(records
                     .map(|r| match r {
-                        Ok(v) => Ok(FileRelation::create_tuple(&v, &schema)),
+                        Ok(v) => FileRelation::create_tuple(&v, &schema),
                         Err(_) => Err(ExecutionError::Custom("CSV error".to_string())) //TODO: improve error handling
-                    });
+                    }));
 
-                //TODO: store the iterator in the returned FileRelation
-
-                Ok(FileRelation { reader: r })
+                Ok(FileRelation { iter: iter })
             },
             Err(_) => panic!("oops") //TODO
         }
