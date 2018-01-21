@@ -13,7 +13,8 @@ use super::csv::StringRecord;
 
 use super::rel::*;
 
-enum ExecutionError {
+#[derive(Debug)]
+pub enum ExecutionError {
     IoError(Error),
     Custom(String)
 }
@@ -24,28 +25,23 @@ impl From<Error> for ExecutionError {
     }
 }
 
+#[derive(Debug)]
 struct InMemoryRelation<'a> {
     tuples: &'a Vec<Tuple>
 }
 
-struct CsvRelation<'a> {
-    iter: Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>,
+/// Represents a csv file with a known schema
+pub struct CsvRelation<'a> {
+    file: &'a File,
+    schema: &'a TupleType
+    //iter: Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>,
 }
 
 impl<'a> CsvRelation<'a> {
 
-    fn open(file: &'a File, schema: &'a TupleType) -> Result<Self,ExecutionError> {
-
-        let buf_reader = BufReader::new(file);
-        let csv_reader = csv::Reader::from_reader(buf_reader);
-        let record_iter = csv_reader.into_records();
-
-        let tuple_iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(record_iter.map(move |r| match r {
-            Ok(record) => CsvRelation::create_tuple(&record, schema),
-            Err(_) => Err(ExecutionError::Custom("TODO".to_string()))
-        }));
-
-        Ok(CsvRelation { iter: tuple_iter })
+    pub fn open(file: &'a File, schema: &'a TupleType) -> Result<Self,ExecutionError> {
+        //TODO: verify file exists?
+        Ok(CsvRelation { file: file, schema: schema })
     }
 
 
@@ -62,29 +58,46 @@ impl<'a> CsvRelation<'a> {
     }
 }
 
-trait SimpleRelation<'a> {
+pub trait SimpleRelation<'a> {
+
     /// scan all records in this relation
-    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
+    fn scan(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
+
+    /// scan all records in this relation that match the given predicate
+    fn scan_with_predicate(&'a self, predicate: Rex) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
 }
 
 impl<'a> SimpleRelation<'a> for CsvRelation<'a> {
 
-    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
-        self.iter
-//      ^^^^ cannot move out of borrowed content
+    fn scan(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+
+        let buf_reader = BufReader::new(self.file);
+        let csv_reader = csv::Reader::from_reader(buf_reader);
+        let record_iter = csv_reader.into_records();
+
+        let tuple_iter = record_iter.map(move |r| match r {
+            Ok(record) => CsvRelation::create_tuple(&record, self.schema),
+            Err(_) => Err(ExecutionError::Custom("TODO".to_string()))
+        });
+
+        Box::new(tuple_iter)
     }
-}
 
-impl<'a> SimpleRelation<'a> for InMemoryRelation<'a> {
-
-    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
-        // transform trom Tuple to Result<Tuple,_>
-//        let tuple_results = self.tuples.iter().map(move |t| Ok(t.clone()));
-//        Box::new(tuple_results)
+    fn scan_with_predicate(&'a self, predicate: Rex) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
         unimplemented!()
     }
-
 }
+
+//impl<'a> SimpleRelation<'a> for InMemoryRelation<'a> {
+//
+//    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+//        // transform trom Tuple to Result<Tuple,_>
+////        let tuple_results = self.tuples.iter().map(move |t| Ok(t.clone()));
+////        Box::new(tuple_results)
+//        unimplemented!()
+//    }
+//
+//}
 
 
 
