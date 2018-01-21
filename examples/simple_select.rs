@@ -40,8 +40,9 @@ fn main() {
 
     // create execution plan
     let execution_plan = create_execution_plan(&plan).unwrap();
+//      ^^^^^^^^^^^^^^ borrowed value does not live long enough
 
-    // execute the query
+// execute the query
     let it = execution_plan.scan();
     it.for_each(|t| {
         match t {
