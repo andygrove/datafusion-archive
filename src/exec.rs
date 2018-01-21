@@ -57,8 +57,8 @@ impl<'a> CsvRelation<'a> {
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
 
-        let tuple_iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(record_iter.map(|r| match r {
-            Ok(record) => CsvRelation::create_tuple(&record/*, &schema()*/),
+        let tuple_iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(record_iter.map(move |r| match r {
+            Ok(record) => CsvRelation::create_tuple(&record, schema),
             Err(_) => Err(ExecutionError::Custom("TODO".to_string()))
         }));
 
@@ -66,25 +66,16 @@ impl<'a> CsvRelation<'a> {
     }
 
 
-    fn create_tuple(r: &StringRecord/*, schema: &TupleType*/) -> Result<Tuple,ExecutionError> {
-        //TODO: re-implement this in a more functional way
-//        v.map(|r| r.map( |s| {
-//
-//        })
-//                let mut converted : Vec<Value> = vec![];
-//                //TODO: should be able to use zip() instead of a loop
-//                for i in 0..r.len() {
-//                    converted.push(match schema.columns[i].data_type {
-//                        DataType::UnsignedLong => Value::UnsignedLong(v[i].parse::<u64>().unwrap()),
-//                        DataType::String => Value::String(v[i].clone()),
-//                        DataType::Double => Value::Double(v[i].parse::<f64>().unwrap()),
-//                    });
-//                }
-//                Ok(Tuple { values: converted })
-//            },
-//            Err =>
-//        }
-        unimplemented!()
+    fn create_tuple(r: &StringRecord, schema: &TupleType) -> Result<Tuple,ExecutionError> {
+        assert_eq!(schema.columns.len(), r.len());
+
+        let values = schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
+            DataType::UnsignedLong => Value::UnsignedLong(s.parse::<u64>().unwrap()),
+            DataType::String => Value::String(s.to_string()),
+            DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
+        }).collect::<Vec<Value>>();
+
+        Ok(Tuple::new(values))
     }
 }
 

@@ -33,6 +33,13 @@ pub struct Tuple {
     pub values: Vec<Value>
 }
 
+impl Tuple {
+
+    pub fn new(v: Vec<Value>) -> Self {
+        Tuple { values: v }
+    }
+}
+
 pub trait Relation<'a> {
     fn schema(&'a self) -> TupleType;
     fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,String>> + 'a>;
