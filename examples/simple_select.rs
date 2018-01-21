@@ -5,8 +5,8 @@ use std::fmt::Debug;
 
 extern crate query_planner;
 use query_planner::rel::*;
-use query_planner::exec::*;
 
+extern crate serde_json;
 
 fn main() {
 
@@ -28,9 +28,15 @@ fn main() {
     };
 
     // create the selection part of the relational plan, referencing the filter expression
-    let selection = Rel::Selection { expr: filter_expr, input: Box::new(csv_file) };
+    let plan = Rel::Selection { expr: filter_expr, input: Box::new(csv_file) };
+
+    let rel_str = serde_json::to_string_pretty(&plan).unwrap();
+
+    println!("Relational plan: {}", rel_str);
 
     //TODO: create an execution plan
+
+
 //    let execution_plan = execute(&selection).unwrap();
 //
 //    // get iterator over data
@@ -47,3 +53,6 @@ fn main() {
 //    }
 
 }
+
+
+use query_planner::exec::*;
