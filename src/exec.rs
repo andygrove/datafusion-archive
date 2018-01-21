@@ -146,8 +146,14 @@ impl SimpleRelation for FilterRelation {
 impl SimpleRelation for ProjectRelation {
 
     fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
-        let foo = self.input.scan().map(|r| match r {
-            Ok(tuple) => Ok(tuple),
+        let foo = self.input.scan().map(move|r| match r {
+            Ok(tuple) => {
+                let x = self.expr.iter().map(|e| match e {
+                    &Rex::TupleValue(i) => tuple.values[i].clone(),
+                    _ => unimplemented!()
+                }).collect();
+                Ok(Tuple { values: x })
+            },
             Err(e) => panic!() // TODO
         });
 

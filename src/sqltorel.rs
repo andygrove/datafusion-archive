@@ -28,6 +28,18 @@ impl SqlToRel {
                     &None => None
                 };
 
+                let input_schema = match input {
+                    Some(ref x) => x.schema().clone(),
+                    None => panic!()
+                };
+
+                let projection_schema = TupleType {
+                    columns: expr.iter().map( |e| match e {
+                        &Rex::TupleValue(i) => input_schema.columns[i].clone(),
+                        _ => unimplemented!()
+                    }).collect()
+                };
+
                 match selection {
                     &Some(ref filter_expr) => {
 
@@ -37,7 +49,7 @@ impl SqlToRel {
                                 Rel::Selection {
                                     expr: self.sql_to_rex(&filter_expr, tt)?,
                                     input: x,
-                                    schema: schema
+                                    schema: input_schema.clone()
                                 }
                             },
                             _ => unimplemented!() //TODO error handling
@@ -46,20 +58,16 @@ impl SqlToRel {
                         Ok(Box::new(Rel::Projection {
                             expr: expr,
                             input: Some(Box::new(selection_rel)),
-                            schema: TupleType { columns: vec![] } //TODO
+                            schema: projection_schema.clone()
                         }))
 
                     },
                     _ => {
-                        let schema = match input {
-                            Some(ref x) => x.schema().clone(),
-                            None => panic!()
-                        };
 
                         Ok(Box::new(Rel::Projection {
                             expr: expr,
                             input: input,
-                            schema
+                            schema: projection_schema.clone()
                         }))
                     }
                 }

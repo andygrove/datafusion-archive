@@ -12,7 +12,7 @@ extern crate serde_json;
 fn main() {
 
     // parse sql - this needs to be made much more concise
-    let ast = Parser::parse_sql(String::from("SELECT id, name FROM people WHERE id > 4")).unwrap();
+    let ast = Parser::parse_sql(String::from("SELECT name, id FROM people WHERE id > 4")).unwrap();
 
     // define schema for data source (csv file)
     let tt = TupleType {
