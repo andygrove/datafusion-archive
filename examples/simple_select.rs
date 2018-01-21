@@ -1,9 +1,12 @@
 #![feature(box_patterns)]
 
+use std::fs::File;
+use std::fmt::Debug;
+
 extern crate query_planner;
 use query_planner::rel::*;
-use query_planner::csvrelation::*;
 use query_planner::exec::*;
+
 
 fn main() {
 
@@ -16,7 +19,8 @@ fn main() {
     };
 
     // open csv file
-    let mut csv = CsvRelation::open(String::from("test/people.csv"), tt.clone());
+    let file = File::open("test/people.csv").unwrap();
+    let mut csv = CsvRelation::open(&file, &tt).unwrap();
 
     // create simple filter expression for "id = 2"
     let filter_expr = Rex::BinaryExpr {
@@ -29,7 +33,7 @@ fn main() {
     let mut it = csv.scan();
 
     // filter out rows matching the predicate
-    while let Some(t) = it.next() {
+    while let Some(Ok(t)) = it.next() {
         match evaluate(&t, &tt, &filter_expr) {
             Ok(Value::Boolean(true)) => println!("{:?}", t),
             _ => {}

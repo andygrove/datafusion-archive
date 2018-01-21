@@ -12,7 +12,7 @@ name = "worker"
 path = "src/worker.rs"
 
 [dependencies]
-csv = "*"
+csv = "1.0.0-beta.5"
 futures = "0.1.14"
 hyper = "0.11.2"
 serde_derive = "1.0"

@@ -2,7 +2,7 @@
 
 extern crate query_planner;
 use query_planner::rel::*;
-use query_planner::csvrelation::*;
+use query_planner::exec::*;
 use query_planner::parser::*;
 use query_planner::sqltorel::*;
 
