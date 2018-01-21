@@ -24,25 +24,8 @@ impl From<Error> for ExecutionError {
     }
 }
 
-trait SimpleRelation {
-    fn next(&mut self) -> Result<Option<&Tuple>, ExecutionError>;
-}
-
-struct InMemoryRelation {
-    values: Vec<Tuple>,
-    index: usize
-}
-
-impl SimpleRelation for InMemoryRelation {
-    fn next(&mut self) -> Result<Option<&Tuple>, ExecutionError> {
-        if self.index < self.values.len() {
-            let i = self.index;
-            self.index += 1;
-            Ok(Some(&self.values[i]))
-        } else {
-            Ok(None)
-        }
-    }
+struct InMemoryRelation<'a> {
+    tuples: &'a Vec<Tuple>
 }
 
 struct CsvRelation<'a> {
@@ -79,14 +62,30 @@ impl<'a> CsvRelation<'a> {
     }
 }
 
+trait SimpleRelation<'a> {
+    /// scan all records in this relation
+    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
+}
 
-impl<'a> SimpleRelation for CsvRelation<'a> {
-    fn next(&mut self) -> Result<Option<&Tuple>, ExecutionError> {
+impl<'a> SimpleRelation<'a> for CsvRelation<'a> {
 
-//        self.reader.read_
-        unimplemented!()
+    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+        self.iter
+//      ^^^^ cannot move out of borrowed content
     }
 }
+
+impl<'a> SimpleRelation<'a> for InMemoryRelation<'a> {
+
+    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+        // transform trom Tuple to Result<Tuple,_>
+//        let tuple_results = self.tuples.iter().map(move |t| Ok(t.clone()));
+//        Box::new(tuple_results)
+        unimplemented!()
+    }
+
+}
+
 
 
 
