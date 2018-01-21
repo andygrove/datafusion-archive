@@ -69,11 +69,12 @@ impl<'a> CsvRelation {
     }
 }
 
+/// trait for all relations (a relation is essentially just an iterator over tuples with
+/// a known schema)
 pub trait SimpleRelation {
-
     /// scan all records in this relation
     fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
-
+    /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a TupleType;
 }
 
@@ -119,6 +120,7 @@ impl SimpleRelation for FilterRelation {
         Box::new(self.input.scan().filter(move|t|
             match t {
                 &Ok(ref tuple) => {
+                    println!("FilterRelation considering tuple: {:?}", tuple);
                     let predicate_eval = evaluate(tuple, &self.schema, &self.expr);
 
                     match predicate_eval {
@@ -158,16 +160,9 @@ impl SimpleRelation for ProjectRelation {
 pub fn create_execution_plan(plan: &Rel) -> Result<Box<SimpleRelation>,ExecutionError> {
     match *plan {
 
-        Rel::TableScan { ref schema, ref table } => {
-            // for now, SQL tables are csv files and we have to hard-code the schema until
-            // we have a way to define the schema through SQL e.g. REGISTER TABLE ...
-            let schema = TupleType {
-                columns: vec![
-                    ColumnMeta { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
-                    ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
-                ]
-            };
-            let file = File::open(format!("test/{}.csv", table))?;
+        Rel::TableScan { ref schema_name, ref table_name, ref schema} => {
+            // for now, tables are csv files
+            let file = File::open(format!("test/{}.csv", table_name))?;
             let rel = CsvRelation::open(file, schema.clone())?;
             Ok(Box::new(rel))
         },
@@ -188,7 +183,7 @@ pub fn create_execution_plan(plan: &Rel) -> Result<Box<SimpleRelation>,Execution
             Ok(Box::new(rel))
         },
 
-        Rel::Projection { ref expr, ref input } => {
+        Rel::Projection { ref expr, ref input, ref schema } => {
             match input {
                 &Some(ref r) => {
                     let input_rel = create_execution_plan(&r)?;

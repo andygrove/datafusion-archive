@@ -80,10 +80,20 @@ pub enum Rex {
 /// Relations
 #[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Rel {
-    Projection { expr: Vec<Rex>, input: Option<Box<Rel>> },
+    Projection { expr: Vec<Rex>, input: Option<Box<Rel>>, schema: TupleType },
     Selection { expr: Rex, input: Box<Rel>, schema: TupleType },
-    TableScan { schema: String, table: String },
+    TableScan { schema_name: String, table_name: String, schema: TupleType },
     CsvFile { filename: String, schema: TupleType },
+}
+
+impl Rel {
+
+    pub fn schema(&self) -> TupleType {
+        match self {
+            &Rel::TableScan { ref schema, .. } => schema.clone(),
+            _ => unimplemented!()
+        }
+    }
 }
 
 #[cfg(test)]
