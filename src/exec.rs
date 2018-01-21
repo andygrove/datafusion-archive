@@ -34,26 +34,24 @@ struct InMemoryRelation<'a> {
 pub struct CsvRelation<'a> {
     file: &'a File,
     schema: &'a TupleType
-    //iter: Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>,
 }
 
 impl<'a> CsvRelation<'a> {
 
     pub fn open(file: &'a File, schema: &'a TupleType) -> Result<Self,ExecutionError> {
-        //TODO: verify file exists?
+        //TODO: verify file exists
         Ok(CsvRelation { file: file, schema: schema })
     }
 
 
+    /// Covnert StringRecord into our internal tuple type based on the known schema
     fn create_tuple(r: &StringRecord, schema: &TupleType) -> Result<Tuple,ExecutionError> {
         assert_eq!(schema.columns.len(), r.len());
-
         let values = schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
             DataType::UnsignedLong => Value::UnsignedLong(s.parse::<u64>().unwrap()),
             DataType::String => Value::String(s.to_string()),
             DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
         }).collect::<Vec<Value>>();
-
         Ok(Tuple::new(values))
     }
 }
