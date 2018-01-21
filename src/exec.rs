@@ -25,11 +25,11 @@ impl From<Error> for ExecutionError {
     }
 }
 
-#[derive(Debug)]
-struct InMemoryRelation<'a> {
-    tuples: &'a Vec<Tuple>,
-    schema: &'a TupleType
-}
+//#[derive(Debug)]
+//struct InMemoryRelation<'a> {
+//    tuples: &'a Vec<Tuple>,
+//    schema: &'a TupleType
+//}
 
 /// Represents a csv file with a known schema
 #[derive(Debug)]
@@ -38,11 +38,11 @@ pub struct CsvRelation {
     schema: TupleType
 }
 
-//pub struct FilterRelation<'a> {
-//    schema: &'a TupleType,
-//    input: Box<SimpleRelation<'a>>,
-//    expr: &'a Rex
-//}
+pub struct FilterRelation {
+    schema: TupleType,
+    input: Box<SimpleRelation>,
+    expr: Rex
+}
 
 impl<'a> CsvRelation {
 
@@ -63,17 +63,17 @@ impl<'a> CsvRelation {
     }
 }
 
-pub trait SimpleRelation<'a> {
+pub trait SimpleRelation {
 
     /// scan all records in this relation
-    fn scan(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
+    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
 
-    fn schema(&'a self) -> &'a TupleType;
+    //fn schema(&'a self) -> &'a TupleType;
 }
 
-impl<'a> SimpleRelation<'a> for CsvRelation {
+impl SimpleRelation for CsvRelation {
 
-    fn scan(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
 
         //let CsvRelation { file, schema } = *self;
 
@@ -89,54 +89,51 @@ impl<'a> SimpleRelation<'a> for CsvRelation {
         Box::new(tuple_iter)
     }
 
-    fn schema(&'a self) -> &'a TupleType {
-        &self.schema
-    }
-
-}
-
-impl<'a> SimpleRelation<'a> for InMemoryRelation<'a> {
-
-    fn scan(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
-        let tuple_iter = self.tuples.iter().map(move |t| Ok(t.clone()));
-        Box::new(tuple_iter)
-    }
-
-    fn schema(&'a self) -> &'a TupleType {
-        &self.schema
-    }
-
-}
-
-
-//impl<'a> SimpleRelation<'a> for FilterRelation<'a> {
-//
-//    fn scan(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
-//        Box::new(self.input.scan().filter(|t| {
-//            //let x = evaluate(t, &self.schema, &self.expr);
-//            //TODO:
-//            true
-//        }))
-//    }
-//
 //    fn schema(&'a self) -> &'a TupleType {
-//        unimplemented!()
+//        &self.schema
 //    }
-//}
+
+}
+
+//impl<'a> SimpleRelation<'a> for InMemoryRelation<'a> {
 //
+//    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+//        let tuple_iter = self.tuples.iter().map(move |t| Ok(t.clone()));
+//        Box::new(tuple_iter)
+//    }
+//
+////    fn schema(&'a self) -> &'a TupleType {
+////        &self.schema
+////    }
+//
+//}
+
+
+impl SimpleRelation for FilterRelation {
+
+    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
+        Box::new(self.input.scan().filter(|t| {
+            //let x = evaluate(t, &self.schema, &self.expr);
+            //TODO:
+            true
+        }))
+    }
+
+}
+
 
 
 pub fn create_execution_plan<'a>(plan: &'a Rel) -> Result<Box<SimpleRelation + 'a>,ExecutionError> {
-    match plan {
+    match *plan {
 
-        &Rel::CsvFile { ref filename, ref schema } => {
+        Rel::CsvFile { ref filename, ref schema } => {
             let file = File::open(filename)?;
             let rel = CsvRelation::open(file, schema.clone())?;
             Ok(Box::new(rel))
         },
 
-//        &Rel::Selection { ref expr, ref input, ref schema } => {
-//            let input_rel = execute(&input)?;
+//        Rel::Selection { expr, ref input, schema } => {
+//            let input_rel = create_execution_plan(input)?;
 //            Ok(Box::new(FilterRelation {
 //                input: input_rel,
 //                expr: expr,
