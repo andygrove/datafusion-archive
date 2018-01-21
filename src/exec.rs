@@ -95,24 +95,24 @@ impl<'a> SimpleRelation<'a> for InMemoryRelation<'a> {
 
 
 
-fn execute(plan: &Rel) -> Result<Box<Relation>,String> {
+//fn execute(plan: &Rel) -> Result<Box<Relation>,ExecutionError> {
 //    match plan {
-//        &Rel::CsvFile { ref filename, ref schema } =>
-//            Ok(Box::new(CsvRelation::open(filename.to_string(), schema.clone()))),
-//
-//        &Rel::Selection { ref expr, ref input } => {
-////            let input_rel = execute(&input)?;
-////            Ok(Box::new(FilterRelation {
-////                input: input_rel,
-////                schema: input_rel.schema().clone()
-////            }))
-//                unimplemented!("selection")
+//        &Rel::CsvFile { ref filename, ref schema } => {
+//            let file = File::open(filename)?;
+//            Ok(Box::new(CsvRelation::open(&file, &schema)?))
 //        },
 //
-//        _ => Err("not implemented".to_string())
+////
+////        &Rel::Selection { ref expr, ref input } => {
+//////            let input_rel = execute(&input)?;
+//////            Ok(Box::new(FilterRelation {
+//////                input: input_rel,
+//////                schema: input_rel.schema().clone()
+//////            }))
+////                unimplemented!("selection")
+//        _ => Err(ExecutionError::Custom("not implemented".to_string()))
 //    }
-    unimplemented!()
-}
+//}
 
 struct FilterRelation<'a> {
     schema: TupleType,

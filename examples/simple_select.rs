@@ -11,16 +11,14 @@ use query_planner::exec::*;
 fn main() {
 
     // define schema for data source (csv file)
-    let tt = TupleType {
+    let schema = TupleType {
         columns: vec![
             ColumnMeta { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
             ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
         ]
     };
 
-    // open csv file
-    let file = File::open("test/people.csv").unwrap();
-    let mut csv = CsvRelation::open(&file, &tt).unwrap();
+    let csv_file = Rel::CsvFile { filename: "test/people.csv".to_string(), schema };
 
     // create simple filter expression for "id = 2"
     let filter_expr = Rex::BinaryExpr {
@@ -29,15 +27,23 @@ fn main() {
         right: Box::new(Rex::Literal(Value::UnsignedLong(2)))
     };
 
-    // get iterator over data
-    let mut it = csv.scan();
+    // create the selection part of the relational plan, referencing the filter expression
+    let selection = Rel::Selection { expr: filter_expr, input: Box::new(csv_file) };
 
-    // filter out rows matching the predicate
-    while let Some(Ok(t)) = it.next() {
-        match evaluate(&t, &tt, &filter_expr) {
-            Ok(Value::Boolean(true)) => println!("{:?}", t),
-            _ => {}
-        }
-    }
+    //TODO: create an execution plan
+//    let execution_plan = execute(&selection).unwrap();
+//
+//    // get iterator over data
+//    {
+//        let it = execution_plan.scan();
+//
+//        it.for_each(|t| {
+//            println!("{:?}", t);
+//        });
+//    }
+
+//    for &tuple in &it.as_ref() {
+//        println!("{:?}", tuple);
+//    }
 
 }
