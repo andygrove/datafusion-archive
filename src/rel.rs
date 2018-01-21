@@ -35,7 +35,7 @@ pub struct Tuple {
 
 pub trait Relation<'a> {
     fn schema(&'a self) -> TupleType;
-    fn scan(&'a mut self) -> Box<Iterator<Item=Tuple> + 'a>;
+    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,String>> + 'a>;
 }
 
 pub trait DataFrame<T> {
@@ -103,7 +103,7 @@ mod tests {
             ]
         };
 
-        let csv = CsvRelation { filename: "test/people.csv".to_string(), schema: tt };
+        let csv = CsvFile { filename: "test/people.csv".to_string(), schema: tt };
 
         let filter_expr = BinaryExpr {
             left: Box::new(TupleValue(0)),
