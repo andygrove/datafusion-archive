@@ -1,4 +1,4 @@
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Read};
 use std::io::{BufReader, BufRead};
 use std::io::prelude::*;
 use std::iter::Iterator;
@@ -45,24 +45,28 @@ impl SimpleRelation for InMemoryRelation {
     }
 }
 
-struct CsvRelation {
-    iter: Box<Iterator<Item=Result<Tuple,ExecutionError>>>,
+struct CsvRelation<'a> {
+    iter: Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>,
 }
 
-impl CsvRelation {
+impl<'a> CsvRelation<'a> {
 
-//    fn new(records: &StringRecord<File>, schema: TupleType) -> Result<Self, ExecutionError> {
-//        // map the csv iterator into an iterator over tuples
-//        let iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(records
-//            .map(|r| match r {
-//                Ok(v) => CsvRelation::create_tuple(&v, &schema),
-//                Err(_) => Err(ExecutionError::Custom("CSV error".to_string())) //TODO: improve error handling
-//            }));
-//
-//        Ok(CsvRelation { iter: iter })
-//    }
+    fn open(file: &'a File, schema: &'a TupleType) -> Result<Self,ExecutionError> {
 
-    fn create_tuple(r: &StringRecord, schema: &TupleType) -> Result<Tuple,ExecutionError> {
+        let buf_reader = BufReader::new(file);
+        let csv_reader = csv::Reader::from_reader(buf_reader);
+        let record_iter = csv_reader.into_records();
+
+        let tuple_iter : Box<Iterator<Item=Result<Tuple,ExecutionError>>> = Box::new(record_iter.map(|r| match r {
+            Ok(record) => CsvRelation::create_tuple(&record/*, &schema()*/),
+            Err(_) => Err(ExecutionError::Custom("TODO".to_string()))
+        }));
+
+        Ok(CsvRelation { iter: tuple_iter })
+    }
+
+
+    fn create_tuple(r: &StringRecord/*, schema: &TupleType*/) -> Result<Tuple,ExecutionError> {
         //TODO: re-implement this in a more functional way
 //        v.map(|r| r.map( |s| {
 //
@@ -84,27 +88,8 @@ impl CsvRelation {
     }
 }
 
-fn create_csv_relation(filename: &str, schema: &TupleType) -> Result<CsvRelation,ExecutionError> {
 
-    let file = File::open("foo.bar").unwrap();
-    let buf_reader = BufReader::new(&file);
-    let csv_reader = csv::Reader::from_reader(buf_reader);
-    let record_iter = csv_reader.into_records();
-
-    let tuple_iter = record_iter.map(|r| match r {
-        Ok(record) => CsvRelation::create_tuple(&record, schema),
-        Err(_) => Err(ExecutionError::Custom("TODO".to_string()))
-    });
-
-//    match csv::Reader::from_reader(buf_reader) {
-//        Ok(mut r) => CsvRelation::new(& r.records(), schema),
-//        Err(_) => panic ! ("") //TODO
-//    }
-
-    unimplemented!()
-}
-
-impl SimpleRelation for CsvRelation {
+impl<'a> SimpleRelation for CsvRelation<'a> {
     fn next(&mut self) -> Result<Option<&Tuple>, ExecutionError> {
 
 //        self.reader.read_
