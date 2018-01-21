@@ -200,7 +200,7 @@ impl Parser {
                     Token::Identifier(id) =>
                         Ok(ASTNode::SQLIdentifier { id: id, parts: vec![] }),
                     Token::Number(n) =>
-                        Ok(ASTNode::SQLLiteralInt(0)), //TODO: parse the number
+                        Ok(ASTNode::SQLLiteralInt(n.parse::<i64>().unwrap())), //TODO: parse the number
                     _ => Err(ParserError::ParserError(
                         format!("Prefix parser expected a keyword but found {:?}", t)))
                 }

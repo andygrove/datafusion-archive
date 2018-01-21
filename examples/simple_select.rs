@@ -36,11 +36,12 @@ fn main() {
     };
 
     let rel_str = serde_json::to_string_pretty(&plan).unwrap();
-
     println!("Relational plan: {}", rel_str);
 
     // create execution plan
-    let execution_plan = create_execution_plan(&plan).unwrap();
+    let mut ctx = ExecutionContext::new();
+    ctx.register_table("people".to_string(), schema.clone());
+    let execution_plan = ctx.create_execution_plan(&plan).unwrap();
 
     // execute the query
     let it = execution_plan.scan();

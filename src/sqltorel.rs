@@ -1,16 +1,18 @@
+use std::collections::HashMap;
 use std::string::String;
 
 use super::sql::*;
 use super::rel::*;
 
 pub struct SqlToRel {
-    default_schema: Option<String>
+    default_schema: Option<String>,
+    schemas: HashMap<String, TupleType>
 }
 
 impl SqlToRel {
 
-    pub fn new() -> Self {
-        SqlToRel { default_schema: None }
+    pub fn new(schemas: HashMap<String, TupleType>) -> Self {
+        SqlToRel { default_schema: None, schemas }
     }
 
     pub fn sql_to_rel(&self, sql: &ASTNode, tt: &TupleType) -> Result<Box<Rel>, String> {
@@ -48,21 +50,32 @@ impl SqlToRel {
                         }))
 
                     },
-                    _ => Ok(Box::new(Rel::Projection {
+                    _ => {
+                        let schema = match input {
+                            Some(ref x) => x.schema().clone(),
+                            None => panic!()
+                        };
+
+                        Ok(Box::new(Rel::Projection {
                             expr: expr,
                             input: input,
-                            schema: TupleType { columns: vec![] } //TODO
+                            schema
                         }))
+                    }
                 }
 
             },
 
             &ASTNode::SQLIdentifier { ref id, .. } => {
-                Ok(Box::new(Rel::TableScan {
-                    schema_name: String::from("default"),
-                    table_name: id.clone(),
-                    schema: TupleType { columns: vec![] } //TODO need schema meta-data now
-                }))
+
+                match self.schemas.get(id) {
+                    Some(schema) => Ok(Box::new(Rel::TableScan {
+                        schema_name: String::from("default"),
+                        table_name: id.clone(),
+                        schema: schema.clone()
+                    })),
+                    None => panic!("no schema found for table") //TODO error handling
+                }
             },
 
 

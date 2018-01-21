@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Read};
 use std::io::{BufReader, BufRead};
 use std::io::prelude::*;
@@ -120,8 +121,9 @@ impl SimpleRelation for FilterRelation {
         Box::new(self.input.scan().filter(move|t|
             match t {
                 &Ok(ref tuple) => {
-                    println!("FilterRelation considering tuple: {:?}", tuple);
                     let predicate_eval = evaluate(tuple, &self.schema, &self.expr);
+
+                    //println!("FilterRelation considering tuple: {:?} .. evals to {:?}", tuple, predicate_eval);
 
                     match predicate_eval {
                         Ok(Value::Boolean(b)) => b,
@@ -157,66 +159,83 @@ impl SimpleRelation for ProjectRelation {
     }
 }
 
-pub fn create_execution_plan(plan: &Rel) -> Result<Box<SimpleRelation>,ExecutionError> {
-    match *plan {
+pub struct ExecutionContext {
+    pub schemas: HashMap<String, TupleType>
+}
 
-        Rel::TableScan { ref schema_name, ref table_name, ref schema} => {
-            // for now, tables are csv files
-            let file = File::open(format!("test/{}.csv", table_name))?;
-            let rel = CsvRelation::open(file, schema.clone())?;
-            Ok(Box::new(rel))
-        },
+impl ExecutionContext {
 
-        Rel::CsvFile { ref filename, ref schema } => {
-            let file = File::open(filename)?;
-            let rel = CsvRelation::open(file, schema.clone())?;
-            Ok(Box::new(rel))
-        },
+    pub fn new() -> Self {
+        ExecutionContext { schemas: HashMap::new() }
+    }
 
-        Rel::Selection { ref expr, ref input, ref schema } => {
-            let input_rel = create_execution_plan(input)?;
-            let rel = FilterRelation {
-                input: input_rel,
-                expr: expr.clone(),
-                schema: schema.clone()
-            };
-            Ok(Box::new(rel))
-        },
+    pub fn register_table(&mut self, name: String, schema: TupleType) {
+        self.schemas.insert(name, schema);
+    }
 
-        Rel::Projection { ref expr, ref input, ref schema } => {
-            match input {
-                &Some(ref r) => {
-                    let input_rel = create_execution_plan(&r)?;
-                    let input_schema = input_rel.schema().clone();
+    pub fn create_execution_plan(&self, plan: &Rel) -> Result<Box<SimpleRelation>,ExecutionError> {
+        match *plan {
 
-                    let project_columns: Vec<ColumnMeta> = expr.iter().map(|e| {
-                        match e {
-                            &Rex::TupleValue(i) => input_schema.columns[i].clone(),
-                            _ => unimplemented!()
-                        }
-                    }).collect();
+            Rel::TableScan { ref schema_name, ref table_name, ref schema} => {
+                // for now, tables are csv files
+                let file = File::open(format!("test/{}.csv", table_name))?;
+                let rel = CsvRelation::open(file, schema.clone())?;
+                Ok(Box::new(rel))
+            },
 
-                    let project_schema = TupleType { columns: project_columns };
+            Rel::CsvFile { ref filename, ref schema } => {
+                let file = File::open(filename)?;
+                let rel = CsvRelation::open(file, schema.clone())?;
+                Ok(Box::new(rel))
+            },
 
-                    let rel = ProjectRelation {
-                        input: input_rel,
-                        expr: expr.clone(),
-                        schema: project_schema,
+            Rel::Selection { ref expr, ref input, ref schema } => {
+                let input_rel = self.create_execution_plan(input)?;
+                let rel = FilterRelation {
+                    input: input_rel,
+                    expr: expr.clone(),
+                    schema: schema.clone()
+                };
+                Ok(Box::new(rel))
+            },
 
-                    };
+            Rel::Projection { ref expr, ref input, ref schema } => {
+                match input {
+                    &Some(ref r) => {
+                        let input_rel = self.create_execution_plan(&r)?;
+                        let input_schema = input_rel.schema().clone();
 
-                    Ok(Box::new(rel))
-                },
-                _ => unimplemented!("Projection currently requires an input relation")
+                        let project_columns: Vec<ColumnMeta> = expr.iter().map(|e| {
+                            match e {
+                                &Rex::TupleValue(i) => input_schema.columns[i].clone(),
+                                _ => unimplemented!()
+                            }
+                        }).collect();
+
+                        let project_schema = TupleType { columns: project_columns };
+
+                        let rel = ProjectRelation {
+                            input: input_rel,
+                            expr: expr.clone(),
+                            schema: project_schema,
+
+                        };
+
+                        Ok(Box::new(rel))
+                    },
+                    _ => unimplemented!("Projection currently requires an input relation")
+                }
+            },
+
+            _ => {
+                println!("Not implemented: {:?}", plan);
+                Err(ExecutionError::Custom("not implemented".to_string()))
             }
-        },
-
-        _ => {
-            println!("Not implemented: {:?}", plan);
-            Err(ExecutionError::Custom("not implemented".to_string()))
         }
     }
+
 }
+
 
 /// Evaluate a relational expression against a tuple
 pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<Error>> {
