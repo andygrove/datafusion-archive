@@ -34,15 +34,9 @@ pub struct Tuple {
 }
 
 impl Tuple {
-
     pub fn new(v: Vec<Value>) -> Self {
         Tuple { values: v }
     }
-}
-
-pub trait Relation<'a> {
-    fn schema(&'a self) -> TupleType;
-    fn scan(&'a mut self) -> Box<Iterator<Item=Result<Tuple,String>> + 'a>;
 }
 
 pub trait DataFrame<T> {
@@ -86,7 +80,7 @@ pub enum Rex {
 #[derive(Debug,Serialize, Deserialize)]
 pub enum Rel {
     Projection { expr: Vec<Rex>, input: Option<Box<Rel>> },
-    Selection { expr: Rex, input: Box<Rel> },
+    Selection { expr: Rex, input: Box<Rel>, schema: TupleType },
     TableScan { schema: String, table: String },
     CsvFile { filename: String, schema: TupleType },
 }
