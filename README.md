@@ -6,7 +6,7 @@ This is a proof-of-concept of a distributed data processing platform in Rust wit
 
 # Current Status
 
-So far, very little works. It is possible to run a trivial SQL query against a CSV file. Just a few data types are implemented. See (examples/sql_query.rs)[examples/sql_query.rs] for an example.
+So far, very little works. It is possible to run a trivial SQL query against a CSV file. Just a few data types are implemented. See [examples/sql_query.rs](https://github.com/andygrove/distributed-query-rs/blob/master/examples/sql_query.rs) for an example.
 
 # Roadmap / TODO list
 
