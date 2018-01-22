@@ -15,23 +15,22 @@ impl SqlToRel {
         SqlToRel { default_schema: None, schemas }
     }
 
-    pub fn sql_to_rel(&self, sql: &ASTNode, tt: &TupleType) -> Result<Box<Rel>, String> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Box<Rel>, String> {
         match sql {
             &ASTNode::SQLSelect { ref projection, ref relation, ref selection, .. } => {
 
+                // parse the input relation so we have access to the tuple type
+                let input = match relation {
+                    &Some(ref r) => self.sql_to_rel(r)?,
+                    &None => Box::new(Rel::EmptyRelation)
+                };
+
+                let input_schema = input.schema();
+
                 let expr : Vec<Rex> = projection.iter()
-                    .map(|e| self.sql_to_rex(&e, tt) )
+                    .map(|e| self.sql_to_rex(&e, &input_schema) )
                     .collect::<Result<Vec<Rex>,String>>()?;
 
-                let input = match relation {
-                    &Some(ref r) => Some(self.sql_to_rel(r, tt)?),
-                    &None => None
-                };
-
-                let input_schema = match input {
-                    Some(ref x) => x.schema().clone(),
-                    None => TupleType::empty()
-                };
 
                 let projection_schema = TupleType {
                     columns: expr.iter().map( |e| match e {
@@ -43,21 +42,15 @@ impl SqlToRel {
                 match selection {
                     &Some(ref filter_expr) => {
 
-                        let selection_rel = match input {
-                            Some(x) => {
-                                let schema = x.schema().clone();
-                                Rel::Selection {
-                                    expr: self.sql_to_rex(&filter_expr, tt)?,
-                                    input: x,
-                                    schema: input_schema.clone()
-                                }
-                            },
-                            _ => unimplemented!() //TODO error handling
+                        let selection_rel = Rel::Selection {
+                            expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
+                            input: input,
+                            schema: input_schema.clone()
                         };
 
                         Ok(Box::new(Rel::Projection {
                             expr: expr,
-                            input: Some(Box::new(selection_rel)),
+                            input: Box::new(selection_rel),
                             schema: projection_schema.clone()
                         }))
 

@@ -120,14 +120,13 @@ impl SimpleRelation for ProjectRelation {
     fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
         let foo = self.input.scan().map(move|r| match r {
             Ok(tuple) => {
-                //TODO: add support for other expressions in projections
-                let x = self.expr.iter()
+                let values = self.expr.iter()
                     .map(|e| match e {
                         &Rex::TupleValue(i) => tuple.values[i].clone(),
                         _ => unimplemented!("Unsupported expression for projection")
                     })
                     .collect();
-                Ok(Tuple { values: x })
+                Ok(Tuple::new(values))
             },
             Err(_) => r
         });
@@ -146,8 +145,8 @@ pub struct ExecutionContext {
 
 impl ExecutionContext {
 
-    pub fn new() -> Self {
-        ExecutionContext { schemas: HashMap::new() }
+    pub fn new(schemas: HashMap<String, TupleType>) -> Self {
+        ExecutionContext { schemas }
     }
 
     pub fn register_table(&mut self, name: String, schema: TupleType) {
@@ -157,7 +156,11 @@ impl ExecutionContext {
     pub fn create_execution_plan(&self, plan: &Rel) -> Result<Box<SimpleRelation>,ExecutionError> {
         match *plan {
 
-            Rel::TableScan { ref schema_name, ref table_name, ref schema} => {
+            Rel::EmptyRelation => {
+                panic!()
+            },
+
+            Rel::TableScan { ref schema_name, ref table_name, ref schema } => {
                 // for now, tables are csv files
                 let file = File::open(format!("test/{}.csv", table_name))?;
                 let rel = CsvRelation::open(file, schema.clone())?;
@@ -181,34 +184,27 @@ impl ExecutionContext {
             },
 
             Rel::Projection { ref expr, ref input, ref schema } => {
-                match input {
-                    &Some(ref r) => {
-                        let input_rel = self.create_execution_plan(&r)?;
-                        let input_schema = input_rel.schema().clone();
+                let input_rel = self.create_execution_plan(&input)?;
+                let input_schema = input_rel.schema().clone();
 
-                        let project_columns: Vec<ColumnMeta> = expr.iter().map(|e| {
-                            match e {
-                                &Rex::TupleValue(i) => input_schema.columns[i].clone(),
-                                _ => unimplemented!()
-                            }
-                        }).collect();
+                let project_columns: Vec<ColumnMeta> = expr.iter().map(|e| {
+                    match e {
+                        &Rex::TupleValue(i) => input_schema.columns[i].clone(),
+                        _ => unimplemented!("Unsupported projection expression")
+                    }
+                }).collect();
 
-                        let project_schema = TupleType { columns: project_columns };
+                let project_schema = TupleType { columns: project_columns };
 
-                        let rel = ProjectRelation {
-                            input: input_rel,
-                            expr: expr.clone(),
-                            schema: project_schema,
+                let rel = ProjectRelation {
+                    input: input_rel,
+                    expr: expr.clone(),
+                    schema: project_schema,
 
-                        };
+                };
 
-                        Ok(Box::new(rel))
-                    },
-                    _ => unimplemented!("Projection currently requires an input relation")
-                }
-            },
-
-            _ => Err(ExecutionError::Custom(format!("Cannot create execution plan for {:?}", plan)))
+                Ok(Box::new(rel))
+            }
         }
     }
 

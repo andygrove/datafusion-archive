@@ -1,5 +1,7 @@
 #![feature(box_patterns)]
 
+use std::collections::HashMap;
+
 extern crate query_planner;
 use query_planner::rel::*;
 use query_planner::exec::*;
@@ -15,6 +17,10 @@ fn main() {
             ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
         ]
     };
+
+    // create a schema registry
+    let mut schemas : HashMap<String, TupleType> = HashMap::new();
+    schemas.insert("people".to_string(), schema.clone());
 
     let csv_file = Rel::CsvFile {
         filename: "test/people.csv".to_string(),
@@ -39,7 +45,7 @@ fn main() {
     println!("Relational plan: {}", rel_str);
 
     // create execution plan
-    let mut ctx = ExecutionContext::new();
+    let mut ctx = ExecutionContext::new(schemas.clone());
     ctx.register_table("people".to_string(), schema.clone());
     let execution_plan = ctx.create_execution_plan(&plan).unwrap();
 

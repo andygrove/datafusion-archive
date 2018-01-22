@@ -47,9 +47,6 @@ pub trait DataFrame<T> {
     fn select(&mut self, column_names: Vec<String>) -> Box<Self>;
 }
 
-
-
-
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,PartialOrd,Serialize,Deserialize)]
 pub enum Value {
@@ -83,10 +80,11 @@ pub enum Rex {
 /// Relations
 #[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Rel {
-    Projection { expr: Vec<Rex>, input: Option<Box<Rel>>, schema: TupleType },
+    Projection { expr: Vec<Rex>, input: Box<Rel>, schema: TupleType },
     Selection { expr: Rex, input: Box<Rel>, schema: TupleType },
     TableScan { schema_name: String, table_name: String, schema: TupleType },
     CsvFile { filename: String, schema: TupleType },
+    EmptyRelation
 }
 
 impl Rel {
@@ -94,6 +92,7 @@ impl Rel {
     pub fn schema(&self) -> TupleType {
         match self {
             &Rel::TableScan { ref schema, .. } => schema.clone(),
+            &Rel::EmptyRelation => TupleType::empty(),
             _ => unimplemented!()
         }
     }
