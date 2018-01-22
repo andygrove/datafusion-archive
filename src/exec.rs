@@ -8,7 +8,7 @@ use std::path::Path;
 use std::string::String;
 use std::convert::*;
 
-extern crate csv; // TODO:why do I need to this here as well as top level lib.rs ??
+extern crate csv;
 
 use super::csv::StringRecord;
 
@@ -17,6 +17,7 @@ use super::rel::*;
 #[derive(Debug)]
 pub enum ExecutionError {
     IoError(Error),
+    CsvError(csv::Error),
     Custom(String)
 }
 
@@ -25,12 +26,6 @@ impl From<Error> for ExecutionError {
         ExecutionError::IoError(e)
     }
 }
-
-//#[derive(Debug)]
-//struct InMemoryRelation<'a> {
-//    tuples: &'a Vec<Tuple>,
-//    schema: &'a TupleType
-//}
 
 /// Represents a csv file with a known schema
 #[derive(Debug)]
@@ -89,7 +84,7 @@ impl SimpleRelation for CsvRelation {
 
         let tuple_iter = record_iter.map(move|r| match r {
             Ok(record) => self.create_tuple(&record),
-            Err(_) => Err(ExecutionError::Custom("TODO".to_string()))
+            Err(e) => Err(ExecutionError::CsvError(e))
         });
 
         Box::new(tuple_iter)
@@ -101,36 +96,16 @@ impl SimpleRelation for CsvRelation {
 
 }
 
-//impl<'a> SimpleRelation<'a> for InMemoryRelation<'a> {
-//
-//    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
-//        let tuple_iter = self.tuples.iter().map(move |t| Ok(t.clone()));
-//        Box::new(tuple_iter)
-//    }
-//
-////    fn schema(&'a self) -> &'a TupleType {
-////        &self.schema
-////    }
-//
-//}
-
-
 impl SimpleRelation for FilterRelation {
 
     fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
         Box::new(self.input.scan().filter(move|t|
             match t {
-                &Ok(ref tuple) => {
-                    let predicate_eval = evaluate(tuple, &self.schema, &self.expr);
-
-                    //println!("FilterRelation considering tuple: {:?} .. evals to {:?}", tuple, predicate_eval);
-
-                    match predicate_eval {
-                        Ok(Value::Boolean(b)) => b,
-                        _ => false //TODO: error handling
-                    }
+                &Ok(ref tuple) => match evaluate(tuple, &self.schema, &self.expr) {
+                    Ok(Value::Boolean(b)) => b,
+                    _ => panic!("Predicate expression evaluated to non-boolean value")
                 },
-                _ => false //TODO: error handling
+                _ => true // let errors through the filter so they can be handled later
             }
         ))
     }
@@ -138,10 +113,7 @@ impl SimpleRelation for FilterRelation {
     fn schema<'a>(&'a self) -> &'a TupleType {
         &self.schema
     }
-
 }
-
-
 
 impl SimpleRelation for ProjectRelation {
 
@@ -244,7 +216,7 @@ impl ExecutionContext {
 
 
 /// Evaluate a relational expression against a tuple
-pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<Error>> {
+pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<ExecutionError>> {
 
     match rex {
         &Rex::BinaryExpr { box ref left, ref op, box ref right } => {
