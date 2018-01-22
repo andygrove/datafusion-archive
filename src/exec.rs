@@ -120,13 +120,16 @@ impl SimpleRelation for ProjectRelation {
     fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
         let foo = self.input.scan().map(move|r| match r {
             Ok(tuple) => {
-                let x = self.expr.iter().map(|e| match e {
-                    &Rex::TupleValue(i) => tuple.values[i].clone(),
-                    _ => unimplemented!()
-                }).collect();
+                //TODO: add support for other expressions in projections
+                let x = self.expr.iter()
+                    .map(|e| match e {
+                        &Rex::TupleValue(i) => tuple.values[i].clone(),
+                        _ => unimplemented!("Unsupported expression for projection")
+                    })
+                    .collect();
                 Ok(Tuple { values: x })
             },
-            Err(e) => panic!() // TODO
+            Err(_) => r
         });
 
         Box::new(foo)
@@ -205,10 +208,7 @@ impl ExecutionContext {
                 }
             },
 
-            _ => {
-                println!("Not implemented: {:?}", plan);
-                Err(ExecutionError::Custom("not implemented".to_string()))
-            }
+            _ => Err(ExecutionError::Custom(format!("Cannot create execution plan for {:?}", plan)))
         }
     }
 

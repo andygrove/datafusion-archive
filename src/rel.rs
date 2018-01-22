@@ -21,6 +21,9 @@ pub struct TupleType {
     pub columns: Vec<ColumnMeta>
 }
 
+impl TupleType {
+    pub fn empty() -> Self { TupleType { columns: vec![] } }
+}
 
 
 /// A tuple represents one row within a relation and is implemented as a trait to allow for

@@ -30,7 +30,7 @@ impl SqlToRel {
 
                 let input_schema = match input {
                     Some(ref x) => x.schema().clone(),
-                    None => panic!()
+                    None => TupleType::empty()
                 };
 
                 let projection_schema = TupleType {
