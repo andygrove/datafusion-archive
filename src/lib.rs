@@ -3,6 +3,7 @@
 pub mod sql;
 pub mod parser;
 pub mod rel;
+pub mod dataframe;
 pub mod sqltorel;
 pub mod exec;
 

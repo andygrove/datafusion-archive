@@ -43,10 +43,6 @@ impl Tuple {
     }
 }
 
-pub trait DataFrame<T> {
-    fn select(&mut self, column_names: Vec<String>) -> Box<Self>;
-}
-
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,PartialOrd,Serialize,Deserialize)]
 pub enum Value {

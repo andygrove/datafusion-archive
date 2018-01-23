@@ -13,6 +13,7 @@ extern crate csv;
 use super::csv::StringRecord;
 
 use super::rel::*;
+use super::dataframe::*;
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -147,6 +148,11 @@ impl ExecutionContext {
 
     pub fn new(schemas: HashMap<String, TupleType>) -> Self {
         ExecutionContext { schemas }
+    }
+
+    /// Open a CSV file
+    pub fn load(&self, filename: &str) -> Result<Box<DataFrame>, ExecutionError> {
+        unimplemented!()
     }
 
     pub fn register_table(&mut self, name: String, schema: TupleType) {
