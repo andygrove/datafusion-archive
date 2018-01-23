@@ -5,12 +5,13 @@ pub enum DataFrameError {
     NotImplemented
 }
 
-pub struct DFColumn {
+pub struct Column {
 }
 
-impl DFColumn {
+impl Column {
 
     pub fn eq(&self, v: Value) -> Rex {
+        //TODO: return Rex::BinaryExpr
         unimplemented!()
     }
 }
@@ -30,6 +31,7 @@ pub trait DataFrame {
     /// Write to CSV ...  will support other formats in the future
     fn write(&self, filename: &str) -> Result<Box<DataFrame>,DataFrameError>;
 
-    fn col(&self, column_name: &str) -> Result<DFColumn,DataFrameError>;
+    /// Return an expression representing the specified column
+    fn col(&self, column_name: &str) -> Result<Column,DataFrameError>;
 }
 
