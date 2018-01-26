@@ -8,12 +8,12 @@ os:
 # Run builds for all the supported trains
 rust:
   - nightly
-  - beta
-  - stable
-  - 1.0.0
+#  - beta
+#  - stable
+#  - 1.0.0
 
 # The main build
 script:
   - cargo build
-  - cargo build --examples
+  - cargo build --example
   - cargo test
