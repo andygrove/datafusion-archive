@@ -15,5 +15,5 @@ rust:
 # The main build
 script:
   - cargo build
-  - cargo build --example
+  - cargo build --examples
   - cargo test
