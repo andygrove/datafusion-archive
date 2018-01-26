@@ -39,20 +39,21 @@ I'd like to be able to run a job that reads a partitioned CSV file from HDFS and
 
 Features needed:
 
-- Worker nodes
 - Partitioning
 - Shuffle
 - Scalar functions
-- Deployment model (most likely kubernetes and etcd for service discovery)
-- Docker container for worker nodes
 - HDFS support
+- Worker nodes (dockerized)
 
-## Phase 2 - Usability
+## Phase 2 - Usability and Stability
 
-- Complete data type support
+- Deployment model (most likely kubernetes and etcd for service discovery)
 - UI
-- Make SQL / DataFrame functionality more complete
 - Documentation
+- Automated integration tests
+- Automated performance tests
+- Complete data type support
+- Make SQL / DataFrame functionality more complete
  
 ## Phase 3 - Make it usable for real-world problems
 
