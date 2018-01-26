@@ -1,10 +1,10 @@
-# Distributed Query Processing implemented in Rust
+# Distributed Query Processing in Rust
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 This project is intended to be a proof-of-concept of a distributed data processing platform in Rust with features somewhat similar to Apache Spark but it is not intended to be a clone of Apache Spark.
 
-I have a hypothesis that even a naive implementation in Rust will have performance that is roughly comparable to that of Apache Spark, but more importantly the performance will be _predictable_ and _reliable_ because there is no garbage collector involved.
+I have a hypothesis that even a naive implementation in Rust will have performance that is roughly comparable to that of Apache Spark for simple use cases, but more importantly the performance will be _predictable_ and _reliable_ because there is no garbage collector involved.
 
 # What will be similar to Apache Spark?
 
@@ -17,7 +17,7 @@ I have a hypothesis that even a naive implementation in Rust will have performan
 
 Due to the statically compiled nature of Rust, this platform will be less interactive:
 
-- No support is planned for allowing idiomatic functional code to be applied to a DataFrame and have the lambda functions be serialized and sent to the worker nodes
+- No support is planned for allowing idiomatic Rust lambda functions to be applied to a DataFrame but instead pre-registered UDFs can be used to perform transformations on DataFrames
 - UDTs and UDFs will need to be statically compiled into the worker nodes, at least initially (it would be possible to do some dynamic loading eventually)
 - No interactive REPL is planned although a SQL console would be possible
 
@@ -62,7 +62,7 @@ Features needed:
 - UDTs
 - UDFs
 - UDAFs
-- Query optimizer (starting with simple optimizations like predicate push-down)
+- Query optimizer (starting with simple optimizations like predicate push-down, push predicate through join etc)
 - Integrations with other data sources
 
 
