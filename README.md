@@ -1,6 +1,7 @@
 # Distributed Query Processing in Rust
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Build Status](https://travis-ci.org/andygrove/distributed-query-rs.svg?branch=master)](https://travis-ci.org/andygrove/distributed-query-rs)
 
 This project is a proof-of-concept of a distributed data processing platform in Rust with features somewhat similar to Apache Spark but it is not intended to be a clone of Apache Spark.
 
