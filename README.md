@@ -6,8 +6,6 @@ This project is intended to be a proof-of-concept of a distributed data processi
 
 I have a hypothesis that even a naive implementation in Rust will have performance that is roughly comparable to that of Apache Spark, but more importantly the performance will be _predictable_ and _reliable_ because there is no garbage collector involved.
 
-Apache Spark has become the de-facto standard for distributed data processing but I would love to see what is possible with Rust.
-
 # What will be similar to Apache Spark?
 
 - There will be a DataFrame API as well as SQL support and both approaches ultimately are just different ways of defining a query plan
@@ -35,12 +33,13 @@ Primarily, this is a just a fun side-project for me to use to become a better Ru
 
 # Roadmap
 
-## Phase 1 - Build a demo of a simple distributed workload
+## Phase 1 - Benchmark simple use case against Apache Spark
 
 I'd like to be able to run a job that reads a partitioned CSV file from HDFS and performs some computationally intensive processing on that data on a cluster and see how the performance compares to Apache Spark.
 
 Features needed:
 
+- Worker nodes
 - Partitioning
 - Shuffle
 - Scalar functions
@@ -64,6 +63,7 @@ Features needed:
 - UDFs
 - UDAFs
 - Query optimizer (starting with simple optimizations like predicate push-down)
+- Integrations with other data sources
 
 
 
