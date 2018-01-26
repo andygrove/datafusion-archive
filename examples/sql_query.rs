@@ -40,8 +40,10 @@ fn main() {
     let rel_str = serde_json::to_string_pretty(&plan).unwrap();
     println!("Relational plan: {}", rel_str);
 
-    // create execution plan
+    // create execution context
     let ctx = ExecutionContext::new(schemas.clone());
+
+    // create execution plan
     let execution_plan = ctx.create_execution_plan(&plan).unwrap();
 
     // execute the query

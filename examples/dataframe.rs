@@ -9,7 +9,7 @@ use query_planner::dataframe::*;
 
 extern crate serde_json;
 
-/// This example shows the steps to parse, plan, and execute simple SQL in the current process
+/// This example shows the use of the DataFrame API to define a query plan
 fn main() {
 
     // define schema for data source (csv file)
@@ -24,7 +24,7 @@ fn main() {
     let mut schemas : HashMap<String, TupleType> = HashMap::new();
     schemas.insert("people".to_string(), schema.clone());
 
-    // create execution plan
+    // create execution context
     let ctx = ExecutionContext::new(schemas.clone());
 
     // open a CSV file as a dataframe
@@ -33,6 +33,7 @@ fn main() {
     // perform some transformations
     let df2 = df.filter(df.col("id").unwrap().eq(Value::UnsignedLong(4))).unwrap();
 
+    // write the results to a file
     df2.write("person4.csv");
 
 }
