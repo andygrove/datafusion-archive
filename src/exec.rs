@@ -165,8 +165,10 @@ impl ExecutionContext {
     }
 
     /// Open a CSV file
-    pub fn load(&self, filename: &str) -> Result<Box<DataFrame>, ExecutionError> {
-        unimplemented!()
+    ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
+    pub fn load(&self, filename: &str, schema: &TupleType) -> Result<Box<DataFrame>, ExecutionError> {
+        let plan = Rel::CsvFile { filename: filename.to_string(), schema: schema.clone() };
+        Ok(Box::new(DF { plan: Box::new(plan) }))
     }
 
     pub fn register_table(&mut self, name: String, schema: TupleType) {
@@ -253,3 +255,37 @@ pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<E
 
 }
 
+
+pub struct DF {
+    plan: Box<Rel>
+}
+
+impl DataFrame for DF {
+
+    fn repartition(&self, n: u32) -> Result<Box<DataFrame>, DataFrameError> {
+        unimplemented!()
+    }
+
+    fn select(&self, expr: Vec<Rex>) -> Result<Box<DataFrame>, DataFrameError> {
+        unimplemented!()
+    }
+
+    fn filter(&self, expr: Rex) -> Result<Box<DataFrame>, DataFrameError> {
+        
+        unimplemented!()
+    }
+
+    fn write(&self, filename: &str) -> Result<Box<DataFrame>, DataFrameError> {
+        unimplemented!()
+    }
+
+    fn col(&self, column_name: &str) -> Result<Rex, DataFrameError> {
+        match &self.plan {
+            &box Rel::CsvFile { ref filename, ref schema } => match schema.column(column_name) {
+                Some((i,c)) => Ok(Rex::TupleValue(i)),
+                _ => Err(DataFrameError::TBD) // column doesn't exist
+            },
+            _ => Err(DataFrameError::NotImplemented)
+        }
+    }
+}

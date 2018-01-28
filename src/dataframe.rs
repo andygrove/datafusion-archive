@@ -16,19 +16,22 @@ use super::rel::*;
 
 #[derive(Debug)]
 pub enum DataFrameError {
+    TBD,
     NotImplemented
 }
 
-pub struct Column {
-}
 
-impl Column {
 
-    pub fn eq(&self, v: Value) -> Rex {
-        //TODO: return Rex::BinaryExpr
-        unimplemented!()
-    }
-}
+//pub trait Column {
+//}
+//
+//impl Column {
+//
+//    pub fn eq(&self, v: Value) -> Rex {
+//        //TODO: return Rex::BinaryExpr
+//        unimplemented!()
+//    }
+//}
 
 /// DataFrame is an abstraction of a distributed query plan
 pub trait DataFrame {
@@ -46,6 +49,6 @@ pub trait DataFrame {
     fn write(&self, filename: &str) -> Result<Box<DataFrame>,DataFrameError>;
 
     /// Return an expression representing the specified column
-    fn col(&self, column_name: &str) -> Result<Column,DataFrameError>;
+    fn col(&self, column_name: &str) -> Result<Rex,DataFrameError>;
 }
 

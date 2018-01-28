@@ -36,7 +36,17 @@ pub struct TupleType {
 }
 
 impl TupleType {
+
+    /// create an empty tuple
     pub fn empty() -> Self { TupleType { columns: vec![] } }
+
+    /// look up a column by name and return a reference to the column along with it's index
+    pub fn column(&self, name: &str) -> Option<(usize, &ColumnMeta)> {
+        self.columns.iter()
+            .enumerate()
+            .find(|&(_,c)| c.name == name)
+    }
+
 }
 
 
@@ -85,6 +95,19 @@ pub enum Rex {
     Literal(Value),
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Rex>, op: Operator, right: Box<Rex> },
+}
+
+impl Rex {
+
+    pub fn eq(&self, other: &Rex) -> Rex {
+        Rex::BinaryExpr {
+            left: Box::new(self.clone()),
+            op: Operator::Eq,
+            right: Box::new(other.clone())
+        }
+    }
+
+
 }
 
 /// Relations
