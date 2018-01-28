@@ -124,9 +124,11 @@ impl Rel {
 
     pub fn schema(&self) -> TupleType {
         match self {
-            &Rel::TableScan { ref schema, .. } => schema.clone(),
             &Rel::EmptyRelation => TupleType::empty(),
-            _ => unimplemented!()
+            &Rel::TableScan { ref schema, .. } => schema.clone(),
+            &Rel::CsvFile { ref schema, .. } => schema.clone(),
+            &Rel::Projection { ref schema, .. } => schema.clone(),
+            &Rel::Selection { ref schema, .. } => schema.clone(),
         }
     }
 }

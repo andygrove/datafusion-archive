@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Error;
+
 use super::rel::*;
+use super::exec::*;
 
 #[derive(Debug)]
 pub enum DataFrameError {
@@ -20,18 +23,19 @@ pub enum DataFrameError {
     NotImplemented
 }
 
+impl From<ExecutionError> for DataFrameError {
+    fn from(e: ExecutionError) -> Self {
+        //TODO:
+        DataFrameError::TBD
+    }
+}
 
-
-//pub trait Column {
-//}
-//
-//impl Column {
-//
-//    pub fn eq(&self, v: Value) -> Rex {
-//        //TODO: return Rex::BinaryExpr
-//        unimplemented!()
-//    }
-//}
+impl From<Error> for DataFrameError {
+    fn from(e: Error) -> Self {
+        //TODO:
+        DataFrameError::TBD
+    }
+}
 
 /// DataFrame is an abstraction of a distributed query plan
 pub trait DataFrame {
@@ -46,7 +50,7 @@ pub trait DataFrame {
     fn filter(&self, expr: Rex) -> Result<Box<DataFrame>,DataFrameError>;
 
     /// Write to CSV ...  will support other formats in the future
-    fn write(&self, filename: &str) -> Result<Box<DataFrame>,DataFrameError>;
+    fn write(&self, filename: &str) -> Result<(),DataFrameError>;
 
     /// Return an expression representing the specified column
     fn col(&self, column_name: &str) -> Result<Rex,DataFrameError>;

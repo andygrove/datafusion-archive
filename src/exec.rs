@@ -154,6 +154,7 @@ impl SimpleRelation for ProjectRelation {
     }
 }
 
+#[derive(Debug,Clone)]
 pub struct ExecutionContext {
     pub schemas: HashMap<String, TupleType>
 }
@@ -168,7 +169,7 @@ impl ExecutionContext {
     ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
     pub fn load(&self, filename: &str, schema: &TupleType) -> Result<Box<DataFrame>, ExecutionError> {
         let plan = Rel::CsvFile { filename: filename.to_string(), schema: schema.clone() };
-        Ok(Box::new(DF { plan: Box::new(plan) }))
+        Ok(Box::new(DF { ctx: Box::new((*self).clone()), plan: Box::new(plan) }))
     }
 
     pub fn register_table(&mut self, name: String, schema: TupleType) {
@@ -257,6 +258,7 @@ pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<E
 
 
 pub struct DF {
+    ctx: Box<ExecutionContext>,
     plan: Box<Rel>
 }
 
@@ -271,12 +273,35 @@ impl DataFrame for DF {
     }
 
     fn filter(&self, expr: Rex) -> Result<Box<DataFrame>, DataFrameError> {
-        
-        unimplemented!()
+
+        let plan = Rel::Selection {
+            expr: expr,
+            input: self.plan.clone(),
+            schema: self.plan.schema().clone()
+        };
+
+        Ok(Box::new(DF { ctx: self.ctx.clone(), plan: Box::new(plan) }))
     }
 
-    fn write(&self, filename: &str) -> Result<Box<DataFrame>, DataFrameError> {
-        unimplemented!()
+    fn write(&self, filename: &str) -> Result<(), DataFrameError> {
+        let execution_plan = self.ctx.create_execution_plan(&self.plan)?;
+
+        // create output file
+        let mut file = File::create(filename)?;
+
+        // implement execution here for now but should be a common method for processing a plan
+        let it = execution_plan.scan();
+        it.for_each(|t| {
+            match t {
+                Ok(tuple) => {
+                    let csv = format!("{:?}", tuple);
+                    file.write(&csv.into_bytes());
+                },
+                _ => println!("Error") //TODO: error handling
+            }
+        });
+
+        Ok(())
     }
 
     fn col(&self, column_name: &str) -> Result<Rex, DataFrameError> {
