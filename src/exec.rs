@@ -238,7 +238,7 @@ impl ExecutionContext {
 pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<ExecutionError>> {
 
     match rex {
-        &Rex::BinaryExpr { box ref left, ref op, box ref right } => {
+        &Rex::BinaryExpr { ref left, ref op, ref right } => {
             let left_value = evaluate(tuple, tt, left)?;
             let right_value = evaluate(tuple, tt, right)?;
             match op {
@@ -305,8 +305,8 @@ impl DataFrame for DF {
     }
 
     fn col(&self, column_name: &str) -> Result<Rex, DataFrameError> {
-        match &self.plan {
-            &box Rel::CsvFile { ref filename, ref schema } => match schema.column(column_name) {
+        match &self.plan.as_ref() {
+            &&Rel::CsvFile { ref filename, ref schema } => match schema.column(column_name) {
                 Some((i,c)) => Ok(Rex::TupleValue(i)),
                 _ => Err(DataFrameError::TBD) // column doesn't exist
             },

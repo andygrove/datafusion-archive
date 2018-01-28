@@ -76,6 +76,14 @@ pub enum Value {
     Double(f64)
 }
 
+impl Value {
+
+    fn to_string(&self) -> String {
+        unimplemented!()
+    }
+
+}
+
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum Operator {
     Eq,
