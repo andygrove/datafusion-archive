@@ -65,6 +65,14 @@ impl Tuple {
     pub fn new(v: Vec<Value>) -> Self {
         Tuple { values: v }
     }
+    pub fn to_string(&self) -> String {
+        let value_strings : Vec<String> = self.values.iter()
+            .map(|v| v.to_string())
+            .collect();
+
+        // return comma-separated
+        value_strings.join(",")
+    }
 }
 
 /// Value holder for all supported data types
@@ -79,7 +87,12 @@ pub enum Value {
 impl Value {
 
     fn to_string(&self) -> String {
-        unimplemented!()
+        match self {
+            &Value::UnsignedLong(l) => l.to_string(),
+            &Value::Double(d) => d.to_string(),
+            &Value::Boolean(b) => b.to_string(),
+            &Value::String(ref s) => s.clone(),
+        }
     }
 
 }
@@ -104,7 +117,7 @@ pub enum Rex {
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Rex>, op: Operator, right: Box<Rex> },
     /// scalar function
-    ScalarFunction { name: String, args: Vec<Rex>, return_type: Box<Rex> }
+    ScalarFunction { name: String, args: Vec<Rex> }
 }
 
 impl Rex {

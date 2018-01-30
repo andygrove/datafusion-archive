@@ -211,8 +211,20 @@ impl Parser {
                                 format!("No prefix parser for keyword {}", k))),
                         }
                     },
-                    Token::Identifier(id) =>
-                        Ok(ASTNode::SQLIdentifier { id: id, parts: vec![] }),
+                    Token::Identifier(id) => {
+                        match self.peek_token() {
+                            Some(Token::LParen) => {
+                                self.next_token(); // skip lparen
+
+                                let args = self.parse_expr_list()?;
+
+                                self.next_token(); // skip rparen
+
+                                Ok(ASTNode::SQLFunction { id, args })
+                            },
+                            _ => Ok(ASTNode::SQLIdentifier { id: id, parts: vec![] })
+                        }
+                    }
                     Token::Number(n) =>
                         Ok(ASTNode::SQLLiteralInt(n.parse::<i64>().unwrap())), //TODO: parse the number
                     _ => Err(ParserError::ParserError(
@@ -382,10 +394,30 @@ mod tests {
         let sql = String::from("SELECT 1");
         let mut tokenizer = Tokenizer { query: sql };
         let tokens = tokenizer.tokenize().unwrap();
-        println!("tokens = {:?}", tokens);
-        assert_eq!(2, tokens.len());
-        assert_eq!(Token::Keyword(String::from("SELECT")), tokens[0]);
-        assert_eq!(Token::Number(String::from("1")), tokens[1]);
+
+        let expected = vec![
+            Token::Keyword(String::from("SELECT")),
+            Token::Number(String::from("1"))
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_scalar_function()  {
+        let sql = String::from("SELECT sqrt(1)");
+        let mut tokenizer = Tokenizer { query: sql };
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::Keyword(String::from("SELECT")),
+            Token::Identifier(String::from("sqrt")),
+            Token::LParen,
+            Token::Number(String::from("1")),
+            Token::RParen
+        ];
+
+        compare(expected, tokens);
     }
 
     #[test]
@@ -393,16 +425,19 @@ mod tests {
         let sql = String::from("SELECT * FROM customer WHERE id = 1");
         let mut tokenizer = Tokenizer { query: sql };
         let tokens = tokenizer.tokenize().unwrap();
-        println!("tokens = {:?}", tokens);
-        assert_eq!(8, tokens.len());
-        assert_eq!(Token::Keyword(String::from("SELECT")), tokens[0]);
-        assert_eq!(Token::Mult, tokens[1]);
-        assert_eq!(Token::Keyword(String::from("FROM")), tokens[2]);
-        assert_eq!(Token::Identifier(String::from("customer")), tokens[3]);
-        assert_eq!(Token::Keyword(String::from("WHERE")), tokens[4]);
-        assert_eq!(Token::Identifier(String::from("id")), tokens[5]);
-        assert_eq!(Token::Eq, tokens[6]);
-        assert_eq!(Token::Number(String::from("1")), tokens[7]);
+        
+        let expected = vec![
+            Token::Keyword(String::from("SELECT")),
+            Token::Mult,
+            Token::Keyword(String::from("FROM")),
+            Token::Identifier(String::from("customer")),
+            Token::Keyword(String::from("WHERE")),
+            Token::Identifier(String::from("id")),
+            Token::Eq,
+            Token::Number(String::from("1"))
+        ];
+
+        compare(expected, tokens);
     }
 
     #[test]
@@ -420,5 +455,30 @@ mod tests {
             _ => assert!(false)
         }
     }
+
+    #[test]
+    fn parse_scalar_function_in_projection() {
+        let sql = String::from("SELECT sqrt(id) FROM foo");
+        let mut tokenizer = Tokenizer { query: sql };
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        println!("AST = {:?}", ast);
+//        match ast {
+//            ASTNode::SQLSelect { projection, .. } => {
+//                assert_eq!(3, projection.len());
+//            },
+//            _ => assert!(false)
+//        }
+    }
+
+    fn compare(expected: Vec<Token>, actual: Vec<Token>) {
+        println!("------------------------------");
+        println!("tokens   = {:?}", actual);
+        println!("expected = {:?}", expected);
+        println!("------------------------------");
+        assert_eq!(expected, actual);
+    }
+
 }
 

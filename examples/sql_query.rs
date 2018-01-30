@@ -59,7 +59,7 @@ fn main() {
     let execution_plan = ctx.create_execution_plan(&plan).unwrap();
 
     // execute the query
-    let it = execution_plan.scan();
+    let it = execution_plan.scan(&ctx);
     it.for_each(|t| {
         match t {
             Ok(tuple) => println!("Tuple: {:?}", tuple),

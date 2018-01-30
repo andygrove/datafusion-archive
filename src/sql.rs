@@ -14,11 +14,12 @@
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum ASTNode {
-    SQLIdentifier{id: String, parts: Vec<String>},
-    SQLBinaryExpr{left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode>},
+    SQLIdentifier { id: String, parts: Vec<String> },
+    SQLBinaryExpr { left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode> },
     SQLNested(Box<ASTNode>),
-    SQLUnary{operator: SQLOperator, rex: Box<ASTNode>},
+    SQLUnary { operator: SQLOperator, rex: Box<ASTNode> },
     SQLLiteralInt(i64),
+    SQLFunction { id: String, args: Vec<ASTNode> },
     SQLSelect{
         projection: Vec<ASTNode>,
         relation: Option<Box<ASTNode>>,

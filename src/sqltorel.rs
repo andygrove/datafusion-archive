@@ -49,6 +49,11 @@ impl SqlToRel {
                 let projection_schema = TupleType {
                     columns: expr.iter().map( |e| match e {
                         &Rex::TupleValue(i) => input_schema.columns[i].clone(),
+                        &Rex::ScalarFunction { ref name, .. } => ColumnMeta {
+                            name: name.clone(),
+                            data_type: DataType::Double, //TODO: hard-coded until I have function metadata in place
+                            nullable: true
+                        },
                         _ => unimplemented!()
                     }).collect()
                 };
@@ -93,8 +98,6 @@ impl SqlToRel {
                 }
             },
 
-
-
             _ => Err(format!("sql_to_rel does not support this relation: {:?}", sql))
         }
     }
@@ -124,6 +127,14 @@ impl SqlToRel {
                     right: Box::new(self.sql_to_rex(&right, &tt)?),
                 })
 
+            },
+
+            &ASTNode::SQLFunction { ref id, ref args } => {
+                let rex_args = args.iter()
+                    .map(|a| self.sql_to_rex(a, tt))
+                    .collect::<Result<Vec<Rex>, String>>()?;
+
+                Ok(Rex::ScalarFunction { name: id.clone(), args: rex_args })
             },
 
             _ => Err(String::from(format!("Unsupported ast node {:?}", sql)))

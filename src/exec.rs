@@ -138,7 +138,9 @@ impl SimpleRelation for ProjectRelation {
                 let values = self.expr.iter()
                     .map(|e| match e {
                         &Rex::TupleValue(i) => tuple.values[i].clone(),
-                        _ => unimplemented!("Unsupported expression for projection")
+                        //TODO: relation delegating back to execution context seems wrong way around
+                        _ => ctx.evaluate(&tuple,&self.schema, e).unwrap() //TODO: remove unwrap
+                        //unimplemented!("Unsupported expression for projection")
                     })
                     .collect();
                 Ok(Tuple::new(values))
@@ -216,9 +218,15 @@ impl ExecutionContext {
                 let input_rel = self.create_execution_plan(&input)?;
                 let input_schema = input_rel.schema().clone();
 
+                //TODO: seems to be duplicate of sql_to_rel code
                 let project_columns: Vec<ColumnMeta> = expr.iter().map(|e| {
                     match e {
                         &Rex::TupleValue(i) => input_schema.columns[i].clone(),
+                        &Rex::ScalarFunction {ref name, ref args} => ColumnMeta {
+                            name: name.clone(),
+                            data_type: DataType::Double, //TODO: hard-coded .. no function metadata yet
+                            nullable: true
+                        },
                         _ => unimplemented!("Unsupported projection expression")
                     }
                 }).collect();
@@ -255,7 +263,7 @@ impl ExecutionContext {
             },
             &Rex::TupleValue(index) => Ok(tuple.values[index].clone()),
             &Rex::Literal(ref value) => Ok(value.clone()),
-            &Rex::ScalarFunction { ref name, ref args, ref return_type } => {
+            &Rex::ScalarFunction { ref name, ref args } => {
 
                 //TODO: look up function dynamically in execution context
                 //TODO: do arg check first based on function definition (count + types)
@@ -270,6 +278,7 @@ impl ExecutionContext {
                     "sqrt" => {
                         match arg_values[0] {
                             Value::Double(d) => Ok(Value::Double(d.sqrt())),
+                            Value::UnsignedLong(l) => Ok(Value::Double((l as f64).sqrt())),
                             _ => Err(Box::new(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())))
                         }
 
@@ -392,13 +401,26 @@ mod tests {
         let it = execution_plan.scan(&ctx);
         let results : Vec<String> = it.map(|t| {
             match t {
-                Ok(tuple) => format!("{:?}", tuple),
+                Ok(tuple) => tuple.to_string(),
                 _ => format!("error")
             }
         })
         .collect();
 
-        assert!(results.join(",") == "expectedresultsTBD");
+        println!("Result: {:?}", results.join(","));
+
+        let expected = "1,1,\
+            2,1.4142135623730951,\
+            3,1.7320508075688772,\
+            4,2,\
+            5,2.23606797749979,\
+            6,2.449489742783178,\
+            7,2.6457513110645907,\
+            8,2.8284271247461903,\
+            9,3,\
+            10,3.1622776601683795";
+
+        assert_eq!(expected, results.join(","));
 
     }
 }
