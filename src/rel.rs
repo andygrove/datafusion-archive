@@ -103,6 +103,8 @@ pub enum Rex {
     Literal(Value),
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Rex>, op: Operator, right: Box<Rex> },
+    /// scalar function
+    ScalarFunction { name: String, args: Vec<Rex>, return_type: Box<Rex> }
 }
 
 impl Rex {

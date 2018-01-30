@@ -154,9 +154,15 @@ impl SimpleRelation for ProjectRelation {
     }
 }
 
+pub trait ScalarFunction {
+    fn execute(args: Vec<Value>) -> Value;
+
+}
+
 #[derive(Debug,Clone)]
 pub struct ExecutionContext {
     pub schemas: HashMap<String, TupleType>
+
 }
 
 impl ExecutionContext {
@@ -252,6 +258,7 @@ pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<E
         },
         &Rex::TupleValue(index) => Ok(tuple.values[index].clone()),
         &Rex::Literal(ref value) => Ok(value.clone()),
+        &Rex::ScalarFunction { .. } => unimplemented!()
     }
 
 }
