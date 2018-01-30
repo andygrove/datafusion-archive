@@ -29,6 +29,16 @@ pub struct ColumnMeta {
     pub nullable: bool
 }
 
+impl ColumnMeta {
+    pub fn new(name: &str, data_type: DataType, nullable: bool) -> Self {
+        ColumnMeta {
+            name: name.to_string(),
+            data_type: data_type,
+            nullable: nullable
+        }
+    }
+}
+
 /// Definition of a relation (data set) consisting of one or more columns.
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct TupleType {
@@ -40,6 +50,8 @@ impl TupleType {
     /// create an empty tuple
     pub fn empty() -> Self { TupleType { columns: vec![] } }
 
+    pub fn new(columns: Vec<ColumnMeta>) -> Self { TupleType { columns: columns } }
+
     /// look up a column by name and return a reference to the column along with it's index
     pub fn column(&self, name: &str) -> Option<(usize, &ColumnMeta)> {
         self.columns.iter()
@@ -49,6 +61,12 @@ impl TupleType {
 
 }
 
+#[derive(Debug,Clone,Serialize,Deserialize)]
+pub struct FunctionMeta {
+    pub name: String,
+    pub args: Vec<ColumnMeta>,
+    pub return_type: DataType
+}
 
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
 /// specific implementations for different data sources
@@ -65,6 +83,14 @@ impl Tuple {
     pub fn new(v: Vec<Value>) -> Self {
         Tuple { values: v }
     }
+    pub fn to_string(&self) -> String {
+        let value_strings : Vec<String> = self.values.iter()
+            .map(|v| v.to_string())
+            .collect();
+
+        // return comma-separated
+        value_strings.join(",")
+    }
 }
 
 /// Value holder for all supported data types
@@ -79,7 +105,12 @@ pub enum Value {
 impl Value {
 
     fn to_string(&self) -> String {
-        unimplemented!()
+        match self {
+            &Value::UnsignedLong(l) => l.to_string(),
+            &Value::Double(d) => d.to_string(),
+            &Value::Boolean(b) => b.to_string(),
+            &Value::String(ref s) => s.clone(),
+        }
     }
 
 }
@@ -104,7 +135,7 @@ pub enum Rex {
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Rex>, op: Operator, right: Box<Rex> },
     /// scalar function
-    ScalarFunction { name: String, args: Vec<Rex>, return_type: Box<Rex> }
+    ScalarFunction { name: String, args: Vec<Rex> }
 }
 
 impl Rex {

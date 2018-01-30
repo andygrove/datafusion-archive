@@ -25,22 +25,21 @@ extern crate serde_json;
 /// This example shows the steps to parse, plan, and execute simple SQL in the current process
 fn main() {
 
-    let sql = "SELECT name, id FROM people WHERE id > 4";
-
-    // parse SQL into AST
-    let ast = Parser::parse_sql(String::from(sql)).unwrap();
-
-    // define schema for a csv file
-    let schema = TupleType {
-        columns: vec![
-            ColumnMeta { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
-            ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
-        ]
-    };
+    // define schema for data source (csv file)
+    let schema = TupleType::new(vec![
+        ColumnMeta::new("id", DataType::UnsignedLong, false),
+        ColumnMeta::new("name", DataType::String, false)
+    ]);
 
     // create a schema registry
     let mut schemas : HashMap<String, TupleType> = HashMap::new();
     schemas.insert("people".to_string(), schema.clone());
+
+    // define the SQL statement
+    let sql = "SELECT name, id FROM people WHERE id > 4";
+
+    // parse SQL into AST
+    let ast = Parser::parse_sql(String::from(sql)).unwrap();
 
     // create a query planner
     let query_planner = SqlToRel::new(schemas.clone());
@@ -59,7 +58,7 @@ fn main() {
     let execution_plan = ctx.create_execution_plan(&plan).unwrap();
 
     // execute the query
-    let it = execution_plan.scan();
+    let it = execution_plan.scan(&ctx);
     it.for_each(|t| {
         match t {
             Ok(tuple) => println!("Tuple: {:?}", tuple),
