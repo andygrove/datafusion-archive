@@ -7,10 +7,8 @@ os:
 
 # Run builds for all the supported trains
 rust:
+  - stable
   - nightly
-#  - beta
-#  - stable
-#  - 1.0.0
 
 # The main build
 script:
