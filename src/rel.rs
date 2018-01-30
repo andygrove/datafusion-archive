@@ -29,6 +29,16 @@ pub struct ColumnMeta {
     pub nullable: bool
 }
 
+impl ColumnMeta {
+    pub fn new(name: &str, data_type: DataType, nullable: bool) -> Self {
+        ColumnMeta {
+            name: name.to_string(),
+            data_type: data_type,
+            nullable: nullable
+        }
+    }
+}
+
 /// Definition of a relation (data set) consisting of one or more columns.
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct TupleType {
@@ -40,6 +50,8 @@ impl TupleType {
     /// create an empty tuple
     pub fn empty() -> Self { TupleType { columns: vec![] } }
 
+    pub fn new(columns: Vec<ColumnMeta>) -> Self { TupleType { columns: columns } }
+
     /// look up a column by name and return a reference to the column along with it's index
     pub fn column(&self, name: &str) -> Option<(usize, &ColumnMeta)> {
         self.columns.iter()
@@ -49,6 +61,12 @@ impl TupleType {
 
 }
 
+#[derive(Debug,Clone,Serialize,Deserialize)]
+pub struct FunctionMeta {
+    pub name: String,
+    pub args: Vec<ColumnMeta>,
+    pub return_type: DataType
+}
 
 /// A tuple represents one row within a relation and is implemented as a trait to allow for
 /// specific implementations for different data sources

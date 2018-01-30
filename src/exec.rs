@@ -163,14 +163,19 @@ pub trait ScalarFunction {
 
 #[derive(Debug,Clone)]
 pub struct ExecutionContext {
-    pub schemas: HashMap<String, TupleType>
+    schemas: HashMap<String, TupleType>,
+    functions: HashMap<String, FunctionMeta>,
 
 }
 
 impl ExecutionContext {
 
     pub fn new(schemas: HashMap<String, TupleType>) -> Self {
-        ExecutionContext { schemas }
+        ExecutionContext { schemas: schemas, functions: HashMap::new() }
+    }
+
+    pub fn define_function(&mut self, fm: FunctionMeta) {
+        self.functions.insert(fm.name.to_lowercase(), fm);
     }
 
     /// Open a CSV file
@@ -392,7 +397,13 @@ mod tests {
         let plan = query_planner.sql_to_rel(&ast).unwrap();
 
         // create execution context
-        let ctx = ExecutionContext::new(schemas.clone());
+        let mut ctx = ExecutionContext::new(schemas.clone());
+
+        ctx.define_function( FunctionMeta {
+            name: "sqrt".to_string(),
+            args: vec![ ColumnMeta::new("value", DataType::Double, false) ],
+            return_type: DataType::Double
+        });
 
         // create execution plan
         let execution_plan = ctx.create_execution_plan(&plan).unwrap();
