@@ -84,14 +84,14 @@ impl<'a> CsvRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a TupleType;
 }
 
 impl SimpleRelation for CsvRelation {
 
-    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
 
         let buf_reader = BufReader::new(&self.file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
@@ -113,10 +113,10 @@ impl SimpleRelation for CsvRelation {
 
 impl SimpleRelation for FilterRelation {
 
-    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
-        Box::new(self.input.scan().filter(move|t|
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
+        Box::new(self.input.scan(ctx).filter(move|t|
             match t {
-                &Ok(ref tuple) => match evaluate(tuple, &self.schema, &self.expr) {
+                &Ok(ref tuple) => match ctx.evaluate(tuple, &self.schema, &self.expr) {
                     Ok(Value::Boolean(b)) => b,
                     _ => panic!("Predicate expression evaluated to non-boolean value")
                 },
@@ -132,8 +132,8 @@ impl SimpleRelation for FilterRelation {
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan<'a>(&'a self) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
-        let foo = self.input.scan().map(move|r| match r {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
+        let foo = self.input.scan(ctx).map(move|r| match r {
             Ok(tuple) => {
                 let values = self.expr.iter()
                     .map(|e| match e {
@@ -237,54 +237,55 @@ impl ExecutionContext {
         }
     }
 
-}
+    /// Evaluate a relational expression against a tuple
+    pub fn evaluate(&self, tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<ExecutionError>> {
 
+        match rex {
+            &Rex::BinaryExpr { ref left, ref op, ref right } => {
+                let left_value = self.evaluate(tuple, tt, left)?;
+                let right_value = self.evaluate(tuple, tt, right)?;
+                match op {
+                    &Operator::Eq => Ok(Value::Boolean(left_value == right_value)),
+                    &Operator::NotEq => Ok(Value::Boolean(left_value != right_value)),
+                    &Operator::Lt => Ok(Value::Boolean(left_value < right_value)),
+                    &Operator::LtEq => Ok(Value::Boolean(left_value <= right_value)),
+                    &Operator::Gt => Ok(Value::Boolean(left_value > right_value)),
+                    &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
+                }
+            },
+            &Rex::TupleValue(index) => Ok(tuple.values[index].clone()),
+            &Rex::Literal(ref value) => Ok(value.clone()),
+            &Rex::ScalarFunction { ref name, ref args, ref return_type } => {
 
-/// Evaluate a relational expression against a tuple
-pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<ExecutionError>> {
+                //TODO: look up function dynamically in execution context
+                //TODO: do arg check first based on function definition (count + types)
+                //TODO: function definition and implemenation should be separate things
 
-    match rex {
-        &Rex::BinaryExpr { ref left, ref op, ref right } => {
-            let left_value = evaluate(tuple, tt, left)?;
-            let right_value = evaluate(tuple, tt, right)?;
-            match op {
-                &Operator::Eq => Ok(Value::Boolean(left_value == right_value)),
-                &Operator::NotEq => Ok(Value::Boolean(left_value != right_value)),
-                &Operator::Lt => Ok(Value::Boolean(left_value < right_value)),
-                &Operator::LtEq => Ok(Value::Boolean(left_value <= right_value)),
-                &Operator::Gt => Ok(Value::Boolean(left_value > right_value)),
-                &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
+                // evaluate the arguments to the function
+                let arg_values : Vec<Value> = args.iter()
+                    .map(|a| self.evaluate(tuple, tt, &a))
+                    .collect::<Result<Vec<Value>, Box<ExecutionError>>>()?;
+
+                match name.as_ref() {
+                    "sqrt" => {
+                        match arg_values[0] {
+                            Value::Double(d) => Ok(Value::Double(d.sqrt())),
+                            _ => Err(Box::new(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())))
+                        }
+
+                    },
+                    _ => Err(Box::new(ExecutionError::Custom("Unknown function".to_string())))
+                }
+
+                //unimplemented!()
             }
-        },
-        &Rex::TupleValue(index) => Ok(tuple.values[index].clone()),
-        &Rex::Literal(ref value) => Ok(value.clone()),
-        &Rex::ScalarFunction { ref name, ref args, ref return_type } => {
-
-            //TODO: look up function dynamically in execution context
-            //TODO: do arg check first based on function definition (count + types)
-            //TODO: function definition and implemenation should be separate things
-
-            // evaluate the arguments to the function
-            let arg_values : Vec<Value> = args.iter()
-                .map(|a| evaluate(tuple, tt, &a))
-                .collect::<Result<Vec<Value>, Box<ExecutionError>>>()?;
-
-            match name.as_ref() {
-                "sqrt" => {
-                    match arg_values[0] {
-                        Value::Double(d) => Ok(Value::Double(d.sqrt())),
-                        _ => Err(Box::new(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())))
-                    }
-
-                },
-                _ => Err(Box::new(ExecutionError::Custom("Unknown function".to_string())))
-            }
-
-            //unimplemented!()
         }
+
     }
 
 }
+
+
 
 
 pub struct DF {
@@ -320,7 +321,7 @@ impl DataFrame for DF {
         let mut file = File::create(filename)?;
 
         // implement execution here for now but should be a common method for processing a plan
-        let it = execution_plan.scan();
+        let it = execution_plan.scan(&self.ctx);
         it.for_each(|t| {
             match t {
                 Ok(tuple) => {
@@ -342,5 +343,62 @@ impl DataFrame for DF {
             },
             _ => Err(DataFrameError::NotImplemented)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::parser::*;
+    use super::super::rel::*;
+    use super::super::sqltorel::*;
+
+    #[test]
+    fn test_sqrt() {
+
+        //TODO: refactor so there is a way to write concise tests
+
+
+        let sql = "SELECT id, sqrt(id) FROM people";
+
+        // parse SQL into AST
+        let ast = Parser::parse_sql(String::from(sql)).unwrap();
+
+        // define schema for a csv file
+        let schema = TupleType {
+            columns: vec![
+                ColumnMeta { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
+                ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
+            ]
+        };
+
+        // create a schema registry
+        let mut schemas : HashMap<String, TupleType> = HashMap::new();
+        schemas.insert("people".to_string(), schema.clone());
+
+        // create a query planner
+        let query_planner = SqlToRel::new(schemas.clone());
+
+        // plan the query (create a logical relational plan)
+        let plan = query_planner.sql_to_rel(&ast).unwrap();
+
+        // create execution context
+        let ctx = ExecutionContext::new(schemas.clone());
+
+        // create execution plan
+        let execution_plan = ctx.create_execution_plan(&plan).unwrap();
+
+        // execute the query
+        let it = execution_plan.scan(&ctx);
+        let results : Vec<String> = it.map(|t| {
+            match t {
+                Ok(tuple) => format!("{:?}", tuple),
+                _ => format!("error")
+            }
+        })
+        .collect();
+
+        assert!(results.join(",") == "expectedresultsTBD");
+
     }
 }
