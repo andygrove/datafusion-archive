@@ -258,7 +258,30 @@ pub fn evaluate(tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<E
         },
         &Rex::TupleValue(index) => Ok(tuple.values[index].clone()),
         &Rex::Literal(ref value) => Ok(value.clone()),
-        &Rex::ScalarFunction { .. } => unimplemented!()
+        &Rex::ScalarFunction { ref name, ref args, ref return_type } => {
+
+            //TODO: look up function dynamically in execution context
+            //TODO: do arg check first based on function definition (count + types)
+            //TODO: function definition and implemenation should be separate things
+
+            // evaluate the arguments to the function
+            let arg_values : Vec<Value> = args.iter()
+                .map(|a| evaluate(tuple, tt, &a))
+                .collect::<Result<Vec<Value>, Box<ExecutionError>>>()?;
+
+            match name.as_ref() {
+                "sqrt" => {
+                    match arg_values[0] {
+                        Value::Double(d) => Ok(Value::Double(d.sqrt())),
+                        _ => Err(Box::new(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())))
+                    }
+
+                },
+                _ => Err(Box::new(ExecutionError::Custom("Unknown function".to_string())))
+            }
+
+            //unimplemented!()
+        }
     }
 
 }
