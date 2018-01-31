@@ -1,4 +1,4 @@
-# Distributed Query Processing in Rust
+# DataFusion: Distributed Query Processing in Rust
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Build Status](https://travis-ci.org/andygrove/distributed-query-rs.svg?branch=master)](https://travis-ci.org/andygrove/datafusion-rs)
