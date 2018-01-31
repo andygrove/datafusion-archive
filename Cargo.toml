@@ -1,5 +1,6 @@
 [package]
 name = "datafusion"
+description = "DataFusion is a datasource-agnostic distributed query planning and execution framework for Rust"
 version = "0.1.0"
 authors = ["Andy Grove <andygrove73@gmail.com>", "bgardner@squarelabs.net"]
 documentation = "https://github.com/andygrove/datafusion-rs"
