@@ -1,10 +1,10 @@
 [package]
-name = "distributed-query"
+name = "datafusion"
 version = "0.1.0"
 authors = ["Andy Grove <andygrove73@gmail.com>", "bgardner@squarelabs.net"]
 
 [lib]
-name = "query_planner"
+name = "datafusion"
 path = "src/lib.rs"
 
 [[bin]]
