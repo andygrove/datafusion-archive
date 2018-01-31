@@ -2,6 +2,11 @@
 name = "datafusion"
 version = "0.1.0"
 authors = ["Andy Grove <andygrove73@gmail.com>", "bgardner@squarelabs.net"]
+documentation = "https://github.com/andygrove/datafusion-rs"
+homepage = "https://github.com/andygrove/datafusion-rs"
+repository = "https://github.com/andygrove/datafusion-rs"
+license = "Apache License 2.0"
+
 
 [lib]
 name = "datafusion"
