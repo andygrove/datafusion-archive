@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-extern crate query_planner;
-use query_planner::rel::*;
-use query_planner::exec::*;
+extern crate datafusion;
+use datafusion::rel::*;
+use datafusion::exec::*;
 
 extern crate serde_json;
 

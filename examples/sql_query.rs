@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
-extern crate query_planner;
-use query_planner::rel::*;
-use query_planner::exec::*;
-use query_planner::parser::*;
-use query_planner::sqltorel::*;
+extern crate datafusion;
+use datafusion::rel::*;
+use datafusion::exec::*;
+use datafusion::parser::*;
+use datafusion::sqltorel::*;
 
 extern crate serde_json;
 
@@ -42,10 +42,10 @@ fn main() {
     let ast = Parser::parse_sql(String::from(sql)).unwrap();
 
     // create a query planner
-    let query_planner = SqlToRel::new(schemas.clone());
+    let datafusion = SqlToRel::new(schemas.clone());
 
     // plan the query (create a logical relational plan)
-    let plan = query_planner.sql_to_rel(&ast).unwrap();
+    let plan = datafusion.sql_to_rel(&ast).unwrap();
 
     // show the query plan (the json can also be sent to a worker node easily)
     let rel_str = serde_json::to_string_pretty(&plan).unwrap();
