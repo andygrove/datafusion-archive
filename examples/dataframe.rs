@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-extern crate query_planner;
-use query_planner::rel::*;
-use query_planner::exec::*;
-use query_planner::dataframe::*;
+extern crate datafusion;
+use datafusion::rel::*;
+use datafusion::exec::*;
+use datafusion::dataframe::*;
 
 extern crate serde_json;
 
