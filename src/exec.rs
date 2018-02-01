@@ -26,8 +26,10 @@ extern crate csv;
 
 use super::csv::StringRecord;
 
+use super::api::*;
 use super::rel::*;
 use super::dataframe::*;
+use super::functions::*;
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -39,6 +41,12 @@ pub enum ExecutionError {
 impl From<Error> for ExecutionError {
     fn from(e: Error) -> Self {
         ExecutionError::IoError(e)
+    }
+}
+
+impl From<String> for ExecutionError {
+    fn from(e: String) -> Self {
+        ExecutionError::Custom(e)
     }
 }
 
@@ -156,11 +164,6 @@ impl SimpleRelation for ProjectRelation {
     }
 }
 
-pub trait ScalarFunction {
-    fn execute(args: Vec<Value>) -> Value;
-
-}
-
 #[derive(Debug,Clone)]
 pub struct ExecutionContext {
     schemas: HashMap<String, TupleType>,
@@ -270,31 +273,28 @@ impl ExecutionContext {
             &Rex::Literal(ref value) => Ok(value.clone()),
             &Rex::ScalarFunction { ref name, ref args } => {
 
-                //TODO: look up function dynamically in execution context
-                //TODO: do arg check first based on function definition (count + types)
-                //TODO: function definition and implemenation should be separate things
-
                 // evaluate the arguments to the function
                 let arg_values : Vec<Value> = args.iter()
                     .map(|a| self.evaluate(tuple, tt, &a))
                     .collect::<Result<Vec<Value>, Box<ExecutionError>>>()?;
 
-                match name.as_ref() {
-                    "sqrt" => {
-                        match arg_values[0] {
-                            Value::Double(d) => Ok(Value::Double(d.sqrt())),
-                            Value::UnsignedLong(l) => Ok(Value::Double((l as f64).sqrt())),
-                            _ => Err(Box::new(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())))
-                        }
+                let func = self.load_function_impl(name.as_ref())?;
 
-                    },
-                    _ => Err(Box::new(ExecutionError::Custom("Unknown function".to_string())))
+                match func.execute(arg_values) {
+                    Ok(value) => Ok(value),
+                    Err(e) => Err(Box::new(ExecutionError::Custom("TBD".to_string()))) //TODO: fix
                 }
-
-                //unimplemented!()
             }
         }
 
+    }
+
+    /// load a function implementation ... eventually do this dyanmically to allow for UDFs
+    fn load_function_impl(&self, function_name: &str) -> Result<Box<ScalarFunction>,Box<ExecutionError>> {
+        match function_name {
+            "sqrt" => Ok(Box::new(SqrtFunction {})),
+            _ => Err(Box::new(ExecutionError::Custom("Unknown function".to_string())))
+        }
     }
 
 }

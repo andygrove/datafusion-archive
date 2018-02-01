@@ -12,20 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod api;
-pub mod sql;
-pub mod parser;
-pub mod rel;
-pub mod dataframe;
-pub mod sqltorel;
-pub mod functions;
-pub mod exec;
+use super::rel::Value;
 
-extern crate serde;
-extern crate serde_json;
-
-#[macro_use]
-extern crate serde_derive;
-
-extern crate csv;
+/// All scalar functions must implement this trait ... hopefully we can load impls at runtime
+pub trait ScalarFunction {
+    fn execute(&self, args: Vec<Value>) -> Result<Value,Box<String>>;
+}
 
