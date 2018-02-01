@@ -11,7 +11,7 @@ This project is a proof-of-concept of a distributed data processing platform in 
 
 Primarily, this is a just a fun side-project for me to use to become a better Rust developer since it involves solving some non-trivial problems. I'm also generally interested in researching distributed systems and query optimizers since I've been working with these concepts professionally for quite a few years now.
 
-Apart from using this is a way to learn, I do think that it could result in a useful product.
+Apart from using this as a way to learn, I do think that it could result in a useful product.
 
 I have a hypothesis that even a naive implementation in Rust will have performance that is roughly comparable to that of Apache Spark for simple use cases, but more importantly the performance will be _predictable_ and _reliable_ because there is no garbage collector involved.
 
