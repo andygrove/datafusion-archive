@@ -7,6 +7,8 @@
 
 This project is a proof-of-concept of a distributed data processing platform in Rust with features somewhat similar to Apache Spark but it is not intended to be a clone of Apache Spark.
 
+DataFusion can also be used as a crate dependency in your project if you want the ability to perform SQL queries and DataFrame style data manipulation in-process.
+
 # Why am I building this?
 
 Primarily, this is a just a fun side-project for me to use to become a better Rust developer since it involves solving some non-trivial problems. I'm also generally interested in researching distributed systems and query optimizers since I've been working with these concepts professionally for quite a few years now.
@@ -34,45 +36,32 @@ Due to the statically compiled nature of Rust, this platform will be less intera
 
 There are two working examples:
 
-- [DataFrame Example](https://github.com/andygrove/distributed-query-rs/blob/master/examples/dataframe.rs)
 - [SQL Example](https://github.com/andygrove/distributed-query-rs/blob/master/examples/sql_query.rs)
+- [DataFrame Example](https://github.com/andygrove/distributed-query-rs/blob/master/examples/dataframe.rs)
 
 Both of these examples run a trivial query against a trivial CSV file using a single thread.
 
 # Roadmap
 
-## Phase 1 - Benchmark simple use case against Apache Spark
+I've started defining [milestones](https://github.com/andygrove/datafusion-rs/milestones) and [issues](https://github.com/andygrove/datafusion-rs/issues) in github issues, but here's a high level summary of the plan with some rough guesses of timescale.
 
-I'd like to be able to run a job that reads a partitioned CSV file from HDFS and performs some computationally intensive processing on that data on a cluster and see how the performance compares to Apache Spark.
+## POC (Q1 2018)
 
-Features needed:
+For the POC, I want to be able to run a single worker process (preferably dockerized) and be able to send it a query (via JSON) and have it execute that query. This will be sufficient to run some representative (but trivial) workloads to compare with Apache Spark.
 
-- Partitioning
-- Shuffle
-- Scalar functions
-- HDFS support
-- Worker nodes (dockerized)
+The workloads will read and write CSV files from HDFS.
 
-## Phase 2 - Usability and Stability
+## MVP (Q2 2018)
 
-- Deployment model (most likely kubernetes and etcd for service discovery)
-- UI
-- Documentation
-- Automated integration tests
-- Automated performance tests
-- Complete data type support
-- Make SQL / DataFrame functionality more complete
- 
-## Phase 3 - Make it usable for real-world problems
+MVP should be fully deployable, have a good UX, have good documentation etc. It could still be lacking major features though such as JOIN, GROUP BY, user-defined functions etc.
 
-- ORDER BY 
-- GROUP BY with basic aggregation functions (MIN, MAX, SUM, AVG)
-- JOIN
-- UDTs
-- UDFs
-- UDAFs
-- Query optimizer (starting with simple optimizations like predicate push-down, push predicate through join etc)
-- Integrations with other data sources
+## 1.0 (Q4 2018)
+
+The 1.0 release should be able to support real-world workloads with performance, scalability, and reliability that generally exceed those of Apache Spark.
+
+# Contributing
+
+Contributers are welcome! Please see [CONTRIBUTING.md](/CONTRIBUTING.md) for details.
 
 
 
