@@ -34,6 +34,21 @@ struct Worker {
     www_root: String
 }
 
+impl Worker {
+
+    fn load_static_file(&self, filename: &str) -> String {
+
+        let mut f = File::open(&filename).expect("file not found");
+
+        let mut contents = String::new();
+        f.read_to_string(&mut contents)
+            .expect("something went wrong reading the file");
+
+        contents
+    }
+
+}
+
 fn handle_request(chunk: Chunk) -> Response {
 
     let body_bytes = chunk.iter()
@@ -55,19 +70,6 @@ fn handle_request(chunk: Chunk) -> Response {
     }
 }
 
-impl Worker {
-
-    fn load_static_file(&self, filename: &str) -> String {
-
-        let mut f = File::open(&filename).expect("file not found");
-
-        let mut contents = String::new();
-        f.read_to_string(&mut contents)
-            .expect("something went wrong reading the file");
-
-        contents
-    }
-}
 
 impl Service for Worker {
     type Request = Request;
@@ -79,7 +81,8 @@ impl Service for Worker {
 
         match req.method() {
             &Method::Get => { // all UI calls are GET
-                println!("path={:?}", req.path());
+
+                //println!("path={:?}", req.path());
 
                 // is this a known file and/or valid path?
                 let filename = match req.path() {
@@ -88,6 +91,7 @@ impl Service for Worker {
                     _ => None
                 };
 
+                // server page, or a 404 not found error
                 match filename {
                     Some(f) => {
                         let fqpath = format!("{}/{}", self.www_root, f);
@@ -122,15 +126,6 @@ impl Service for Worker {
             }
 
         }
-
-//        // We're currently ignoring the Request
-//        // And returning an 'ok' Future, which means it's ready
-//        // immediately, and build a Response with the 'PHRASE' body.
-//        Box::new(futures::future::ok(
-//            Response::new()
-//                .with_header(ContentLength(PHRASE.len() as u64))
-//                .with_body(PHRASE)
-//        ))
     }
 
 }
@@ -138,7 +133,7 @@ impl Service for Worker {
 fn main() {
 
     //TODO: make command-line params
-    let addr = "127.0.0.1:8080".parse().unwrap();
+    let addr = "0.0.0.0:8080".parse().unwrap();
     let www_root = "./src/bin/worker/";
 
     println!("Worker listening on {}", addr);
