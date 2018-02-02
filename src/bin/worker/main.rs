@@ -17,18 +17,25 @@ extern crate futures;
 extern crate serde;
 extern crate serde_json;
 
+use std::fs::File;
+use std::io::prelude::*;
+
 use futures::future::Future;
 use futures::Stream;
 
 use hyper::{Method, StatusCode, Chunk};
+use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
 
 extern crate datafusion;
 use datafusion::rel::*;
 
-struct Worker;
+struct Worker {
+    www_root: String
+}
 
 fn handle_request(chunk: Chunk) -> Response {
+
     let body_bytes = chunk.iter()
         .cloned()
         .collect::<Vec<u8>>();
@@ -48,25 +55,66 @@ fn handle_request(chunk: Chunk) -> Response {
     }
 }
 
+impl Worker {
+
+    fn load_static_file(&self, filename: &str) -> String {
+
+        let mut f = File::open(&filename).expect("file not found");
+
+        let mut contents = String::new();
+        f.read_to_string(&mut contents)
+            .expect("something went wrong reading the file");
+
+        contents
+    }
+}
+
 impl Service for Worker {
-    // boilerplate hooking up hyper's server types
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
-    // The future representing the eventual Response your call will
-    // resolve to. This can change to whatever Future you need.
     type Future = Box<Future<Item=Self::Response, Error=Self::Error>>;
 
     fn call(&self, req: Request) -> Self::Future {
 
         match req.method() {
-            &Method::Post => {
+            &Method::Get => { // all UI calls are GET
+                println!("path={:?}", req.path());
+
+                // is this a known file and/or valid path?
+                let filename = match req.path() {
+                    "/" => Some("/index.html"),
+                    "/css/main.css" => Some("/css/main.css"),
+                    _ => None
+                };
+
+                match filename {
+                    Some(f) => {
+                        let fqpath = format!("{}/{}", self.www_root, f);
+                        let content = self.load_static_file(&fqpath);
+                        Box::new(futures::future::ok(
+                            Response::new()
+                                .with_header(ContentLength(content.len() as u64))
+                                .with_body(content)))
+                    }
+                    _ => {
+                        let fqpath = format!("{}/{}", self.www_root, "/404.html");
+                        let content = self.load_static_file(&fqpath);
+                        Box::new(futures::future::ok(
+                            Response::new()
+                                .with_status(StatusCode::NotFound)
+                                .with_header(ContentLength(content.len() as u64))
+                                .with_body(content)))
+                    }
+                }
+            }
+            &Method::Post => { // all REST calls are POST
                 Box::new(
                     req.body()
                         .concat2()
                         .map(handle_request)
                 )
-            },
+            }
             _ => {
                 Box::new(futures::future::ok(
                     Response::new().with_status(StatusCode::NotFound)
@@ -85,14 +133,17 @@ impl Service for Worker {
 //        ))
     }
 
-
 }
 
 fn main() {
+
+    //TODO: make command-line params
     let addr = "127.0.0.1:8080".parse().unwrap();
+    let www_root = "./src/bin/worker/";
 
     println!("Worker listening on {}", addr);
 
-    let server = Http::new().bind(&addr, || Ok(Worker)).unwrap();
+    let server = Http::new()
+        .bind(&addr, move|| Ok(Worker { www_root: www_root.to_string() })).unwrap();
     server.run().unwrap();
 }

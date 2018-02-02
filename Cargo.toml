@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "worker"
-path = "src/bin/worker.rs"
+path = "src/bin/worker/main.rs"
 
 [dependencies]
 csv = "1.0.0-beta.5"
