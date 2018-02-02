@@ -30,8 +30,8 @@ use hyper::server::{Http, Request, Response, Service};
 
 //use serde_json::Value;
 
-pub mod rel;
-use rel::*;
+extern crate datafusion;
+use datafusion::rel::*;
 
 struct Worker;
 
