@@ -24,14 +24,14 @@ pub enum DataFrameError {
 }
 
 impl From<ExecutionError> for DataFrameError {
-    fn from(e: ExecutionError) -> Self {
+    fn from(_e: ExecutionError) -> Self {
         //TODO:
         DataFrameError::TBD
     }
 }
 
 impl From<Error> for DataFrameError {
-    fn from(e: Error) -> Self {
+    fn from(_e: Error) -> Self {
         //TODO:
         DataFrameError::TBD
     }

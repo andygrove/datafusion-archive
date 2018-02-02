@@ -13,12 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::io::{Error, ErrorKind, Read};
-use std::io::{BufReader, BufRead};
+use std::io::Error;
+use std::io::BufReader;
 use std::io::prelude::*;
 use std::iter::Iterator;
 use std::fs::File;
-use std::path::Path;
 use std::string::String;
 use std::convert::*;
 
@@ -99,7 +98,7 @@ pub trait SimpleRelation {
 
 impl SimpleRelation for CsvRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
 
         let buf_reader = BufReader::new(&self.file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
@@ -199,7 +198,7 @@ impl ExecutionContext {
                 panic!()
             },
 
-            Rel::TableScan { ref schema_name, ref table_name, ref schema } => {
+            Rel::TableScan { ref table_name, ref schema, .. } => {
                 // for now, tables are csv files
                 let file = File::open(format!("test/{}.csv", table_name))?;
                 let rel = CsvRelation::open(file, schema.clone())?;
@@ -222,7 +221,7 @@ impl ExecutionContext {
                 Ok(Box::new(rel))
             },
 
-            Rel::Projection { ref expr, ref input, ref schema } => {
+            Rel::Projection { ref expr, ref input, .. } => {
                 let input_rel = self.create_execution_plan(&input)?;
                 let input_schema = input_rel.schema().clone();
 
@@ -230,7 +229,7 @@ impl ExecutionContext {
                 let project_columns: Vec<ColumnMeta> = expr.iter().map(|e| {
                     match e {
                         &Rex::TupleValue(i) => input_schema.columns[i].clone(),
-                        &Rex::ScalarFunction {ref name, ref args} => ColumnMeta {
+                        &Rex::ScalarFunction {ref name, .. } => ColumnMeta {
                             name: name.clone(),
                             data_type: DataType::Double, //TODO: hard-coded .. no function metadata yet
                             nullable: true
@@ -282,7 +281,7 @@ impl ExecutionContext {
 
                 match func.execute(arg_values) {
                     Ok(value) => Ok(value),
-                    Err(e) => Err(Box::new(ExecutionError::Custom("TBD".to_string()))) //TODO: fix
+                    Err(_) => Err(Box::new(ExecutionError::Custom("TBD".to_string()))) //TODO: fix
                 }
             }
         }
@@ -309,11 +308,11 @@ pub struct DF {
 
 impl DataFrame for DF {
 
-    fn repartition(&self, n: u32) -> Result<Box<DataFrame>, DataFrameError> {
+    fn repartition(&self, _n: u32) -> Result<Box<DataFrame>, DataFrameError> {
         unimplemented!()
     }
 
-    fn select(&self, expr: Vec<Rex>) -> Result<Box<DataFrame>, DataFrameError> {
+    fn select(&self, _expr: Vec<Rex>) -> Result<Box<DataFrame>, DataFrameError> {
         unimplemented!()
     }
 
@@ -340,7 +339,7 @@ impl DataFrame for DF {
             match t {
                 Ok(tuple) => {
                     let csv = format!("{:?}", tuple);
-                    file.write(&csv.into_bytes());
+                    file.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
                 },
                 _ => println!("Error") //TODO: error handling
             }
@@ -351,8 +350,8 @@ impl DataFrame for DF {
 
     fn col(&self, column_name: &str) -> Result<Rex, DataFrameError> {
         match &self.plan.as_ref() {
-            &&Rel::CsvFile { ref filename, ref schema } => match schema.column(column_name) {
-                Some((i,c)) => Ok(Rex::TupleValue(i)),
+            &&Rel::CsvFile { ref schema, .. } => match schema.column(column_name) {
+                Some((i,_)) => Ok(Rex::TupleValue(i)),
                 _ => Err(DataFrameError::TBD) // column doesn't exist
             },
             _ => Err(DataFrameError::NotImplemented)

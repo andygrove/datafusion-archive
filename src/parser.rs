@@ -14,7 +14,6 @@
 
 use std::iter::Peekable;
 use std::str::Chars;
-use std::ascii::AsciiExt;
 
 use super::sql::*;
 

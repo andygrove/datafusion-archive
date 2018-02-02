@@ -17,31 +17,26 @@ extern crate futures;
 extern crate serde;
 extern crate serde_json;
 
-#[macro_use]
-extern crate serde_derive;
-
-//use std::io;
 use futures::future::Future;
 use futures::Stream;
 
 use hyper::{Method, StatusCode, Chunk};
-//use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
-
-//use serde_json::Value;
 
 extern crate datafusion;
 use datafusion::rel::*;
 
 struct Worker;
 
-fn reverse(chunk: Chunk) -> Response {
+fn handle_request(chunk: Chunk) -> Response {
     let body_bytes = chunk.iter()
         .cloned()
         .collect::<Vec<u8>>();
 
     match String::from_utf8(body_bytes.clone()) {
         Ok(json_str) => {
+            // for initial testing, just receive a relational plan directly but this should
+            // really be an execution plan
             let rel: Rel = serde_json::from_str(&json_str).unwrap();
 
             println!("Plan: {:?}", rel);
@@ -69,7 +64,7 @@ impl Service for Worker {
                 Box::new(
                     req.body()
                         .concat2()
-                        .map(reverse)
+                        .map(handle_request)
                 )
             },
             _ => {

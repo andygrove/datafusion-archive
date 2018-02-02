@@ -19,14 +19,14 @@ use super::sql::*;
 use super::rel::*;
 
 pub struct SqlToRel {
-    default_schema: Option<String>,
+    //default_schema: Option<String>,
     schemas: HashMap<String, TupleType>
 }
 
 impl SqlToRel {
 
     pub fn new(schemas: HashMap<String, TupleType>) -> Self {
-        SqlToRel { default_schema: None, schemas }
+        SqlToRel { /*default_schema: None,*/ schemas }
     }
 
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Box<Rel>, String> {
