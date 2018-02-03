@@ -85,6 +85,7 @@ impl<'a> CsvRelation {
             DataType::UnsignedLong => Value::UnsignedLong(s.parse::<u64>().unwrap()),
             DataType::String => Value::String(s.to_string()),
             DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
+            _ => panic!("csv unsupported type")
         }).collect();
         Ok(Tuple::new(values))
     }
@@ -308,9 +309,9 @@ impl ExecutionContext {
 
     /// load a function implementation ... eventually do this dyanmically to allow for UDFs
     fn load_function_impl(&self, function_name: &str) -> Result<Box<ScalarFunction>,Box<ExecutionError>> {
-        match function_name {
+        match function_name.to_lowercase().as_ref() {
             "sqrt" => Ok(Box::new(SqrtFunction {})),
-            "latlng" => Ok(Box::new(LatLngFunc {})),
+            "st_point" => Ok(Box::new(STPointFunc {})),
             _ => Err(Box::new(ExecutionError::Custom(format!("Unknown function {}", function_name))))
         }
     }
@@ -407,7 +408,7 @@ mod tests {
         let mut ctx = create_context();
 
         ctx.define_function( FunctionMeta {
-            name: "latlng".to_string(),
+            name: "ST_Point".to_string(),
             args: vec![
                 Field::new("lat", DataType::Double, false),
                 Field::new("lng", DataType::Double, false)
@@ -415,7 +416,7 @@ mod tests {
             return_type: DataType::Double
         });
 
-        let df = ctx.sql(&"SELECT latlng(lat, lng) FROM uk_cities").unwrap();
+        let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities").unwrap();
 
         df.write("_uk_cities_out.csv").unwrap();
 

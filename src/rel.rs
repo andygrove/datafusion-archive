@@ -19,7 +19,8 @@
 pub enum DataType {
     UnsignedLong,
     String,
-    Double
+    Double,
+    ComplexType(Vec<Field>)
 }
 
 /// Definition of a column in a relation (data set).
