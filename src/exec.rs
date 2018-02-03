@@ -27,8 +27,11 @@ use super::csv::StringRecord;
 
 use super::api::*;
 use super::rel::*;
+use super::parser::*;
+use super::sqltorel::*;
 use super::dataframe::*;
-use super::functions::*;
+use super::functions::math::*;
+use super::functions::geospatial::*;
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -180,6 +183,21 @@ impl ExecutionContext {
         self.functions.insert(fm.name.to_lowercase(), fm);
     }
 
+    pub fn sql(&self, sql: &str) -> Result<Box<DataFrame>, ExecutionError> {
+
+        // parse SQL into AST
+        let ast = Parser::parse_sql(String::from(sql)).unwrap();
+
+        // create a query planner
+        let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
+
+        // plan the query (create a logical relational plan)
+        let plan = query_planner.sql_to_rel(&ast).unwrap(); //TODO: remove unwrap
+
+        // return the DataFrame
+        Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: plan })) //TODO: don't clone context
+    }
+
     /// Open a CSV file
     ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
     pub fn load(&self, filename: &str, schema: &TupleType) -> Result<Box<DataFrame>, ExecutionError> {
@@ -200,7 +218,7 @@ impl ExecutionContext {
 
             Rel::TableScan { ref table_name, ref schema, .. } => {
                 // for now, tables are csv files
-                let file = File::open(format!("test/{}.csv", table_name))?;
+                let file = File::open(format!("test/data/{}.csv", table_name))?;
                 let rel = CsvRelation::open(file, schema.clone())?;
                 Ok(Box::new(rel))
             },
@@ -226,10 +244,10 @@ impl ExecutionContext {
                 let input_schema = input_rel.schema().clone();
 
                 //TODO: seems to be duplicate of sql_to_rel code
-                let project_columns: Vec<ColumnMeta> = expr.iter().map(|e| {
+                let project_columns: Vec<Field> = expr.iter().map(|e| {
                     match e {
                         &Rex::TupleValue(i) => input_schema.columns[i].clone(),
-                        &Rex::ScalarFunction {ref name, .. } => ColumnMeta {
+                        &Rex::ScalarFunction {ref name, .. } => Field {
                             name: name.clone(),
                             data_type: DataType::Double, //TODO: hard-coded .. no function metadata yet
                             nullable: true
@@ -292,7 +310,8 @@ impl ExecutionContext {
     fn load_function_impl(&self, function_name: &str) -> Result<Box<ScalarFunction>,Box<ExecutionError>> {
         match function_name {
             "sqrt" => Ok(Box::new(SqrtFunction {})),
-            _ => Err(Box::new(ExecutionError::Custom("Unknown function".to_string())))
+            "latlng" => Ok(Box::new(LatLngFunc {})),
+            _ => Err(Box::new(ExecutionError::Custom(format!("Unknown function {}", function_name))))
         }
     }
 
@@ -331,6 +350,7 @@ impl DataFrame for DF {
         let execution_plan = self.ctx.create_execution_plan(&self.plan)?;
 
         // create output file
+        println!("Writing csv to {}", filename);
         let mut file = File::create(filename)?;
 
         // implement execution here for now but should be a common method for processing a plan
@@ -338,10 +358,10 @@ impl DataFrame for DF {
         it.for_each(|t| {
             match t {
                 Ok(tuple) => {
-                    let csv = format!("{:?}", tuple);
+                    let csv = format!("{}\n", tuple.to_string());
                     file.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
                 },
-                _ => println!("Error") //TODO: error handling
+                Err(e) => panic!(format!("Error processing tuple: {:?}", e)) //TODO: error handling
             }
         });
 
@@ -352,7 +372,7 @@ impl DataFrame for DF {
         match &self.plan.as_ref() {
             &&Rel::CsvFile { ref schema, .. } => match schema.column(column_name) {
                 Some((i,_)) => Ok(Rex::TupleValue(i)),
-                _ => Err(DataFrameError::TBD) // column doesn't exist
+                _ => Err(DataFrameError::InvalidColumn(column_name.to_string()))
             },
             _ => Err(DataFrameError::NotImplemented)
         }
@@ -362,75 +382,62 @@ impl DataFrame for DF {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::parser::*;
-    use super::super::rel::*;
-    use super::super::sqltorel::*;
 
     #[test]
     fn test_sqrt() {
 
-        //TODO: refactor so there is a way to write concise tests
-
-
-        let sql = "SELECT id, sqrt(id) FROM people";
-
-        // parse SQL into AST
-        let ast = Parser::parse_sql(String::from(sql)).unwrap();
-
-        // define schema for a csv file
-        let schema = TupleType {
-            columns: vec![
-                ColumnMeta { name: String::from("id"), data_type: DataType::UnsignedLong, nullable: false },
-                ColumnMeta { name: String::from("name"), data_type: DataType::String, nullable: false }
-            ]
-        };
-
-        // create a schema registry
-        let mut schemas : HashMap<String, TupleType> = HashMap::new();
-        schemas.insert("people".to_string(), schema.clone());
-
-        // create a query planner
-        let query_planner = SqlToRel::new(schemas.clone());
-
-        // plan the query (create a logical relational plan)
-        let plan = query_planner.sql_to_rel(&ast).unwrap();
-
-        // create execution context
-        let mut ctx = ExecutionContext::new(schemas.clone());
+        let mut ctx = create_context();
 
         ctx.define_function( FunctionMeta {
             name: "sqrt".to_string(),
-            args: vec![ ColumnMeta::new("value", DataType::Double, false) ],
+            args: vec![ Field::new("value", DataType::Double, false) ],
             return_type: DataType::Double
         });
 
-        // create execution plan
-        let execution_plan = ctx.create_execution_plan(&plan).unwrap();
+        let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
-        // execute the query
-        let it = execution_plan.scan(&ctx);
-        let results : Vec<String> = it.map(|t| {
-            match t {
-                Ok(tuple) => tuple.to_string(),
-                _ => format!("error")
-            }
-        })
-        .collect();
+        df.write("_sqrt_out.csv").unwrap();
 
-        println!("Result: {:?}", results.join(","));
+        //TODO: check that generated file has expected contents
+    }
 
-        let expected = "1,1,\
-            2,1.4142135623730951,\
-            3,1.7320508075688772,\
-            4,2,\
-            5,2.23606797749979,\
-            6,2.449489742783178,\
-            7,2.6457513110645907,\
-            8,2.8284271247461903,\
-            9,3,\
-            10,3.1622776601683795";
+    #[test]
+    fn test_complex_type() {
 
-        assert_eq!(expected, results.join(","));
+        let mut ctx = create_context();
 
+        ctx.define_function( FunctionMeta {
+            name: "latlng".to_string(),
+            args: vec![
+                Field::new("lat", DataType::Double, false),
+                Field::new("lng", DataType::Double, false)
+            ],
+            return_type: DataType::Double
+        });
+
+        let df = ctx.sql(&"SELECT latlng(lat, lng) FROM uk_cities").unwrap();
+
+        df.write("_uk_cities_out.csv").unwrap();
+
+        //TODO: check that generated file has expected contents
+    }
+
+    fn create_context() -> ExecutionContext {
+
+        // create a schema registry
+        let mut schemas : HashMap<String, TupleType> = HashMap::new();
+
+        // define schemas for test data
+        schemas.insert("people".to_string(), TupleType::new(vec![
+            Field::new("id", DataType::UnsignedLong, false),
+            Field::new("name", DataType::String, false)]));
+
+        schemas.insert("uk_cities".to_string(), TupleType::new(vec![
+            Field::new("city", DataType::String, false),
+            Field::new("lat", DataType::Double, false),
+            Field::new("lng", DataType::Double, false)]));
+
+        // create execution context
+        ExecutionContext::new(schemas.clone())
     }
 }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 /// The data types supported by this database. Currently just u64 and string but others
 /// will be added later, including complex types
 #[derive(Debug,Clone,Serialize,Deserialize)]
@@ -23,15 +24,15 @@ pub enum DataType {
 
 /// Definition of a column in a relation (data set).
 #[derive(Debug,Clone,Serialize,Deserialize)]
-pub struct ColumnMeta {
+pub struct Field {
     pub name: String,
     pub data_type: DataType,
     pub nullable: bool
 }
 
-impl ColumnMeta {
+impl Field {
     pub fn new(name: &str, data_type: DataType, nullable: bool) -> Self {
-        ColumnMeta {
+        Field {
             name: name.to_string(),
             data_type: data_type,
             nullable: nullable
@@ -39,10 +40,16 @@ impl ColumnMeta {
     }
 }
 
+#[derive(Debug,Clone,Serialize,Deserialize)]
+pub struct ComplexType {
+    name: String,
+    fields: Vec<Field>
+}
+
 /// Definition of a relation (data set) consisting of one or more columns.
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct TupleType {
-    pub columns: Vec<ColumnMeta>
+    pub columns: Vec<Field>
 }
 
 impl TupleType {
@@ -50,10 +57,10 @@ impl TupleType {
     /// create an empty tuple
     pub fn empty() -> Self { TupleType { columns: vec![] } }
 
-    pub fn new(columns: Vec<ColumnMeta>) -> Self { TupleType { columns: columns } }
+    pub fn new(columns: Vec<Field>) -> Self { TupleType { columns: columns } }
 
     /// look up a column by name and return a reference to the column along with it's index
-    pub fn column(&self, name: &str) -> Option<(usize, &ColumnMeta)> {
+    pub fn column(&self, name: &str) -> Option<(usize, &Field)> {
         self.columns.iter()
             .enumerate()
             .find(|&(_,c)| c.name == name)
@@ -64,7 +71,7 @@ impl TupleType {
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct FunctionMeta {
     pub name: String,
-    pub args: Vec<ColumnMeta>,
+    pub args: Vec<Field>,
     pub return_type: DataType
 }
 
@@ -80,9 +87,11 @@ pub struct Tuple {
 }
 
 impl Tuple {
+
     pub fn new(v: Vec<Value>) -> Self {
         Tuple { values: v }
     }
+
     pub fn to_string(&self) -> String {
         let value_strings : Vec<String> = self.values.iter()
             .map(|v| v.to_string())
@@ -99,7 +108,8 @@ pub enum Value {
     UnsignedLong(u64),
     String(String),
     Boolean(bool),
-    Double(f64)
+    Double(f64),
+    ComplexValue(Vec<Value>)
 }
 
 impl Value {
@@ -110,6 +120,12 @@ impl Value {
             &Value::Double(d) => d.to_string(),
             &Value::Boolean(b) => b.to_string(),
             &Value::String(ref s) => s.clone(),
+            &Value::ComplexValue(ref v) => {
+                let s : Vec<String> = v.iter()
+                    .map(|v| v.to_string())
+                    .collect();
+                s.join(",")
+            }
         }
     }
 
@@ -188,12 +204,12 @@ mod tests {
 
         let tt = TupleType {
             columns: vec![
-                ColumnMeta { name: "id".to_string(), data_type: DataType::UnsignedLong, nullable: false },
-                ColumnMeta { name: "name".to_string(), data_type: DataType::String, nullable: false }
+                Field { name: "id".to_string(), data_type: DataType::UnsignedLong, nullable: false },
+                Field { name: "name".to_string(), data_type: DataType::String, nullable: false }
             ]
         };
 
-        let csv = CsvFile { filename: "test/people.csv".to_string(), schema: tt.clone() };
+        let csv = CsvFile { filename: "test/data/people.csv".to_string(), schema: tt.clone() };
 
         let filter_expr = BinaryExpr {
             left: Box::new(TupleValue(0)),
