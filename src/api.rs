@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::rel::Value;
+use super::rel::*;
 
-/// All scalar functions must implement this trait ... hopefully we can load impls at runtime
+/// Scalar function. User-defined implementations will be dynamically loaded at runtime.
 pub trait ScalarFunction {
+    fn name(&self) -> String;
+    fn args(&self) -> TupleType;
+    fn return_type(&self) -> DataType;
     fn execute(&self, args: Vec<Value>) -> Result<Value,Box<String>>;
+
 }
 
