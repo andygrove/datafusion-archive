@@ -20,12 +20,12 @@ use super::rel::*;
 
 pub struct SqlToRel {
     //default_schema: Option<String>,
-    schemas: HashMap<String, TupleType>
+    schemas: HashMap<String, Schema>
 }
 
 impl SqlToRel {
 
-    pub fn new(schemas: HashMap<String, TupleType>) -> Self {
+    pub fn new(schemas: HashMap<String, Schema>) -> Self {
         SqlToRel { /*default_schema: None,*/ schemas }
     }
 
@@ -46,7 +46,7 @@ impl SqlToRel {
                     .collect::<Result<Vec<Rex>,String>>()?;
 
 
-                let projection_schema = TupleType {
+                let projection_schema = Schema {
                     columns: expr.iter().map( |e| match e {
                         &Rex::TupleValue(i) => input_schema.columns[i].clone(),
                         &Rex::ScalarFunction { ref name, .. } => Field {
@@ -102,7 +102,7 @@ impl SqlToRel {
         }
     }
 
-    pub fn sql_to_rex(&self, sql: &ASTNode, tt: &TupleType) -> Result<Rex, String> {
+    pub fn sql_to_rex(&self, sql: &ASTNode, tt: &Schema) -> Result<Rex, String> {
         match sql {
 
             &ASTNode::SQLLiteralInt(n) =>

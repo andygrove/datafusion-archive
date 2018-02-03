@@ -25,13 +25,13 @@ extern crate serde_json;
 fn main() {
 
     // define schema for data source (csv file)
-    let schema = TupleType::new(vec![
+    let schema = Schema::new(vec![
         Field::new("id", DataType::UnsignedLong, false),
         Field::new("name", DataType::String, false)
         ]);
 
     // create a schema registry
-    let mut schemas : HashMap<String, TupleType> = HashMap::new();
+    let mut schemas : HashMap<String, Schema> = HashMap::new();
     schemas.insert("people".to_string(), schema.clone());
 
     // create execution context

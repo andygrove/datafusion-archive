@@ -49,16 +49,16 @@ pub struct ComplexType {
 
 /// Definition of a relation (data set) consisting of one or more columns.
 #[derive(Debug,Clone,Serialize,Deserialize)]
-pub struct TupleType {
+pub struct Schema {
     pub columns: Vec<Field>
 }
 
-impl TupleType {
+impl Schema {
 
     /// create an empty tuple
-    pub fn empty() -> Self { TupleType { columns: vec![] } }
+    pub fn empty() -> Self { Schema { columns: vec![] } }
 
-    pub fn new(columns: Vec<Field>) -> Self { TupleType { columns: columns } }
+    pub fn new(columns: Vec<Field>) -> Self { Schema { columns: columns } }
 
     /// look up a column by name and return a reference to the column along with it's index
     pub fn column(&self, name: &str) -> Option<(usize, &Field)> {
@@ -171,18 +171,18 @@ impl Rex {
 /// Relations
 #[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Rel {
-    Projection { expr: Vec<Rex>, input: Box<Rel>, schema: TupleType },
-    Selection { expr: Rex, input: Box<Rel>, schema: TupleType },
-    TableScan { schema_name: String, table_name: String, schema: TupleType },
-    CsvFile { filename: String, schema: TupleType },
+    Projection { expr: Vec<Rex>, input: Box<Rel>, schema: Schema },
+    Selection { expr: Rex, input: Box<Rel>, schema: Schema },
+    TableScan { schema_name: String, table_name: String, schema: Schema },
+    CsvFile { filename: String, schema: Schema },
     EmptyRelation
 }
 
 impl Rel {
 
-    pub fn schema(&self) -> TupleType {
+    pub fn schema(&self) -> Schema {
         match self {
-            &Rel::EmptyRelation => TupleType::empty(),
+            &Rel::EmptyRelation => Schema::empty(),
             &Rel::TableScan { ref schema, .. } => schema.clone(),
             &Rel::CsvFile { ref schema, .. } => schema.clone(),
             &Rel::Projection { ref schema, .. } => schema.clone(),
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn serde() {
 
-        let tt = TupleType {
+        let tt = Schema {
             columns: vec![
                 Field { name: "id".to_string(), data_type: DataType::UnsignedLong, nullable: false },
                 Field { name: "name".to_string(), data_type: DataType::String, nullable: false }

@@ -56,24 +56,24 @@ impl From<String> for ExecutionError {
 #[derive(Debug)]
 pub struct CsvRelation {
     file: File,
-    schema: TupleType
+    schema: Schema
 }
 
 pub struct FilterRelation {
-    schema: TupleType,
+    schema: Schema,
     input: Box<SimpleRelation>,
     expr: Rex
 }
 
 pub struct ProjectRelation {
-    schema: TupleType,
+    schema: Schema,
     input: Box<SimpleRelation>,
     expr: Vec<Rex>
 }
 
 impl<'a> CsvRelation {
 
-    pub fn open(file: File, schema: TupleType) -> Result<Self,ExecutionError> {
+    pub fn open(file: File, schema: Schema) -> Result<Self,ExecutionError> {
         Ok(CsvRelation { file, schema })
     }
 
@@ -97,7 +97,7 @@ pub trait SimpleRelation {
     /// scan all records in this relation
     fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
     /// get the schema for this relation
-    fn schema<'a>(&'a self) -> &'a TupleType;
+    fn schema<'a>(&'a self) -> &'a Schema;
 }
 
 impl SimpleRelation for CsvRelation {
@@ -116,7 +116,7 @@ impl SimpleRelation for CsvRelation {
         Box::new(tuple_iter)
     }
 
-    fn schema<'a>(&'a self) -> &'a TupleType {
+    fn schema<'a>(&'a self) -> &'a Schema {
         &self.schema
     }
 
@@ -136,7 +136,7 @@ impl SimpleRelation for FilterRelation {
         ))
     }
 
-    fn schema<'a>(&'a self) -> &'a TupleType {
+    fn schema<'a>(&'a self) -> &'a Schema {
         &self.schema
     }
 }
@@ -162,21 +162,21 @@ impl SimpleRelation for ProjectRelation {
         Box::new(foo)
     }
 
-    fn schema<'a>(&'a self) -> &'a TupleType {
+    fn schema<'a>(&'a self) -> &'a Schema {
         &self.schema
     }
 }
 
 #[derive(Debug,Clone)]
 pub struct ExecutionContext {
-    schemas: HashMap<String, TupleType>,
+    schemas: HashMap<String, Schema>,
     functions: HashMap<String, FunctionMeta>,
 
 }
 
 impl ExecutionContext {
 
-    pub fn new(schemas: HashMap<String, TupleType>) -> Self {
+    pub fn new(schemas: HashMap<String, Schema>) -> Self {
         ExecutionContext { schemas: schemas, functions: HashMap::new() }
     }
 
@@ -208,12 +208,12 @@ impl ExecutionContext {
 
     /// Open a CSV file
     ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
-    pub fn load(&self, filename: &str, schema: &TupleType) -> Result<Box<DataFrame>, ExecutionError> {
+    pub fn load(&self, filename: &str, schema: &Schema) -> Result<Box<DataFrame>, ExecutionError> {
         let plan = Rel::CsvFile { filename: filename.to_string(), schema: schema.clone() };
         Ok(Box::new(DF { ctx: Box::new((*self).clone()), plan: Box::new(plan) }))
     }
 
-    pub fn register_table(&mut self, name: String, schema: TupleType) {
+    pub fn register_table(&mut self, name: String, schema: Schema) {
         self.schemas.insert(name, schema);
     }
 
@@ -264,7 +264,7 @@ impl ExecutionContext {
                     }
                 }).collect();
 
-                let project_schema = TupleType { columns: project_columns };
+                let project_schema = Schema { columns: project_columns };
 
                 let rel = ProjectRelation {
                     input: input_rel,
@@ -279,7 +279,7 @@ impl ExecutionContext {
     }
 
     /// Evaluate a relational expression against a tuple
-    pub fn evaluate(&self, tuple: &Tuple, tt: &TupleType, rex: &Rex) -> Result<Value, Box<ExecutionError>> {
+    pub fn evaluate(&self, tuple: &Tuple, tt: &Schema, rex: &Rex) -> Result<Value, Box<ExecutionError>> {
 
         match rex {
             &Rex::BinaryExpr { ref left, ref op, ref right } => {
@@ -441,14 +441,14 @@ mod tests {
     fn create_context() -> ExecutionContext {
 
         // create a schema registry
-        let mut schemas : HashMap<String, TupleType> = HashMap::new();
+        let mut schemas : HashMap<String, Schema> = HashMap::new();
 
         // define schemas for test data
-        schemas.insert("people".to_string(), TupleType::new(vec![
+        schemas.insert("people".to_string(), Schema::new(vec![
             Field::new("id", DataType::UnsignedLong, false),
             Field::new("name", DataType::String, false)]));
 
-        schemas.insert("uk_cities".to_string(), TupleType::new(vec![
+        schemas.insert("uk_cities".to_string(), Schema::new(vec![
             Field::new("city", DataType::String, false),
             Field::new("lat", DataType::Double, false),
             Field::new("lng", DataType::Double, false)]));
