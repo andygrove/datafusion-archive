@@ -22,11 +22,11 @@ impl ScalarFunction for STPointFunc {
         }
     }
 
-    fn args(&self) -> TupleType {
-        TupleType::new(vec![
+    fn args(&self) -> Vec<Field> {
+        vec![
             Field::new("x", DataType::Double, false),
             Field::new("y", DataType::Double, false)
-        ])
+        ]
     }
 
     fn return_type(&self) -> DataType {

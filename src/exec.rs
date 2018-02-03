@@ -180,7 +180,14 @@ impl ExecutionContext {
         ExecutionContext { schemas: schemas, functions: HashMap::new() }
     }
 
-    pub fn define_function(&mut self, fm: FunctionMeta) {
+    pub fn define_function(&mut self, func: &ScalarFunction) {
+
+        let fm = FunctionMeta {
+            name: func.name(),
+            args: func.args(),
+            return_type: func.return_type()
+        };
+
         self.functions.insert(fm.name.to_lowercase(), fm);
     }
 
@@ -307,8 +314,12 @@ impl ExecutionContext {
 
     }
 
-    /// load a function implementation ... eventually do this dyanmically to allow for UDFs
+    /// load a function implementation
     fn load_function_impl(&self, function_name: &str) -> Result<Box<ScalarFunction>,Box<ExecutionError>> {
+
+        //TODO: this is a huge hack since the functions have already been registered with the
+        // execution context ... I need to implement this so it dynamically loads the functions
+
         match function_name.to_lowercase().as_ref() {
             "sqrt" => Ok(Box::new(SqrtFunction {})),
             "st_point" => Ok(Box::new(STPointFunc {})),
@@ -389,11 +400,7 @@ mod tests {
 
         let mut ctx = create_context();
 
-        ctx.define_function( FunctionMeta {
-            name: "sqrt".to_string(),
-            args: vec![ Field::new("value", DataType::Double, false) ],
-            return_type: DataType::Double
-        });
+        ctx.define_function(&SqrtFunction {});
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
@@ -407,14 +414,7 @@ mod tests {
 
         let mut ctx = create_context();
 
-        ctx.define_function( FunctionMeta {
-            name: "ST_Point".to_string(),
-            args: vec![
-                Field::new("lat", DataType::Double, false),
-                Field::new("lng", DataType::Double, false)
-            ],
-            return_type: DataType::Double
-        });
+        ctx.define_function(&STPointFunc {});
 
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities").unwrap();
 
