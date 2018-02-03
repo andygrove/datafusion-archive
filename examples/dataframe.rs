@@ -26,8 +26,8 @@ fn main() {
 
     // define schema for data source (csv file)
     let schema = TupleType::new(vec![
-            ColumnMeta::new("id", DataType::UnsignedLong, false),
-            ColumnMeta::new("name", DataType::String, false)
+        Field::new("id", DataType::UnsignedLong, false),
+        Field::new("name", DataType::String, false)
         ]);
 
     // create a schema registry
