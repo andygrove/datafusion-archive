@@ -62,13 +62,13 @@ pub struct CsvRelation {
 pub struct FilterRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
-    expr: Rex
+    expr: Expr
 }
 
 pub struct ProjectRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
-    expr: Vec<Rex>
+    expr: Vec<Expr>
 }
 
 impl<'a> CsvRelation {
@@ -148,7 +148,7 @@ impl SimpleRelation for ProjectRelation {
             Ok(tuple) => {
                 let values = self.expr.iter()
                     .map(|e| match e {
-                        &Rex::TupleValue(i) => tuple.values[i].clone(),
+                        &Expr::TupleValue(i) => tuple.values[i].clone(),
                         //TODO: relation delegating back to execution context seems wrong way around
                         _ => ctx.evaluate(&tuple,&self.schema, e).unwrap() //TODO: remove unwrap
                         //unimplemented!("Unsupported expression for projection")
@@ -176,8 +176,15 @@ pub struct ExecutionContext {
 
 impl ExecutionContext {
 
-    pub fn new(schemas: HashMap<String, Schema>) -> Self {
-        ExecutionContext { schemas: schemas, functions: HashMap::new() }
+    pub fn new() -> Self {
+        ExecutionContext {
+            schemas: HashMap::new(),
+            functions: HashMap::new()
+        }
+    }
+
+    pub fn define_schema(&mut self, name: String, schema: &Schema) {
+        self.schemas.insert(name, schema.clone());
     }
 
     pub fn define_function(&mut self, func: &ScalarFunction) {
@@ -254,8 +261,8 @@ impl ExecutionContext {
                 //TODO: seems to be duplicate of sql_to_rel code
                 let project_columns: Vec<Field> = expr.iter().map(|e| {
                     match e {
-                        &Rex::TupleValue(i) => input_schema.columns[i].clone(),
-                        &Rex::ScalarFunction {ref name, .. } => Field {
+                        &Expr::TupleValue(i) => input_schema.columns[i].clone(),
+                        &Expr::ScalarFunction {ref name, .. } => Field {
                             name: name.clone(),
                             data_type: DataType::Double, //TODO: hard-coded .. no function metadata yet
                             nullable: true
@@ -279,10 +286,10 @@ impl ExecutionContext {
     }
 
     /// Evaluate a relational expression against a tuple
-    pub fn evaluate(&self, tuple: &Tuple, tt: &Schema, rex: &Rex) -> Result<Value, Box<ExecutionError>> {
+    pub fn evaluate(&self, tuple: &Tuple, tt: &Schema, rex: &Expr) -> Result<Value, Box<ExecutionError>> {
 
         match rex {
-            &Rex::BinaryExpr { ref left, ref op, ref right } => {
+            &Expr::BinaryExpr { ref left, ref op, ref right } => {
                 let left_value = self.evaluate(tuple, tt, left)?;
                 let right_value = self.evaluate(tuple, tt, right)?;
                 match op {
@@ -294,9 +301,9 @@ impl ExecutionContext {
                     &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
                 }
             },
-            &Rex::TupleValue(index) => Ok(tuple.values[index].clone()),
-            &Rex::Literal(ref value) => Ok(value.clone()),
-            &Rex::ScalarFunction { ref name, ref args } => {
+            &Expr::TupleValue(index) => Ok(tuple.values[index].clone()),
+            &Expr::Literal(ref value) => Ok(value.clone()),
+            &Expr::ScalarFunction { ref name, ref args } => {
 
                 // evaluate the arguments to the function
                 let arg_values : Vec<Value> = args.iter()
@@ -340,15 +347,20 @@ pub struct DF {
 
 impl DataFrame for DF {
 
-    fn repartition(&self, _n: u32) -> Result<Box<DataFrame>, DataFrameError> {
-        unimplemented!()
+    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
+
+        let plan = Rel::Projection {
+            expr: expr,
+            input: self.plan.clone(),
+            schema: self.plan.schema().clone()
+
+        };
+
+        Ok(Box::new(DF { ctx: self.ctx.clone(), plan: Box::new(plan) }))
+
     }
 
-    fn select(&self, _expr: Vec<Rex>) -> Result<Box<DataFrame>, DataFrameError> {
-        unimplemented!()
-    }
-
-    fn filter(&self, expr: Rex) -> Result<Box<DataFrame>, DataFrameError> {
+    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError> {
 
         let plan = Rel::Selection {
             expr: expr,
@@ -381,14 +393,22 @@ impl DataFrame for DF {
         Ok(())
     }
 
-    fn col(&self, column_name: &str) -> Result<Rex, DataFrameError> {
+    fn col(&self, column_name: &str) -> Result<Expr, DataFrameError> {
         match &self.plan.as_ref() {
             &&Rel::CsvFile { ref schema, .. } => match schema.column(column_name) {
-                Some((i,_)) => Ok(Rex::TupleValue(i)),
+                Some((i,_)) => Ok(Expr::TupleValue(i)),
                 _ => Err(DataFrameError::InvalidColumn(column_name.to_string()))
             },
             _ => Err(DataFrameError::NotImplemented)
         }
+    }
+
+    fn schema(&self) -> Schema {
+        self.plan.schema().clone()
+    }
+
+    fn repartition(&self, _n: u32) -> Result<Box<DataFrame>, DataFrameError> {
+        unimplemented!()
     }
 }
 
@@ -411,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn test_complex_type() {
+    fn test_sql_udf_udt() {
 
         let mut ctx = create_context();
 
@@ -419,7 +439,34 @@ mod tests {
 
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities").unwrap();
 
-        df.write("_uk_cities_out.csv").unwrap();
+        df.write("_uk_cities_sql.csv").unwrap();
+
+        //TODO: check that generated file has expected contents
+    }
+
+    #[test]
+    fn test_df_udf_udt() {
+
+        let mut ctx = create_context();
+
+        ctx.define_function(&STPointFunc {});
+
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::String, false),
+            Field::new("lat", DataType::Double, false),
+            Field::new("lng", DataType::Double, false)]);
+
+        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+
+        // create an expression for invoking a scalar function
+        let func_expr = Expr::ScalarFunction {
+            name: "ST_Point".to_string(),
+            args: vec![df.col("lat").unwrap(), df.col("lng").unwrap()]
+        };
+
+        let df2 = df.select(vec![func_expr]).unwrap();
+
+        df2.write("_uk_cities_df.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -440,20 +487,19 @@ mod tests {
 
     fn create_context() -> ExecutionContext {
 
-        // create a schema registry
-        let mut schemas : HashMap<String, Schema> = HashMap::new();
+        // create execution context
+        let mut ctx = ExecutionContext::new();
 
         // define schemas for test data
-        schemas.insert("people".to_string(), Schema::new(vec![
+        ctx.define_schema("people".to_string(), &Schema::new(vec![
             Field::new("id", DataType::UnsignedLong, false),
             Field::new("name", DataType::String, false)]));
 
-        schemas.insert("uk_cities".to_string(), Schema::new(vec![
+        ctx.define_schema("uk_cities".to_string(), &Schema::new(vec![
             Field::new("city", DataType::String, false),
             Field::new("lat", DataType::Double, false),
             Field::new("lng", DataType::Double, false)]));
 
-        // create execution context
-        ExecutionContext::new(schemas.clone())
+        ctx
     }
 }

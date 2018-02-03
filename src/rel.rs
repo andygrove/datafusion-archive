@@ -39,6 +39,10 @@ impl Field {
             nullable: nullable
         }
     }
+
+    pub fn to_string(&self) -> String {
+        format!("{}: {:?}", self.name, self.data_type)
+    }
 }
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
@@ -65,6 +69,13 @@ impl Schema {
         self.columns.iter()
             .enumerate()
             .find(|&(_,c)| c.name == name)
+    }
+
+    pub fn to_string(&self) -> String {
+        let s : Vec<String> = self.columns.iter()
+            .map(|c| c.to_string())
+            .collect();
+        s.join(",")
     }
 
 }
@@ -144,35 +155,50 @@ pub enum Operator {
 
 /// Relation Expression
 #[derive(Debug,Clone,Serialize, Deserialize)]
-pub enum Rex {
+pub enum Expr {
     /// index into a value within the tuple
     TupleValue(usize),
     /// literal value
     Literal(Value),
     /// binary expression e.g. "age > 21"
-    BinaryExpr { left: Box<Rex>, op: Operator, right: Box<Rex> },
+    BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
     /// scalar function
-    ScalarFunction { name: String, args: Vec<Rex> }
+    ScalarFunction { name: String, args: Vec<Expr> }
 }
 
-impl Rex {
+impl Expr {
 
-    pub fn eq(&self, other: &Rex) -> Rex {
-        Rex::BinaryExpr {
+    pub fn eq(&self, other: &Expr) -> Expr {
+        Expr::BinaryExpr {
             left: Box::new(self.clone()),
             op: Operator::Eq,
             right: Box::new(other.clone())
         }
     }
 
+    pub fn gt(&self, other: &Expr) -> Expr {
+        Expr::BinaryExpr {
+            left: Box::new(self.clone()),
+            op: Operator::Gt,
+            right: Box::new(other.clone())
+        }
+    }
+
+    pub fn lt(&self, other: &Expr) -> Expr {
+        Expr::BinaryExpr {
+            left: Box::new(self.clone()),
+            op: Operator::Lt,
+            right: Box::new(other.clone())
+        }
+    }
 
 }
 
 /// Relations
 #[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Rel {
-    Projection { expr: Vec<Rex>, input: Box<Rel>, schema: Schema },
-    Selection { expr: Rex, input: Box<Rel>, schema: Schema },
+    Projection { expr: Vec<Expr>, input: Box<Rel>, schema: Schema },
+    Selection { expr: Expr, input: Box<Rel>, schema: Schema },
     TableScan { schema_name: String, table_name: String, schema: Schema },
     CsvFile { filename: String, schema: Schema },
     EmptyRelation
@@ -196,7 +222,7 @@ mod tests {
 
     use super::*;
     use super::Rel::*;
-    use super::Rex::*;
+    use super::Expr::*;
     use super::Value::*;
     extern crate serde_json;
 

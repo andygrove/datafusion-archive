@@ -41,15 +41,15 @@ impl SqlToRel {
 
                 let input_schema = input.schema();
 
-                let expr : Vec<Rex> = projection.iter()
+                let expr : Vec<Expr> = projection.iter()
                     .map(|e| self.sql_to_rex(&e, &input_schema) )
-                    .collect::<Result<Vec<Rex>,String>>()?;
+                    .collect::<Result<Vec<Expr>,String>>()?;
 
 
                 let projection_schema = Schema {
                     columns: expr.iter().map( |e| match e {
-                        &Rex::TupleValue(i) => input_schema.columns[i].clone(),
-                        &Rex::ScalarFunction { ref name, .. } => Field {
+                        &Expr::TupleValue(i) => input_schema.columns[i].clone(),
+                        &Expr::ScalarFunction { ref name, .. } => Field {
                             name: name.clone(),
                             data_type: DataType::Double, //TODO: hard-coded until I have function metadata in place
                             nullable: true
@@ -102,15 +102,15 @@ impl SqlToRel {
         }
     }
 
-    pub fn sql_to_rex(&self, sql: &ASTNode, tt: &Schema) -> Result<Rex, String> {
+    pub fn sql_to_rex(&self, sql: &ASTNode, tt: &Schema) -> Result<Expr, String> {
         match sql {
 
             &ASTNode::SQLLiteralInt(n) =>
-                Ok(Rex::Literal(Value::UnsignedLong(n as u64))), //TODO
+                Ok(Expr::Literal(Value::UnsignedLong(n as u64))), //TODO
 
             &ASTNode::SQLIdentifier { ref id, .. } => {
                 match tt.columns.iter().position(|c| c.name.eq(id) ) {
-                    Some(index) => Ok(Rex::TupleValue(index)),
+                    Some(index) => Ok(Expr::TupleValue(index)),
                     None => Err(String::from("Invalid identifier"))
                 }
             },
@@ -121,7 +121,7 @@ impl SqlToRel {
                     &SQLOperator::GT => Operator::Gt,
                     _ => unimplemented!()
                 };
-                Ok(Rex::BinaryExpr {
+                Ok(Expr::BinaryExpr {
                     left: Box::new(self.sql_to_rex(&left, &tt)?),
                     op: operator,
                     right: Box::new(self.sql_to_rex(&right, &tt)?),
@@ -132,9 +132,9 @@ impl SqlToRel {
             &ASTNode::SQLFunction { ref id, ref args } => {
                 let rex_args = args.iter()
                     .map(|a| self.sql_to_rex(a, tt))
-                    .collect::<Result<Vec<Rex>, String>>()?;
+                    .collect::<Result<Vec<Expr>, String>>()?;
 
-                Ok(Rex::ScalarFunction { name: id.clone(), args: rex_args })
+                Ok(Expr::ScalarFunction { name: id.clone(), args: rex_args })
             },
 
             _ => Err(String::from(format!("Unsupported ast node {:?}", sql)))

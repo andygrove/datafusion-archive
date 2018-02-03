@@ -44,17 +44,18 @@ pub trait DataFrame {
     fn repartition(&self, n: u32) -> Result<Box<DataFrame>,DataFrameError>;
 
     /// Projection
-    fn select(&self, expr: Vec<Rex>) -> Result<Box<DataFrame>,DataFrameError>;
+    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>,DataFrameError>;
 
     /// Selection
-    fn filter(&self, expr: Rex) -> Result<Box<DataFrame>,DataFrameError>;
+    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>,DataFrameError>;
 
     /// Write to CSV ...  will support other formats in the future
     fn write(&self, filename: &str) -> Result<(),DataFrameError>;
 
     /// Return an expression representing the specified column
-    fn col(&self, column_name: &str) -> Result<Rex,DataFrameError>;
+    fn col(&self, column_name: &str) -> Result<Expr,DataFrameError>;
 
-    //fn collect(&self) -> Result<Iterator>
+    fn schema(&self) -> Schema;
+
 }
 

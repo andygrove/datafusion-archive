@@ -26,26 +26,32 @@ fn main() {
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![
-        Field::new("id", DataType::UnsignedLong, false),
-        Field::new("name", DataType::String, false)
-        ]);
-
-    // create a schema registry
-    let mut schemas : HashMap<String, Schema> = HashMap::new();
-    schemas.insert("people".to_string(), schema.clone());
+        Field::new("city", DataType::String, false),
+        Field::new("lat", DataType::Double, false),
+        Field::new("lng", DataType::Double, false)]);
 
     // create execution context
-    let ctx = ExecutionContext::new(schemas.clone());
+    let ctx = ExecutionContext::new();
 
     // open a CSV file as a dataframe
-    let df = ctx.load("test/data/people.csv", &schema).unwrap();
+    let df1 = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+    println!("df1: {}", df1.schema().to_string());
 
-    // filter on id
-    let id = df.col("id").unwrap();
-    let id_value = Rex::Literal(Value::UnsignedLong(4));
-    let df2 = df.filter(id.eq(&id_value)).unwrap();
+    // filter on lat > 52.0
+    let lat = df1.col("lat").unwrap();
+    let value = Expr::Literal(Value::Double(52.0));
+    let df2 = df1.filter(lat.gt(&value)).unwrap();
+    println!("df2: {}", df1.schema().to_string());
+
+    // apply a projection using a scalar function to create a complex type
+    let st_point = Expr::ScalarFunction { name: "ST_Point".to_string(), args: vec![
+        df1.col("lat").unwrap(),
+        df1.col("lng").unwrap()
+    ]};
+    let df3 = df2.select(vec![st_point]).unwrap();
+    println!("df3: {}", df1.schema().to_string());
 
     // write the results to a file
-    df2.write("person4.csv").unwrap();
+    df3.write("northern_cities.csv").unwrap();
 
 }

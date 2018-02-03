@@ -52,7 +52,7 @@ fn main() {
     println!("Relational plan: {}", rel_str);
 
     // create execution context
-    let ctx = ExecutionContext::new(schemas.clone());
+    let ctx = ExecutionContext::new();
 
     // create execution plan
     let execution_plan = ctx.create_execution_plan(&plan).unwrap();
