@@ -382,9 +382,6 @@ impl DataFrame for DF {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::parser::*;
-    use super::super::rel::*;
-    use super::super::sqltorel::*;
 
     #[test]
     fn test_sqrt() {

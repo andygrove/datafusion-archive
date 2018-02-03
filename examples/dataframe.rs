@@ -17,7 +17,7 @@ use std::collections::HashMap;
 extern crate datafusion;
 use datafusion::rel::*;
 use datafusion::exec::*;
-use datafusion::dataframe::*;
+//use datafusion::dataframe::*;
 
 extern crate serde_json;
 
@@ -38,7 +38,7 @@ fn main() {
     let ctx = ExecutionContext::new(schemas.clone());
 
     // open a CSV file as a dataframe
-    let df = ctx.load("test/people.csv", &schema).unwrap();
+    let df = ctx.load("test/data/people.csv", &schema).unwrap();
 
     // filter on id
     let id = df.col("id").unwrap();
@@ -46,6 +46,6 @@ fn main() {
     let df2 = df.filter(id.eq(&id_value)).unwrap();
 
     // write the results to a file
-    df2.write("person4.csv");
+    df2.write("person4.csv").unwrap();
 
 }
