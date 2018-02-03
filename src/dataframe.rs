@@ -19,21 +19,21 @@ use super::exec::*;
 
 #[derive(Debug)]
 pub enum DataFrameError {
-    TBD,
+    IoError(Error),
+    ExecError(ExecutionError),
+    InvalidColumn(String),
     NotImplemented
 }
 
 impl From<ExecutionError> for DataFrameError {
-    fn from(_e: ExecutionError) -> Self {
-        //TODO:
-        DataFrameError::TBD
+    fn from(e: ExecutionError) -> Self {
+        DataFrameError::ExecError(e)
     }
 }
 
 impl From<Error> for DataFrameError {
-    fn from(_e: Error) -> Self {
-        //TODO:
-        DataFrameError::TBD
+    fn from(e: Error) -> Self {
+        DataFrameError::IoError(e)
     }
 }
 
@@ -54,5 +54,7 @@ pub trait DataFrame {
 
     /// Return an expression representing the specified column
     fn col(&self, column_name: &str) -> Result<Rex,DataFrameError>;
+
+    //fn collect(&self) -> Result<Iterator>
 }
 

@@ -49,7 +49,7 @@ impl SqlToRel {
                 let projection_schema = TupleType {
                     columns: expr.iter().map( |e| match e {
                         &Rex::TupleValue(i) => input_schema.columns[i].clone(),
-                        &Rex::ScalarFunction { ref name, .. } => ColumnMeta {
+                        &Rex::ScalarFunction { ref name, .. } => Field {
                             name: name.clone(),
                             data_type: DataType::Double, //TODO: hard-coded until I have function metadata in place
                             nullable: true
