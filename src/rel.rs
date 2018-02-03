@@ -94,14 +94,14 @@ pub struct FunctionMeta {
 //}
 
 #[derive(Debug,Clone)]
-pub struct Tuple {
+pub struct Row {
     pub values: Vec<Value>
 }
 
-impl Tuple {
+impl Row {
 
     pub fn new(v: Vec<Value>) -> Self {
-        Tuple { values: v }
+        Row { values: v }
     }
 
     pub fn to_string(&self) -> String {

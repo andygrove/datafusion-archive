@@ -78,7 +78,7 @@ impl<'a> CsvRelation {
     }
 
     /// Convert StringRecord into our internal tuple type based on the known schema
-    fn create_tuple(&self, r: &StringRecord) -> Result<Tuple,ExecutionError> {
+    fn create_tuple(&self, r: &StringRecord) -> Result<Row,ExecutionError> {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
             //TODO: remove unwrap use here
@@ -87,7 +87,7 @@ impl<'a> CsvRelation {
             DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
             _ => panic!("csv unsupported type")
         }).collect();
-        Ok(Tuple::new(values))
+        Ok(Row::new(values))
     }
 }
 
@@ -95,14 +95,14 @@ impl<'a> CsvRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a>;
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row,ExecutionError>> + 'a>;
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
 }
 
 impl SimpleRelation for CsvRelation {
 
-    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple,ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row,ExecutionError>> + 'a> {
 
         let buf_reader = BufReader::new(&self.file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
@@ -124,7 +124,7 @@ impl SimpleRelation for CsvRelation {
 
 impl SimpleRelation for FilterRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).filter(move|t|
             match t {
                 &Ok(ref tuple) => match ctx.evaluate(tuple, &self.schema, &self.expr) {
@@ -143,7 +143,7 @@ impl SimpleRelation for FilterRelation {
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Tuple, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
         let foo = self.input.scan(ctx).map(move|r| match r {
             Ok(tuple) => {
                 let values = self.expr.iter()
@@ -154,7 +154,7 @@ impl SimpleRelation for ProjectRelation {
                         //unimplemented!("Unsupported expression for projection")
                     })
                     .collect();
-                Ok(Tuple::new(values))
+                Ok(Row::new(values))
             },
             Err(_) => r
         });
@@ -286,7 +286,7 @@ impl ExecutionContext {
     }
 
     /// Evaluate a relational expression against a tuple
-    pub fn evaluate(&self, tuple: &Tuple, tt: &Schema, rex: &Expr) -> Result<Value, Box<ExecutionError>> {
+    pub fn evaluate(&self, tuple: &Row, tt: &Schema, rex: &Expr) -> Result<Value, Box<ExecutionError>> {
 
         match rex {
             &Expr::BinaryExpr { ref left, ref op, ref right } => {
