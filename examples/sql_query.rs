@@ -12,59 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 extern crate datafusion;
 use datafusion::rel::*;
 use datafusion::exec::*;
-use datafusion::parser::*;
-use datafusion::sqltorel::*;
 
 extern crate serde_json;
 
 /// This example shows the steps to parse, plan, and execute simple SQL in the current process
 fn main() {
 
+    // create execution context
+    let mut ctx = ExecutionContext::new();
+
     // define schema for data source (csv file)
     let schema = Schema::new(vec![
-        Field::new("id", DataType::UnsignedLong, false),
-        Field::new("name", DataType::String, false)
-    ]);
+        Field::new("city", DataType::String, false),
+        Field::new("lat", DataType::Double, false),
+        Field::new("lng", DataType::Double, false)]);
 
-    // create a schema registry
-    let mut schemas : HashMap<String, Schema> = HashMap::new();
-    schemas.insert("people".to_string(), schema.clone());
+    // register the csv file as a table that can be queried via sql
+    ctx.define_schema("uk_cities", &schema);
 
     // define the SQL statement
-    let sql = "SELECT name, id FROM people WHERE id > 4";
+    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities"; // WHERE lat < 53
 
-    // parse SQL into AST
-    let ast = Parser::parse_sql(String::from(sql)).unwrap();
+    let df1 = ctx.sql(&sql).unwrap();
+    println!("df1: {}", df1.schema().to_string());
 
-    // create a query planner
-    let datafusion = SqlToRel::new(schemas.clone());
-
-    // plan the query (create a logical relational plan)
-    let plan = datafusion.sql_to_rel(&ast).unwrap();
-
-    // show the query plan (the json can also be sent to a worker node easily)
-    let rel_str = serde_json::to_string_pretty(&plan).unwrap();
-    println!("Relational plan: {}", rel_str);
-
-    // create execution context
-    let ctx = ExecutionContext::new();
-
-    // create execution plan
-    let execution_plan = ctx.create_execution_plan(&plan).unwrap();
-
-    // execute the query
-    let it = execution_plan.scan(&ctx);
-    it.for_each(|t| {
-        match t {
-            Ok(tuple) => println!("Tuple: {:?}", tuple),
-            _ => println!("Error")
-        }
-    });
+    // write the results to a file
+    df1.write("_southern_cities.csv").unwrap();
 
 
 }

@@ -183,8 +183,8 @@ impl ExecutionContext {
         }
     }
 
-    pub fn define_schema(&mut self, name: String, schema: &Schema) {
-        self.schemas.insert(name, schema.clone());
+    pub fn define_schema(&mut self, name: &str, schema: &Schema) {
+        self.schemas.insert(name.to_string(), schema.clone());
     }
 
     pub fn define_function(&mut self, func: &ScalarFunction) {
@@ -491,11 +491,11 @@ mod tests {
         let mut ctx = ExecutionContext::new();
 
         // define schemas for test data
-        ctx.define_schema("people".to_string(), &Schema::new(vec![
+        ctx.define_schema("people", &Schema::new(vec![
             Field::new("id", DataType::UnsignedLong, false),
             Field::new("name", DataType::String, false)]));
 
-        ctx.define_schema("uk_cities".to_string(), &Schema::new(vec![
+        ctx.define_schema("uk_cities", &Schema::new(vec![
             Field::new("city", DataType::String, false),
             Field::new("lat", DataType::Double, false),
             Field::new("lng", DataType::Double, false)]));

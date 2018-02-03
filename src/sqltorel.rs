@@ -111,7 +111,7 @@ impl SqlToRel {
             &ASTNode::SQLIdentifier { ref id, .. } => {
                 match tt.columns.iter().position(|c| c.name.eq(id) ) {
                     Some(index) => Ok(Expr::TupleValue(index)),
-                    None => Err(String::from("Invalid identifier"))
+                    None => Err(format!("Invalid identifier {}", id))
                 }
             },
 
@@ -119,6 +119,10 @@ impl SqlToRel {
                 //TODO: we have this implemented somewhere else already
                 let operator = match op {
                     &SQLOperator::GT => Operator::Gt,
+                    &SQLOperator::GTEQ => Operator::GtEq,
+                    &SQLOperator::LT => Operator::Lt,
+                    &SQLOperator::LTEQ => Operator::LtEq,
+                    &SQLOperator::EQ => Operator::Eq,
                     _ => unimplemented!()
                 };
                 Ok(Expr::BinaryExpr {

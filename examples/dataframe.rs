@@ -12,26 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 extern crate datafusion;
 use datafusion::rel::*;
 use datafusion::exec::*;
-//use datafusion::dataframe::*;
 
 extern crate serde_json;
 
 /// This example shows the use of the DataFrame API to define a query plan
 fn main() {
 
+    // create execution context
+    let ctx = ExecutionContext::new();
+
     // define schema for data source (csv file)
     let schema = Schema::new(vec![
         Field::new("city", DataType::String, false),
         Field::new("lat", DataType::Double, false),
         Field::new("lng", DataType::Double, false)]);
-
-    // create execution context
-    let ctx = ExecutionContext::new();
 
     // open a CSV file as a dataframe
     let df1 = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
@@ -52,6 +49,6 @@ fn main() {
     println!("df3: {}", df1.schema().to_string());
 
     // write the results to a file
-    df3.write("northern_cities.csv").unwrap();
+    df3.write("_northern_cities.csv").unwrap();
 
 }

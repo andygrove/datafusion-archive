@@ -239,7 +239,8 @@ impl Parser {
         match self.next_token() {
             Some(tok) => {
                 match tok {
-                    Token::Eq | Token::Gt => Ok(Some(ASTNode::SQLBinaryExpr {
+                    Token::Eq | Token::Gt | Token::GtEq |
+                    Token::Lt | Token::LtEq => Ok(Some(ASTNode::SQLBinaryExpr {
                         left: Box::new(expr),
                         op: self.to_sql_operator(&tok)?,
                         right: Box::new(self.parse_expr(precedence)?)
@@ -364,16 +365,13 @@ impl Parser {
     }
 
     fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
-        println!("parse_expr_list()");
         let mut expr_list : Vec<ASTNode> = vec![];
         loop {
-            println!("parse_expr_list() top of loop");
             expr_list.push(self.parse_expr(0)?);
             if let Some(t) = self.peek_token() {
                 if t == Token::Comma {
                     self.next_token();
                 } else {
-                    println!("parse_expr_list() BREAK on token={:?}", t);
                     break;
                 }
             }
