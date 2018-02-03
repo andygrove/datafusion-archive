@@ -323,6 +323,7 @@ impl ExecutionContext {
         match function_name.to_lowercase().as_ref() {
             "sqrt" => Ok(Box::new(SqrtFunction {})),
             "st_point" => Ok(Box::new(STPointFunc {})),
+            "st_astext" => Ok(Box::new(STAsText {})),
             _ => Err(Box::new(ExecutionError::Custom(format!("Unknown function {}", function_name))))
         }
     }
@@ -419,6 +420,20 @@ mod tests {
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities").unwrap();
 
         df.write("_uk_cities_out.csv").unwrap();
+
+        //TODO: check that generated file has expected contents
+    }
+
+    #[test]
+    fn test_chaining_functions() {
+
+        let mut ctx = create_context();
+
+        ctx.define_function(&STPointFunc {});
+
+        let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities").unwrap();
+
+        df.write("_uk_cities_wkt.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
