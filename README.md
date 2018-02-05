@@ -1,36 +1,18 @@
-# DataFusion: Distributed Query Processing in Rust
+# DataFusion: Big Data Platform for Rust
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/datafusion.svg)](https://crates.io/crates/datafusion)
 [![Docs](https://docs.rs/datafusion/badge.svg)](https://docs.rs/datafusion)
 [![Build Status](https://travis-ci.org/andygrove/datafusion-rs.svg?branch=master)](https://travis-ci.org/andygrove/datafusion-rs)
+[![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
-This project is a proof-of-concept of a distributed data processing platform in Rust with features somewhat similar to Apache Spark but it is not intended to be a clone of Apache Spark.
+DataFusion is a distributed data processing platform implemented in Rust. It is very much inspired by Apache Spark and has a similar programming style through the use of DataFrames and SQL.
 
 DataFusion can also be used as a crate dependency in your project if you want the ability to perform SQL queries and DataFrame style data manipulation in-process.
 
-# Why am I building this?
+# Project Home Page
 
-Primarily, this is a just a fun side-project for me to use to become a better Rust developer since it involves solving some non-trivial problems. I'm also generally interested in researching distributed systems and query optimizers since I've been working with these concepts professionally for quite a few years now.
-
-Apart from using this as a way to learn, I do think that it could result in a useful product.
-
-I have a hypothesis that even a naive implementation in Rust will have performance that is roughly comparable to that of Apache Spark for simple use cases, but more importantly the performance will be _predictable_ and _reliable_ because there is no garbage collector involved.
-
-# What will be similar to Apache Spark?
-
-- There will be a DataFrame API as well as SQL support and both approaches ultimately are just different ways of defining a query plan
-- A master node will create a distributed execution plan and co-ordinate the execution of the plan across the worker nodes
-- There will be a query optimizer, with some basic optimizations 
-- HDFS will be supported
-
-# What will be different to Apache Spark?
-
-Due to the statically compiled nature of Rust, this platform will be less interactive:
-
-- No support is planned for allowing idiomatic Rust lambda functions to be applied to a DataFrame but instead pre-registered UDFs can be used to perform transformations on DataFrames
-- UDTs and UDFs will need to be statically compiled into the worker nodes, at least initially (it would be possible to do some dynamic loading eventually)
-- No interactive REPL is planned although a SQL console would be possible
+The project home page is now at [https://datafusion.rs](https://datafusion.rs)
 
 # Current Status
 

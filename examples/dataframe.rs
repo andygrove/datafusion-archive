@@ -41,10 +41,11 @@ fn main() {
     println!("df2: {}", df1.schema().to_string());
 
     // apply a projection using a scalar function to create a complex type
-    let st_point = Expr::ScalarFunction { name: "ST_Point".to_string(), args: vec![
-        df1.col("lat").unwrap(),
-        df1.col("lng").unwrap()
-    ]};
+    // invoke custom code as a scalar UDF
+    let st_point = ctx.udf("ST_Point",vec![
+        df2.col("lat").unwrap(),
+        df2.col("lng").unwrap()]);
+
     let df3 = df2.select(vec![st_point]).unwrap();
     println!("df3: {}", df1.schema().to_string());
 

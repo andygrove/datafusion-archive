@@ -335,6 +335,10 @@ impl ExecutionContext {
         }
     }
 
+    pub fn udf(&self, name: &str, args: Vec<Expr>) -> Expr {
+        Expr::ScalarFunction { name: name.to_string(), args: args.clone() }
+    }
+
 }
 
 
@@ -394,12 +398,9 @@ impl DataFrame for DF {
     }
 
     fn col(&self, column_name: &str) -> Result<Expr, DataFrameError> {
-        match &self.plan.as_ref() {
-            &&Rel::CsvFile { ref schema, .. } => match schema.column(column_name) {
-                Some((i,_)) => Ok(Expr::TupleValue(i)),
-                _ => Err(DataFrameError::InvalidColumn(column_name.to_string()))
-            },
-            _ => Err(DataFrameError::NotImplemented)
+        match self.plan.schema().column(column_name) {
+            Some((i,_)) => Ok(Expr::TupleValue(i)),
+            _ => Err(DataFrameError::InvalidColumn(column_name.to_string()))
         }
     }
 
@@ -459,10 +460,17 @@ mod tests {
         let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
 
         // create an expression for invoking a scalar function
-        let func_expr = Expr::ScalarFunction {
-            name: "ST_Point".to_string(),
-            args: vec![df.col("lat").unwrap(), df.col("lng").unwrap()]
-        };
+//        let func_expr = Expr::ScalarFunction {
+//            name: "ST_Point".to_string(),
+//            args: vec![df.col("lat").unwrap(), df.col("lng").unwrap()]
+//        };
+
+
+        // invoke custom code as a scalar UDF
+        let func_expr = ctx.udf("ST_Point",vec![
+            df.col("lat").unwrap(),
+            df.col("lng").unwrap()]
+        );
 
         let df2 = df.select(vec![func_expr]).unwrap();
 
