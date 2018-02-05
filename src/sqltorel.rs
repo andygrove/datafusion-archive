@@ -29,14 +29,14 @@ impl SqlToRel {
         SqlToRel { /*default_schema: None,*/ schemas }
     }
 
-    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Box<Rel>, String> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Box<LogicalPlan>, String> {
         match sql {
             &ASTNode::SQLSelect { ref projection, ref relation, ref selection, .. } => {
 
                 // parse the input relation so we have access to the tuple type
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
-                    &None => Box::new(Rel::EmptyRelation)
+                    &None => Box::new(LogicalPlan::EmptyRelation)
                 };
 
                 let input_schema = input.schema();
@@ -61,13 +61,13 @@ impl SqlToRel {
                 match selection {
                     &Some(ref filter_expr) => {
 
-                        let selection_rel = Rel::Selection {
+                        let selection_rel = LogicalPlan::Selection {
                             expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
                             input: input,
                             schema: input_schema.clone()
                         };
 
-                        Ok(Box::new(Rel::Projection {
+                        Ok(Box::new(LogicalPlan::Projection {
                             expr: expr,
                             input: Box::new(selection_rel),
                             schema: projection_schema.clone()
@@ -76,7 +76,7 @@ impl SqlToRel {
                     },
                     _ => {
 
-                        Ok(Box::new(Rel::Projection {
+                        Ok(Box::new(LogicalPlan::Projection {
                             expr: expr,
                             input: input,
                             schema: projection_schema.clone()
@@ -89,7 +89,7 @@ impl SqlToRel {
             &ASTNode::SQLIdentifier { ref id, .. } => {
 
                 match self.schemas.get(id) {
-                    Some(schema) => Ok(Box::new(Rel::TableScan {
+                    Some(schema) => Ok(Box::new(LogicalPlan::TableScan {
                         schema_name: String::from("default"),
                         table_name: id.clone(),
                         schema: schema.clone()

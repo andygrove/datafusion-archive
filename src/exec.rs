@@ -167,6 +167,16 @@ impl SimpleRelation for ProjectRelation {
     }
 }
 
+/// Execution plans are sent to worker nodes for execution
+pub enum ExecutionPlan {
+    /// Run a query and return the results to the client
+    Interactive { plan: LogicalPlan },
+    /// Partition the relation
+    Partition { plan: LogicalPlan, partition_count: usize, partition_expr: Expr }
+
+}
+
+
 #[derive(Debug,Clone)]
 pub struct ExecutionContext {
     schemas: HashMap<String, Schema>,
@@ -216,7 +226,7 @@ impl ExecutionContext {
     /// Open a CSV file
     ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
     pub fn load(&self, filename: &str, schema: &Schema) -> Result<Box<DataFrame>, ExecutionError> {
-        let plan = Rel::CsvFile { filename: filename.to_string(), schema: schema.clone() };
+        let plan = LogicalPlan::CsvFile { filename: filename.to_string(), schema: schema.clone() };
         Ok(Box::new(DF { ctx: Box::new((*self).clone()), plan: Box::new(plan) }))
     }
 
@@ -224,27 +234,27 @@ impl ExecutionContext {
         self.schemas.insert(name, schema);
     }
 
-    pub fn create_execution_plan(&self, plan: &Rel) -> Result<Box<SimpleRelation>,ExecutionError> {
+    pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>,ExecutionError> {
         match *plan {
 
-            Rel::EmptyRelation => {
+            LogicalPlan::EmptyRelation => {
                 panic!()
             },
 
-            Rel::TableScan { ref table_name, ref schema, .. } => {
+            LogicalPlan::TableScan { ref table_name, ref schema, .. } => {
                 // for now, tables are csv files
                 let file = File::open(format!("test/data/{}.csv", table_name))?;
                 let rel = CsvRelation::open(file, schema.clone())?;
                 Ok(Box::new(rel))
             },
 
-            Rel::CsvFile { ref filename, ref schema } => {
+            LogicalPlan::CsvFile { ref filename, ref schema } => {
                 let file = File::open(filename)?;
                 let rel = CsvRelation::open(file, schema.clone())?;
                 Ok(Box::new(rel))
             },
 
-            Rel::Selection { ref expr, ref input, ref schema } => {
+            LogicalPlan::Selection { ref expr, ref input, ref schema } => {
                 let input_rel = self.create_execution_plan(input)?;
                 let rel = FilterRelation {
                     input: input_rel,
@@ -254,7 +264,7 @@ impl ExecutionContext {
                 Ok(Box::new(rel))
             },
 
-            Rel::Projection { ref expr, ref input, .. } => {
+            LogicalPlan::Projection { ref expr, ref input, .. } => {
                 let input_rel = self.create_execution_plan(&input)?;
                 let input_schema = input_rel.schema().clone();
 
@@ -346,14 +356,14 @@ impl ExecutionContext {
 
 pub struct DF {
     ctx: Box<ExecutionContext>,
-    plan: Box<Rel>
+    plan: Box<LogicalPlan>
 }
 
 impl DataFrame for DF {
 
     fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
 
-        let plan = Rel::Projection {
+        let plan = LogicalPlan::Projection {
             expr: expr,
             input: self.plan.clone(),
             schema: self.plan.schema().clone()
@@ -366,7 +376,7 @@ impl DataFrame for DF {
 
     fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError> {
 
-        let plan = Rel::Selection {
+        let plan = LogicalPlan::Selection {
             expr: expr,
             input: self.plan.clone(),
             schema: self.plan.schema().clone()

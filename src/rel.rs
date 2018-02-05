@@ -196,23 +196,23 @@ impl Expr {
 
 /// Relations
 #[derive(Debug,Clone,Serialize, Deserialize)]
-pub enum Rel {
-    Projection { expr: Vec<Expr>, input: Box<Rel>, schema: Schema },
-    Selection { expr: Expr, input: Box<Rel>, schema: Schema },
+pub enum LogicalPlan {
+    Projection { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
+    Selection { expr: Expr, input: Box<LogicalPlan>, schema: Schema },
     TableScan { schema_name: String, table_name: String, schema: Schema },
     CsvFile { filename: String, schema: Schema },
     EmptyRelation
 }
 
-impl Rel {
+impl LogicalPlan {
 
     pub fn schema(&self) -> Schema {
         match self {
-            &Rel::EmptyRelation => Schema::empty(),
-            &Rel::TableScan { ref schema, .. } => schema.clone(),
-            &Rel::CsvFile { ref schema, .. } => schema.clone(),
-            &Rel::Projection { ref schema, .. } => schema.clone(),
-            &Rel::Selection { ref schema, .. } => schema.clone(),
+            &LogicalPlan::EmptyRelation => Schema::empty(),
+            &LogicalPlan::TableScan { ref schema, .. } => schema.clone(),
+            &LogicalPlan::CsvFile { ref schema, .. } => schema.clone(),
+            &LogicalPlan::Projection { ref schema, .. } => schema.clone(),
+            &LogicalPlan::Selection { ref schema, .. } => schema.clone(),
         }
     }
 }
@@ -221,7 +221,7 @@ impl Rel {
 mod tests {
 
     use super::*;
-    use super::Rel::*;
+    use super::LogicalPlan::*;
     use super::Expr::*;
     use super::Value::*;
     extern crate serde_json;

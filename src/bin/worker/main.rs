@@ -59,7 +59,7 @@ fn handle_request(chunk: Chunk) -> Response {
         Ok(json_str) => {
             // for initial testing, just receive a relational plan directly but this should
             // really be an execution plan
-            let rel: Rel = serde_json::from_str(&json_str).unwrap();
+            let rel: LogicalPlan = serde_json::from_str(&json_str).unwrap();
 
             println!("Plan: {:?}", rel);
 

@@ -16,6 +16,10 @@ path = "src/lib.rs"
 name = "worker"
 path = "src/bin/worker/main.rs"
 
+[[bin]]
+name = "console"
+path = "src/bin/console/main.rs"
+
 [dependencies]
 csv = "1.0.0-beta.5"
 futures = "0.1.14"
@@ -23,4 +27,5 @@ hyper = "0.11.2"
 serde_derive = "1.0"
 serde = "1.0"
 serde_json = "1.0"
+rprompt = "1.0"
 #etcd = "0.8.0"
