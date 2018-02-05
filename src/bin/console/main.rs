@@ -1,7 +1,6 @@
 extern crate rprompt;
 extern crate datafusion;
 
-use datafusion::rel::*;
 use datafusion::exec::*;
 
 /// Interactive SQL console

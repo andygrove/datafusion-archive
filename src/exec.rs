@@ -37,6 +37,7 @@ use super::functions::geospatial::*;
 pub enum ExecutionError {
     IoError(Error),
     CsvError(csv::Error),
+    ParserError(ParserError),
     Custom(String)
 }
 
@@ -49,6 +50,12 @@ impl From<Error> for ExecutionError {
 impl From<String> for ExecutionError {
     fn from(e: String) -> Self {
         ExecutionError::Custom(e)
+    }
+}
+
+impl From<ParserError> for ExecutionError {
+    fn from(e: ParserError) -> Self {
+        ExecutionError::ParserError(e)
     }
 }
 
@@ -211,13 +218,13 @@ impl ExecutionContext {
     pub fn sql(&self, sql: &str) -> Result<Box<DataFrame>, ExecutionError> {
 
         // parse SQL into AST
-        let ast = Parser::parse_sql(String::from(sql)).unwrap();
+        let ast = Parser::parse_sql(String::from(sql))?;
 
         // create a query planner
         let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
 
         // plan the query (create a logical relational plan)
-        let plan = query_planner.sql_to_rel(&ast).unwrap(); //TODO: remove unwrap
+        let plan = query_planner.sql_to_rel(&ast)?;
 
         // return the DataFrame
         Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: plan })) //TODO: don't clone context

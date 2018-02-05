@@ -94,7 +94,7 @@ impl SqlToRel {
                         table_name: id.clone(),
                         schema: schema.clone()
                     })),
-                    None => panic!("no schema found for table") //TODO error handling
+                    None => Err(format!("no schema found for table"))
                 }
             },
 

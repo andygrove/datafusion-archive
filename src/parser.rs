@@ -171,7 +171,7 @@ impl Parser {
 
     pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
         let mut tokenizer = Tokenizer { query: sql };
-        let tokens = tokenizer.tokenize().unwrap();
+        let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
         parser.parse()
     }
