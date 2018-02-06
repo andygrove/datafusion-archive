@@ -175,6 +175,7 @@ impl SimpleRelation for ProjectRelation {
 }
 
 /// Execution plans are sent to worker nodes for execution
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum ExecutionPlan {
     /// Run a query and return the results to the client
     Interactive { plan: LogicalPlan },
@@ -215,6 +216,18 @@ impl ExecutionContext {
         self.functions.insert(fm.name.to_lowercase(), fm);
     }
 
+    pub fn create_logical_plan(&self, sql: &str) -> Result<Box<LogicalPlan>, ExecutionError> {
+
+        // parse SQL into AST
+        let ast = Parser::parse_sql(String::from(sql))?;
+
+        // create a query planner
+        let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
+
+        // plan the query (create a logical relational plan)
+        Ok(query_planner.sql_to_rel(&ast)?)
+    }
+
     pub fn sql(&self, sql: &str) -> Result<Box<DataFrame>, ExecutionError> {
 
         // parse SQL into AST
@@ -225,6 +238,8 @@ impl ExecutionContext {
 
         // plan the query (create a logical relational plan)
         let plan = query_planner.sql_to_rel(&ast)?;
+
+        println!("{:?}", plan);
 
         // return the DataFrame
         Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: plan })) //TODO: don't clone context
