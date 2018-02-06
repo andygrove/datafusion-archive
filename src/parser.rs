@@ -175,21 +175,21 @@ impl Tokenizer {
     }
 }
 
-pub struct Parser {
-    tokens: Vec<Token>,
+pub struct Parser<'a> {
+    tokens: &'a Vec<Token>,
     index: usize
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
 
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: &'a Vec<Token>) -> Self {
         Parser { tokens: tokens, index: 0 }
     }
 
     pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         parser.parse()
     }
 
@@ -230,7 +230,7 @@ impl Parser {
                     },
                     Token::Identifier(id) => {
                         match self.peek_token() {
-                            Some(Token::LParen) => {
+                            Some(&Token::LParen) => {
                                 self.next_token(); // skip lparen
 
                                 let args = self.parse_expr_list()?;
@@ -295,9 +295,9 @@ impl Parser {
         }
     }
 
-    fn peek_token(&mut self) -> Option<Token> {
+    fn peek_token(&mut self) -> Option<&Token> {
         if self.index < self.tokens.len() {
-            Some(self.tokens[self.index].clone())
+            Some(&self.tokens[self.index])
         } else {
             None
         }
@@ -386,7 +386,7 @@ impl Parser {
                                 }
 
                                 match self.peek_token() {
-                                    Some(Token::Comma) => {
+                                    Some(&Token::Comma) => {
                                         self.next_token();
                                         columns.push(SQLColumnDef {
                                             name: column_name,
@@ -394,7 +394,7 @@ impl Parser {
                                             allow_null: true // TODO
                                         });
                                     },
-                                    Some(Token::RParen) => break,
+                                    Some(&Token::RParen) => break,
                                     _ => return Err(ParserError::ParserError("Expected ',' or ')' after column definition".to_string()))
                                 }
 
@@ -483,7 +483,7 @@ impl Parser {
         loop {
             expr_list.push(self.parse_expr(0)?);
             if let Some(t) = self.peek_token() {
-                if t == Token::Comma {
+                if t == &Token::Comma {
                     self.next_token();
                 } else {
                     break;
@@ -556,7 +556,7 @@ mod tests {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
         println!("AST = {:?}", ast);
         match ast {
@@ -576,7 +576,7 @@ mod tests {
 
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
         println!("AST = {:?}", ast);
 //        match ast {
@@ -592,7 +592,7 @@ mod tests {
         let sql = String::from("SELECT sqrt(id) FROM foo");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
         println!("AST = {:?}", ast);
 //        match ast {
