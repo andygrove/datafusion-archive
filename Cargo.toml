@@ -29,3 +29,14 @@ serde = "1.0"
 serde_json = "1.0"
 rprompt = "1.0"
 #etcd = "0.8.0"
+
+[dev-dependencies]
+criterion = "0.2.0"
+
+[[bench]]
+name = "dataframe_bench"
+harness = false
+
+[[bench]]
+name = "sql_bench"
+harness = false

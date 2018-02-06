@@ -396,7 +396,7 @@ impl DataFrame for DF {
         let execution_plan = self.ctx.create_execution_plan(&self.plan)?;
 
         // create output file
-        println!("Writing csv to {}", filename);
+        // println!("Writing csv to {}", filename);
         let mut file = File::create(filename)?;
 
         // implement execution here for now but should be a common method for processing a plan
