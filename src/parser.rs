@@ -248,10 +248,17 @@ impl<'a> Parser<'a> {
                             _ => Ok(ASTNode::SQLIdentifier { id: id })
                         }
                     }
-                    Token::Number(n) =>
-                        Ok(ASTNode::SQLLiteralInt(n.parse::<i64>().unwrap())), //TODO: remove unwrap
-                    _ => Err(ParserError::ParserError(
-                        format!("Prefix parser expected a keyword but found {:?}", t)))
+                    Token::Number(n) => match n.parse::<i64>() {
+                        Ok(n) => Ok(ASTNode::SQLLiteralInt(n)),
+                        Err(e) => Err(ParserError::ParserError(format!(
+                            "Could not parse '{}' as i64: {}",
+                            n, e
+                        ))),
+                    },
+                    _ => Err(ParserError::ParserError(format!(
+                        "Prefix parser expected a keyword but found {:?}",
+                        t
+                    ))),
                 }
             },
             None => Err(ParserError::ParserError(
@@ -442,8 +449,12 @@ impl<'a> Parser<'a> {
 
     fn parse_literal_int(&mut self) -> Result<i64, ParserError> {
         match self.next_token() {
-            Some(Token::Number(s)) => Ok(s.parse::<i64>().unwrap()), //TODO: remove unwrap
-            _ => Err(ParserError::ParserError("error parsing literal int".to_string()))
+            Some(Token::Number(s)) => s.parse::<i64>().map_err(|e| {
+                ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
+            }),
+            _ => Err(ParserError::ParserError(
+                "error parsing literal int".to_string(),
+            )),
         }
     }
 
