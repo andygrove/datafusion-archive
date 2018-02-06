@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -47,11 +48,28 @@ pub enum ParserError {
     ParserError(String),
 }
 
+/// SQL keywords
+static KEYWORDS : &'static [&'static str] = &[
+    "SELECT", "FROM", "WHERE", "LIMIT", "ORDER", "GROUP", "BY", "HAVING",
+    "UNION", "ALL", "INSERT", "UPDATE", "DELETE", "IN", "NOT", "NULL",
+    "SET", "CREATE", "EXTERNAL", "TABLE", 
+    "VARCHAR", "DOUBLE"
+];
+
 pub struct Tokenizer {
+    keywords: HashSet<String>,
     pub query: String,
 }
 
 impl Tokenizer {
+
+    pub fn new(query: &str) -> Self {
+        let mut tokenizer = Tokenizer { keywords: HashSet::new(), query: query.to_string() };
+        KEYWORDS.into_iter().for_each(|k| {
+            tokenizer.keywords.insert(k.to_string());
+        });
+        tokenizer
+    }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, ParserError> {
 
@@ -89,13 +107,10 @@ impl Tokenizer {
                             _ => break
                         }
                     }
-                    match s.to_uppercase().as_ref() {
-                        "SELECT" | "FROM" | "WHERE" | "LIMIT" | "ORDER" | "GROUP" | "BY" |
-                        "UNION" | "ALL"| "UPDATE" | "DELETE" | "IN" | "NOT" | "NULL" |
-                        "SET" | "CREATE" | "EXTERNAL" | "TABLE" | "VARCHAR" | "DOUBLE"
-                        => Ok(Some(Token::Keyword(s))),
-
-                        _ => Ok(Some(Token::Identifier(s))),
+                    if self.keywords.contains(&s) {
+                        Ok(Some(Token::Keyword(s)))
+                    } else {
+                        Ok(Some(Token::Identifier(s)))
                     }
                 },
                 // numbers
@@ -172,7 +187,7 @@ impl Parser {
     }
 
     pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
-        let mut tokenizer = Tokenizer { query: sql };
+        let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
         parser.parse()
@@ -488,7 +503,7 @@ mod tests {
     #[test]
     fn tokenize_select_1()  {
         let sql = String::from("SELECT 1");
-        let mut tokenizer = Tokenizer { query: sql };
+        let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -502,7 +517,7 @@ mod tests {
     #[test]
     fn tokenize_scalar_function()  {
         let sql = String::from("SELECT sqrt(1)");
-        let mut tokenizer = Tokenizer { query: sql };
+        let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -519,7 +534,7 @@ mod tests {
     #[test]
     fn tokenize_simple_select()  {
         let sql = String::from("SELECT * FROM customer WHERE id = 1");
-        let mut tokenizer = Tokenizer { query: sql };
+        let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         
         let expected = vec![
@@ -539,7 +554,7 @@ mod tests {
     #[test]
     fn parse_simple_select() {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
-        let mut tokenizer = Tokenizer { query: sql };
+        let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
@@ -559,7 +574,7 @@ mod tests {
             lat DOUBLE NOT NULL,\
             lng DOUBLE NOT NULL)");
 
-        let mut tokenizer = Tokenizer { query: sql };
+        let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
@@ -575,7 +590,7 @@ mod tests {
     #[test]
     fn parse_scalar_function_in_projection() {
         let sql = String::from("SELECT sqrt(id) FROM foo");
-        let mut tokenizer = Tokenizer { query: sql };
+        let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
