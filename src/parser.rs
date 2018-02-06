@@ -175,21 +175,21 @@ impl Tokenizer {
     }
 }
 
-pub struct Parser {
-    tokens: Vec<Token>,
+pub struct Parser<'a> {
+    tokens: &'a Vec<Token>,
     index: usize
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
 
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: &'a Vec<Token>) -> Self {
         Parser { tokens: tokens, index: 0 }
     }
 
     pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         parser.parse()
     }
 
@@ -198,20 +198,26 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
+        //println!("parse_expr() precendence = {}", precedence);
 
         let mut expr = self.parse_prefix()?;
+        //println!("parsed prefix: {:?}", expr);
 
-        while let Some(tok) = self.peek_token() {
+        loop {
 
-            let next_precedence = self.get_precedence(&tok)?;
+            let next_precedence = self.get_next_precedence()?;
             if precedence >= next_precedence {
+                //println!("break on precedence change ({} >= {})", precedence, next_precedence);
                 break;
             }
 
-            if let Some(new_expr) = self.parse_infix(expr.clone(), next_precedence)? {
-                expr = new_expr;
+            if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
+                //println!("parsed infix: {:?}", infix_expr);
+                expr = infix_expr;
             }
         }
+
+        //println!("parse_expr() returning {:?}", expr);
 
         Ok(expr)
     }
@@ -230,7 +236,7 @@ impl Parser {
                     },
                     Token::Identifier(id) => {
                         match self.peek_token() {
-                            Some(Token::LParen) => {
+                            Some(&Token::LParen) => {
                                 self.next_token(); // skip lparen
 
                                 let args = self.parse_expr_list()?;
@@ -283,7 +289,17 @@ impl Parser {
         }
     }
 
+    fn get_next_precedence(&self) -> Result<u8, ParserError> {
+        if self.index < self.tokens.len() {
+            self.get_precedence(&self.tokens[self.index])
+        } else {
+            Ok(0)
+        }
+    }
+
     fn get_precedence(&self, tok: &Token) -> Result<u8, ParserError> {
+        //println!("get_precedence() {:?}", tok);
+
         match tok {
             &Token::Eq | &Token::Lt | & Token::LtEq |
             &Token::Neq | &Token::Gt | & Token::GtEq => Ok(20),
@@ -295,9 +311,9 @@ impl Parser {
         }
     }
 
-    fn peek_token(&mut self) -> Option<Token> {
+    fn peek_token(&mut self) -> Option<&Token> {
         if self.index < self.tokens.len() {
-            Some(self.tokens[self.index].clone())
+            Some(&self.tokens[self.index])
         } else {
             None
         }
@@ -321,19 +337,23 @@ impl Parser {
     }
 
     fn parse_keyword(&mut self, expected: &'static str) -> bool {
-        println!("parse_keyword? {}", expected);
-        match self.peek_token() {
-            Some(Token::Keyword(k)) => {
+        //println!("parse_keyword? {}", expected);
+        let b = match self.peek_token() {
+            Some(&Token::Keyword(ref k)) => {
                 if expected.eq_ignore_ascii_case(k.as_str()) {
-                    self.next_token();
-                    println!("return true, peek = {:?}", self.peek_token());
                     true
                 } else {
                     false
                 }
             },
             _ => false
+        };
+
+        if b {
+            self.index += 1;
         }
+
+        b
     }
 
     fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
@@ -386,7 +406,7 @@ impl Parser {
                                 }
 
                                 match self.peek_token() {
-                                    Some(Token::Comma) => {
+                                    Some(&Token::Comma) => {
                                         self.next_token();
                                         columns.push(SQLColumnDef {
                                             name: column_name,
@@ -394,7 +414,7 @@ impl Parser {
                                             allow_null: true // TODO
                                         });
                                     },
-                                    Some(Token::RParen) => break,
+                                    Some(&Token::RParen) => break,
                                     _ => return Err(ParserError::ParserError("Expected ',' or ')' after column definition".to_string()))
                                 }
 
@@ -432,9 +452,9 @@ impl Parser {
             Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
                 "DOUBLE" => Ok(SQLType::Double),
                 "VARCHAR" => {
-                    self.consume_token(&Token::LParen);
+                    self.consume_token(&Token::LParen)?;
                     let n = self.parse_literal_int()?;
-                    self.consume_token(&Token::RParen);
+                    self.consume_token(&Token::RParen)?;
                     Ok(SQLType::Varchar(n as usize))
                 },
                 _ => Err(ParserError::ParserError("Invalid data type".to_string()))
@@ -478,18 +498,26 @@ impl Parser {
         }
     }
 
+    fn helper(&mut self) -> Result<(ASTNode, bool), ParserError> {
+        let expr = self.parse_expr(0)?;
+        if self.index < self.tokens.len() && self.tokens[self.index] == Token::Comma {
+            self.index += 1;
+            Ok((expr, true))
+        } else {
+            Ok((expr, false))
+        }
+    }
+
     fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
         let mut expr_list : Vec<ASTNode> = vec![];
         loop {
-            expr_list.push(self.parse_expr(0)?);
-            if let Some(t) = self.peek_token() {
-                if t == Token::Comma {
-                    self.next_token();
-                } else {
-                    break;
-                }
+            let (expr, more) = self.helper()?;
+            expr_list.push(expr);
+            if !more {
+                break;
             }
         }
+
         Ok(expr_list)
     }
 
@@ -536,7 +564,7 @@ mod tests {
         let sql = String::from("SELECT * FROM customer WHERE id = 1");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        
+
         let expected = vec![
             Token::Keyword(String::from("SELECT")),
             Token::Mult,
@@ -556,9 +584,9 @@ mod tests {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
-        println!("AST = {:?}", ast);
+        //println!("AST = {:?}", ast);
         match ast {
             ASTNode::SQLSelect { projection, .. } => {
                 assert_eq!(3, projection.len());
@@ -576,9 +604,9 @@ mod tests {
 
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
-        println!("AST = {:?}", ast);
+        //println!("AST = {:?}", ast);
 //        match ast {
 //            ASTNode::SQLSelect { projection, .. } => {
 //                assert_eq!(3, projection.len());
@@ -592,9 +620,9 @@ mod tests {
         let sql = String::from("SELECT sqrt(id) FROM foo");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
-        println!("AST = {:?}", ast);
+        //println!("AST = {:?}", ast);
 //        match ast {
 //            ASTNode::SQLSelect { projection, .. } => {
 //                assert_eq!(3, projection.len());
@@ -604,10 +632,10 @@ mod tests {
     }
 
     fn compare(expected: Vec<Token>, actual: Vec<Token>) {
-        println!("------------------------------");
-        println!("tokens   = {:?}", actual);
-        println!("expected = {:?}", expected);
-        println!("------------------------------");
+        //println!("------------------------------");
+        //println!("tokens   = {:?}", actual);
+        //println!("expected = {:?}", expected);
+        //println!("------------------------------");
         assert_eq!(expected, actual);
     }
 
