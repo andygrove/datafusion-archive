@@ -14,7 +14,7 @@
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum ASTNode {
-    SQLIdentifier { id: String, parts: Vec<String> },
+    SQLIdentifier { id: String },
     SQLBinaryExpr { left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode> },
     SQLNested(Box<ASTNode>),
     SQLUnary { operator: SQLOperator, rex: Box<ASTNode> },
@@ -27,6 +27,23 @@ pub enum ASTNode {
         order: Option<Box<ASTNode>>,
         limit: Option<Box<ASTNode>>,
     },
+    SQLCreateTable {
+        name: String,
+        columns: Vec<SQLColumnDef>
+    }
+}
+
+#[derive(Debug,Clone,PartialEq)]
+pub struct SQLColumnDef {
+    pub name: String,
+    pub data_type: SQLType,
+    pub allow_null: bool
+}
+
+#[derive(Debug,Clone,PartialEq)]
+pub enum SQLType {
+    Varchar(usize),
+    Double
 }
 
 #[derive(Debug, PartialEq, Clone)]
