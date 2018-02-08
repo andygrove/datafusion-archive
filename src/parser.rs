@@ -634,12 +634,16 @@ mod tests {
         let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
-//        match ast {
-//            ASTNode::SQLSelect { projection, .. } => {
-//                assert_eq!(3, projection.len());
-//            },
-//            _ => assert!(false)
-//        }
+        if let ASTNode::SQLSelect { projection, .. } = ast {
+            assert_eq!(
+                vec![ASTNode::SQLFunction {
+                    id: String::from("sqrt"),
+                    args: vec![ASTNode::SQLIdentifier { id: String::from("id") }],
+                }],
+                projection);
+        } else {
+            assert!(false);
+        }
     }
 
     fn compare(expected: Vec<Token>, actual: Vec<Token>) {
