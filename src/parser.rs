@@ -421,7 +421,15 @@ impl<'a> Parser<'a> {
                                             allow_null: true // TODO
                                         });
                                     },
-                                    Some(&Token::RParen) => break,
+                                    Some(&Token::RParen) => {
+                                        self.next_token();
+                                        columns.push(SQLColumnDef {
+                                            name: column_name,
+                                            data_type: data_type,
+                                            allow_null: true // TODO
+                                        });
+                                        break;
+                                    },
                                     _ => return Err(ParserError::ParserError("Expected ',' or ')' after column definition".to_string()))
                                 }
 
@@ -618,12 +626,13 @@ mod tests {
         let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
-//        match ast {
-//            ASTNode::SQLSelect { projection, .. } => {
-//                assert_eq!(3, projection.len());
-//            },
-//            _ => assert!(false)
-//        }
+        match ast {
+            ASTNode::SQLCreateTable { name, columns, .. } => {
+                assert_eq!("uk_cities", name);
+                assert_eq!(3, columns.len());
+            },
+            _ => assert!(false)
+        }
     }
 
     #[test]
