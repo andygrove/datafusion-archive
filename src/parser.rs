@@ -461,7 +461,7 @@ impl<'a> Parser<'a> {
                 ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
             }),
             _ => Err(ParserError::ParserError(
-                "error parsing literal int".to_string(),
+                "Expected literal int".to_string(),
             )),
         }
     }
@@ -502,16 +502,24 @@ impl<'a> Parser<'a> {
         //TODO: parse GROUP BY
         //TODO: parse HAVING
         //TODO: parse ORDER BY
-        //TODO: parse LIMIT
+
+        let limit = if self.parse_keyword("LIMIT") {
+            self.parse_limit()?
+        } else {
+            None
+        };
 
         if let Some(next_token) = self.peek_token() {
-            Err(ParserError::ParserError(format!("Unexpected token at end of SELECT: {:?}", next_token)))
+            Err(ParserError::ParserError(format!(
+                "Unexpected token at end of SELECT: {:?}",
+                next_token
+            )))
         } else {
             Ok(ASTNode::SQLSelect {
                 projection: projection,
                 selection: selection,
                 relation: relation,
-                limit: None,
+                limit: limit,
                 order: None,
             })
         }
@@ -540,6 +548,13 @@ impl<'a> Parser<'a> {
         Ok(expr_list)
     }
 
+    fn parse_limit(&mut self) -> Result<Option<Box<ASTNode>>, ParserError> {
+        if self.parse_keyword("ALL") {
+            Ok(None)
+        } else {
+            self.parse_literal_int().map(|n| Some(Box::new(ASTNode::SQLLiteralInt(n))))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -579,8 +594,8 @@ mod tests {
     }
 
     #[test]
-    fn tokenize_simple_select()  {
-        let sql = String::from("SELECT * FROM customer WHERE id = 1");
+    fn tokenize_simple_select() {
+        let sql = String::from("SELECT * FROM customer WHERE id = 1 LIMIT 5");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
@@ -592,7 +607,9 @@ mod tests {
             Token::Keyword(String::from("WHERE")),
             Token::Identifier(String::from("id")),
             Token::Eq,
-            Token::Number(String::from("1"))
+            Token::Number(String::from("1")),
+            Token::Keyword(String::from("LIMIT")),
+            Token::Number(String::from("5")),
         ];
 
         compare(expected, tokens);
@@ -600,17 +617,39 @@ mod tests {
 
     #[test]
     fn parse_simple_select() {
-        let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
+        let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(&tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
-            ASTNode::SQLSelect { projection, .. } => {
+            ASTNode::SQLSelect {
+                projection, limit, ..
+            } => {
                 assert_eq!(3, projection.len());
-            },
-            _ => assert!(false)
+                assert_eq!(Some(Box::new(ASTNode::SQLLiteralInt(5))), limit);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_limit_accepts_all() {
+        let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(&tokens);
+        let ast = parser.parse().unwrap();
+        //println!("AST = {:?}", ast);
+        match ast {
+            ASTNode::SQLSelect {
+                projection, limit, ..
+            } => {
+                assert_eq!(3, projection.len());
+                assert_eq!(None, limit);
+            }
+            _ => assert!(false),
         }
     }
 

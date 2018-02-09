@@ -78,6 +78,12 @@ pub struct ProjectRelation {
     expr: Vec<Expr>
 }
 
+pub struct LimitRelation {
+    schema: Schema,
+    input: Box<SimpleRelation>,
+    limit: usize,
+}
+
 impl<'a> CsvRelation {
 
     pub fn open(file: File, schema: Schema) -> Result<Self,ExecutionError> {
@@ -167,6 +173,16 @@ impl SimpleRelation for ProjectRelation {
         });
 
         Box::new(foo)
+    }
+
+    fn schema<'a>(&'a self) -> &'a Schema {
+        &self.schema
+    }
+}
+
+impl SimpleRelation for LimitRelation {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
+        Box::new(self.input.scan(ctx).take(self.limit))
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -297,6 +313,16 @@ impl ExecutionContext {
 
                 };
 
+                Ok(Box::new(rel))
+            }
+
+            LogicalPlan::Limit { limit, ref input, ref schema, .. } => {
+                let input_rel = self.create_execution_plan(input)?;
+                let rel = LimitRelation {
+                    input: input_rel,
+                    limit: limit,
+                    schema: schema.clone()
+                };
                 Ok(Box::new(rel))
             }
         }
