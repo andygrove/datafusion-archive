@@ -61,7 +61,8 @@ fn handle_request(chunk: Chunk) -> Response {
 
     match String::from_utf8(body_bytes.clone()) {
         Ok(json_str) => {
-            println!("Request: {}", json_str);
+            println!("Received request");
+            //println!("Request: {}", json_str);
 
             // this is a crude POC that demonstrates the worker receiving a plan, executing it,
             // and returning a result set
@@ -72,7 +73,7 @@ fn handle_request(chunk: Chunk) -> Response {
 
             match serde_json::from_str(&json_str) {
                 Ok(plan) => {
-                    println!("Plan: {:?}", plan);
+                    //println!("Plan: {:?}", plan);
 
                     // create execution context
                     let mut ctx = ExecutionContext::new();

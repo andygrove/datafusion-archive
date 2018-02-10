@@ -176,13 +176,19 @@ impl SimpleRelation for SortRelation {
         v.sort_by(|a,b| {
 
             for e in &self.expr {
-                let a_value = ctx.evaluate(a, &self.schema, &e).unwrap();
-                let b_value = ctx.evaluate(b, &self.schema, &e).unwrap();
 
-                if a_value < b_value {
-                    return Less;
-                } else if a_value > b_value {
-                    return Greater;
+                match e {
+                    &Expr::Sort { ref expr, asc } => {
+                        let a_value = ctx.evaluate(a, &self.schema, expr).unwrap();
+                        let b_value = ctx.evaluate(b, &self.schema, expr).unwrap();
+
+                        if a_value < b_value {
+                            return if asc { Less } else { Greater };
+                        } else if a_value > b_value {
+                            return if asc { Greater } else { Less };
+                        }
+                    },
+                    _ => panic!("wrong expression type for sort")
                 }
             }
 

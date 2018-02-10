@@ -24,10 +24,11 @@ fn main() {
 
     /*
 
-    test data:
+    sample queries to run:
 
     CREATE EXTERNAL TABLE uk_cities (name VARCHAR(100) NOT NULL, lat DOUBLE NOT NULL, lng DOUBLE NOT NULL)
-    SELECT name, lat, lng FROM uk_cities WHERE lat < 51
+    SELECT lat, lng, name FROM uk_cities WHERE lat < 51 ORDER BY lat, lng
+    SELECT lat, lng, name FROM uk_cities WHERE lat < 51 ORDER BY lat DESC, lng DESC
 
     */
 

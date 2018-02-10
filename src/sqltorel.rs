@@ -145,14 +145,14 @@ impl SqlToRel {
         }
     }
 
-    pub fn sql_to_rex(&self, sql: &ASTNode, tt: &Schema) -> Result<Expr, String> {
+    pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
 
             &ASTNode::SQLLiteralInt(n) =>
                 Ok(Expr::Literal(Value::UnsignedLong(n as u64))), //TODO
 
             &ASTNode::SQLIdentifier(ref id) => {
-                match tt.columns.iter().position(|c| c.name.eq(id) ) {
+                match schema.columns.iter().position(|c| c.name.eq(id) ) {
                     Some(index) => Ok(Expr::TupleValue(index)),
                     None => Err(format!("Invalid identifier {}", id))
                 }
@@ -169,22 +169,25 @@ impl SqlToRel {
                     _ => unimplemented!()
                 };
                 Ok(Expr::BinaryExpr {
-                    left: Box::new(self.sql_to_rex(&left, &tt)?),
+                    left: Box::new(self.sql_to_rex(&left, &schema)?),
                     op: operator,
-                    right: Box::new(self.sql_to_rex(&right, &tt)?),
+                    right: Box::new(self.sql_to_rex(&right, &schema)?),
                 })
 
             },
 
+            &ASTNode::SQLOrderBy { ref expr, asc } =>
+                Ok(Expr::Sort { expr: Box::new(self.sql_to_rex(&expr, &schema)?), asc }),
+
             &ASTNode::SQLFunction { ref id, ref args } => {
                 let rex_args = args.iter()
-                    .map(|a| self.sql_to_rex(a, tt))
+                    .map(|a| self.sql_to_rex(a, schema))
                     .collect::<Result<Vec<Expr>, String>>()?;
 
                 Ok(Expr::ScalarFunction { name: id.clone(), args: rex_args })
             },
 
-            _ => Err(String::from(format!("Unsupported ast node {:?}", sql)))
+            _ => Err(String::from(format!("Unsupported ast node {:?} in sqltorel", sql)))
         }
     }
 
