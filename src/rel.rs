@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::{Ordering, PartialOrd};
 
 /// The data types supported by this database. Currently just u64 and string but others
 /// will be added later, including complex types
@@ -115,7 +116,7 @@ impl Row {
 }
 
 /// Value holder for all supported data types
-#[derive(Debug,Clone,PartialEq,PartialOrd,Serialize,Deserialize)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub enum Value {
     UnsignedLong(u64),
     String(String),
@@ -123,6 +124,35 @@ pub enum Value {
     Double(f64),
     ComplexValue(Vec<Value>)
 }
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Value) -> Option<Ordering> {
+
+        //TODO: implement all type coercion rules
+
+        match self {
+            &Value::Double(l) => match other {
+                &Value::Double(r) => l.partial_cmp(&r),
+                &Value::UnsignedLong(r) => l.partial_cmp(&(r as f64)),
+                _ => unimplemented!("type coercion rules missing")
+            },
+            &Value::UnsignedLong(l) => match other {
+                &Value::Double(r) => (l as f64).partial_cmp(&r),
+                &Value::UnsignedLong(r) => l.partial_cmp(&r),
+                _ => unimplemented!("type coercion rules missing")
+            },
+            &Value::String(ref l) => match other {
+                &Value::String(ref r) => l.partial_cmp(r),
+                _ => unimplemented!("type coercion rules missing")
+            },
+            &Value::ComplexValue(_) => None,
+            _ => unimplemented!("type coercion rules missing")
+        }
+
+    }
+}
+
+
 
 impl Value {
 

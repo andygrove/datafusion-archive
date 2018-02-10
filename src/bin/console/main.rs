@@ -66,13 +66,8 @@ fn main() {
                     match Parser::parse_sql(String::from(sql)) {
                         Ok(ast) => match ast {
                             SQLCreateTable { name, columns } => {
-                                let fields : Vec<Field> = columns.iter()
-                                    .map(|c| Field::new(&c.name, DataType::String, true))
-                                    .collect();
-                                let schema = Schema::new(fields);
-                                ctx.define_schema(&name, &schema);
-
-                                println!("Defined schema for {}", name);
+                                ctx.sql(&sql).unwrap();
+                                ()
                             },
                             _ => execute_in_worker(&ctx, &sql)
                         }
