@@ -31,8 +31,13 @@ impl SqlToRel {
 
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Box<LogicalPlan>, String> {
         match sql {
-            &ASTNode::SQLSelect { ref projection, ref relation, ref selection, .. } => {
-
+            &ASTNode::SQLSelect {
+                ref projection,
+                ref relation,
+                ref selection,
+                ref limit,
+                ..
+            } => {
                 // parse the input relation so we have access to the tuple type
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
@@ -58,7 +63,7 @@ impl SqlToRel {
                     }).collect()
                 };
 
-                match selection {
+                let selection_plan = match selection {
                     &Some(ref filter_expr) => {
 
                         let selection_rel = LogicalPlan::Selection {
@@ -67,27 +72,38 @@ impl SqlToRel {
                             schema: input_schema.clone()
                         };
 
-                        Ok(Box::new(LogicalPlan::Projection {
+                        LogicalPlan::Projection {
                             expr: expr,
                             input: Box::new(selection_rel),
-                            schema: projection_schema.clone()
-                        }))
-
-                    },
-                    _ => {
-
-                        Ok(Box::new(LogicalPlan::Projection {
-                            expr: expr,
-                            input: input,
-                            schema: projection_schema.clone()
-                        }))
+                            schema: projection_schema.clone(),
+                        }
                     }
-                }
+                    _ => LogicalPlan::Projection {
+                        expr: expr,
+                        input: input,
+                        schema: projection_schema.clone(),
+                    },
+                };
 
-            },
+                let limit_plan = match limit {
+                    &Some(ref limit_ast_node) => {
+                        let limit_count = match **limit_ast_node {
+                            ASTNode::SQLLiteralInt(n) => n,
+                            _ => return Err(String::from("LIMIT parameter is not a number")),
+                        };
+                        LogicalPlan::Limit {
+                            limit: limit_count as usize,
+                            schema: selection_plan.schema(),
+                            input: Box::new(selection_plan),
+                        }
+                    }
+                    _ => selection_plan,
+                };
+
+                Ok(Box::new(limit_plan))
+            }
 
             &ASTNode::SQLIdentifier { ref id, .. } => {
-
                 match self.schemas.get(id) {
                     Some(schema) => Ok(Box::new(LogicalPlan::TableScan {
                         schema_name: String::from("default"),
