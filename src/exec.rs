@@ -27,8 +27,9 @@ use super::csv::StringRecord;
 
 use super::api::*;
 use super::rel::*;
-use super::parser::*;
+use super::sql::ASTNode::*;
 use super::sqltorel::*;
+use super::parser::*;
 use super::dataframe::*;
 use super::functions::math::*;
 use super::functions::geospatial::*;
@@ -191,11 +192,12 @@ impl SimpleRelation for LimitRelation {
 }
 
 /// Execution plans are sent to worker nodes for execution
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum ExecutionPlan {
     /// Run a query and return the results to the client
-    Interactive { plan: LogicalPlan },
+    Interactive { plan: Box<LogicalPlan> },
     /// Partition the relation
-    Partition { plan: LogicalPlan, partition_count: usize, partition_expr: Expr }
+    Partition { plan: Box<LogicalPlan>, partition_count: usize, partition_expr: Expr }
 
 }
 
@@ -231,7 +233,7 @@ impl ExecutionContext {
         self.functions.insert(fm.name.to_lowercase(), fm);
     }
 
-    pub fn sql(&self, sql: &str) -> Result<Box<DataFrame>, ExecutionError> {
+    pub fn create_logical_plan(&self, sql: &str) -> Result<Box<LogicalPlan>, ExecutionError> {
 
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
@@ -240,10 +242,40 @@ impl ExecutionContext {
         let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
 
         // plan the query (create a logical relational plan)
-        let plan = query_planner.sql_to_rel(&ast)?;
+        Ok(query_planner.sql_to_rel(&ast)?)
+    }
 
-        // return the DataFrame
-        Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: plan })) //TODO: don't clone context
+    pub fn sql(&mut self, sql: &str) -> Result<Box<DataFrame>, ExecutionError> {
+
+        // parse SQL into AST
+        let ast = Parser::parse_sql(String::from(sql))?;
+
+        match ast {
+            SQLCreateTable { name, columns } => {
+                let fields : Vec<Field> = columns.iter()
+                    .map(|c| Field::new(&c.name, convert_data_type(&c.data_type), c.allow_null))
+                    .collect();
+                let schema = Schema::new(fields);
+                self.define_schema(&name, &schema);
+
+                //TODO: not sure what to return here
+                Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: Box::new(LogicalPlan::EmptyRelation) })) //TODO: don't clone context
+
+
+            },
+            _ => {
+                // create a query planner
+                let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
+
+                // plan the query (create a logical relational plan)
+                let plan = query_planner.sql_to_rel(&ast)?;
+
+                // return the DataFrame
+                Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: plan })) //TODO: don't clone context
+            }
+        }
+
+
     }
 
     /// Open a CSV file
@@ -329,9 +361,8 @@ impl ExecutionContext {
     }
 
     /// Evaluate a relational expression against a tuple
-    pub fn evaluate(&self, tuple: &Row, tt: &Schema, rex: &Expr) -> Result<Value, Box<ExecutionError>> {
-
-        match rex {
+    pub fn evaluate(&self, tuple: &Row, tt: &Schema, expr: &Expr) -> Result<Value, Box<ExecutionError>> {
+        match expr {
             &Expr::BinaryExpr { ref left, ref op, ref right } => {
                 let left_value = self.evaluate(tuple, tt, left)?;
                 let right_value = self.evaluate(tuple, tt, right)?;
@@ -357,7 +388,8 @@ impl ExecutionContext {
 
                 match func.execute(arg_values) {
                     Ok(value) => Ok(value),
-                    Err(_) => Err(Box::new(ExecutionError::Custom("TBD".to_string()))) //TODO: fix
+                    Err(e) => Err(Box::new(ExecutionError::Custom(
+                        format!("Function returned error {:?}", e))))
                 }
             }
         }

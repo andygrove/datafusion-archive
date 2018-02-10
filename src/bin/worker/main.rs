@@ -28,7 +28,7 @@ use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
 
 extern crate datafusion;
-use datafusion::rel::*;
+use datafusion::exec::*;
 
 struct Worker {
     www_root: String
@@ -51,22 +51,94 @@ impl Worker {
 
 fn handle_request(chunk: Chunk) -> Response {
 
+    println!("handle_request()");
+
+    // collect the entire body
     let body_bytes = chunk.iter()
         .cloned()
         .collect::<Vec<u8>>();
 
+
     match String::from_utf8(body_bytes.clone()) {
         Ok(json_str) => {
-            // for initial testing, just receive a relational plan directly but this should
-            // really be an execution plan
-            let rel: LogicalPlan = serde_json::from_str(&json_str).unwrap();
+            println!("Request: {}", json_str);
 
-            println!("Plan: {:?}", rel);
+            // this is a crude POC that demonstrates the worker receiving a plan, executing it,
+            // and returning a result set
 
-            Response::new()
-                .with_body(body_bytes)
+            //TODO: should stream results to client, not build a result set in memory
+            //TODO: decide on a more appropriate format to return than csv
+            //TODO: should not create a new execution context each time
+
+            match serde_json::from_str(&json_str) {
+                Ok(plan) => {
+                    println!("Plan: {:?}", plan);
+
+                    // create execution context
+                    let mut ctx = ExecutionContext::new();
+
+                    match plan {
+                        ExecutionPlan::Interactive { plan } => {
+                            match ctx.create_execution_plan(&plan) {
+                                Ok(exec) => {
+                                    let it = exec.scan(&ctx);
+                                    let mut result_set = "".to_string();
+
+                                    it.for_each(|t| {
+                                        match t {
+                                            Ok(tuple) => {
+                                                result_set += &tuple.to_string()
+                                            },
+                                            Err(e) => {
+                                                result_set += &format!("ERROR: {:?}", e)
+                                            }
+                                        }
+                                        result_set += "\n";
+                                    });
+
+                                    Response::new()
+                                        .with_status(StatusCode::Ok)
+                                        .with_header(ContentLength(result_set.len() as u64))
+                                        .with_body(result_set)
+                                },
+                                Err(e) => {
+                                    let msg = format!("Failed to create execution plan: {:?}", e);
+                                    Response::new()
+                                        .with_status(StatusCode::BadRequest)
+                                        .with_header(ContentLength(msg.len() as u64))
+                                        .with_body(msg)
+                                }
+                            }
+
+                        },
+                        _ => {
+                            let msg = format!("Unsupported execution plan");
+                            Response::new()
+                                .with_status(StatusCode::BadRequest)
+                                .with_header(ContentLength(msg.len() as u64))
+                                .with_body(msg)
+                        }
+                    }
+
+                },
+                Err(e) => {
+                    let msg = format!("Failed to parse execution plan: {:?}", e);
+                    Response::new()
+                        .with_status(StatusCode::BadRequest)
+                        .with_header(ContentLength(msg.len() as u64))
+                        .with_body(msg)
+
+                }
+            }
+
         },
-        _ => panic!()
+        _ => {
+            let msg = format!("Failed to parse request JSON");
+            Response::new()
+                .with_status(StatusCode::BadRequest)
+                .with_header(ContentLength(msg.len() as u64))
+                .with_body(msg)
+        }
     }
 }
 

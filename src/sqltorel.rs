@@ -110,7 +110,7 @@ impl SqlToRel {
                         table_name: id.clone(),
                         schema: schema.clone()
                     })),
-                    None => Err(format!("no schema found for table"))
+                    None => Err(format!("no schema found for table {}", id))
                 }
             },
 
@@ -162,3 +162,12 @@ impl SqlToRel {
     }
 
 }
+
+/// Convert SQL data type to relational representation of data type
+pub fn convert_data_type(sql: &SQLType) -> DataType {
+    match sql {
+        &SQLType::Varchar(_) => DataType::String,
+        &SQLType::Double => DataType::Double
+    }
+}
+
