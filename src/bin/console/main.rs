@@ -18,6 +18,10 @@ extern crate rprompt;
 extern crate datafusion;
 
 use datafusion::exec::*;
+use datafusion::parser::*;
+use datafusion::sql::*;
+use datafusion::sql::ASTNode::*;
+use datafusion::rel::*;
 
 /// Interactive SQL console
 struct Console {
@@ -40,41 +44,41 @@ impl Console {
 
 fn main() {
 
+    /*
+
+    CREATE EXTERNAL TABLE uk_cities (name VARCHAR(100) NOT NULL, lat DOUBLE NOT NULL, lng DOUBLE NOT NULL)
+
+    */
+
     println!("DataFusion Console");
 
     let mut console = Console { ctx: ExecutionContext::new() };
 
+    let mut ctx = ExecutionContext::new();
+
     loop {
         match rprompt::prompt_reply_stdout("$ ") {
-            Ok(command) => match command.to_lowercase().as_ref() {
+            Ok(command) => match command.as_ref() {
                 "exit" | "quit" => break,
-                _ => {
-                    let mut core = Core::new().unwrap();
-                    let client = Client::new(&core.handle());
+                sql => {
 
-                    let uri = "http://localhost:8080".parse().unwrap();
+                    // parse the SQL
+                    match Parser::parse_sql(String::from(sql)) {
+                        Ok(ast) => match ast {
+                            SQLCreateTable { name, columns } => {
+                                let fields : Vec<Field> = columns.iter()
+                                    .map(|c| Field::new(&c.name, DataType::String, true))
+                                    .collect();
+                                let schema = Schema::new(fields);
+                                ctx.define_schema(&name, &schema);
 
-//                    let ctx = ExecutionContext::new();
-//                    let plan = ctx.create_logical_plan(&command).unwrap();
+                                println!("Defined schema for {}", name);
+                            },
+                            _ => execute_in_worker(&ctx, &sql)
+                        }
+                        Err(_) => println!("fail")
+                    }
 
-                    // serialize plan to JSON
-//                    let json = serde_json::to_string(&plan).unwrap();
-
-                    let json = command.clone();
-
-                    let mut req = Request::new(Method::Post, uri);
-                    req.headers_mut().set(ContentType::json());
-                    req.headers_mut().set(ContentLength(json.len() as u64));
-                    req.set_body(json);
-
-                    let post = client.request(req).and_then(|res| {
-                        println!("POST: {}", res.status());
-                        res.body().concat2()
-                    });
-
-                    let result = core.run(post).unwrap();
-
-                    println!("response: {:?}", str::from_utf8(&result));
 
                     //console.execute(&command)
                 }
@@ -82,6 +86,35 @@ fn main() {
             Err(e) => println!("Error parsing command: {:?}", e)
         }
 
+
+    }
+
+    fn execute_in_worker(ctx: &ExecutionContext, sql: &str) {
+        let mut core = Core::new().unwrap();
+        let client = Client::new(&core.handle());
+
+        let uri = "http://localhost:8080".parse().unwrap();
+
+        let logical_plan = ctx.create_logical_plan(&sql).unwrap();
+
+        let execution_plan = ExecutionPlan::Interactive { plan: logical_plan };
+
+        // serialize plan to JSON
+        let json = serde_json::to_string(&execution_plan).unwrap();
+
+        let mut req = Request::new(Method::Post, uri);
+        req.headers_mut().set(ContentType::json());
+        req.headers_mut().set(ContentLength(json.len() as u64));
+        req.set_body(json);
+
+        let post = client.request(req).and_then(|res| {
+            println!("POST: {}", res.status());
+            res.body().concat2()
+        });
+
+        let result = core.run(post).unwrap();
+
+        println!("response: {:?}", str::from_utf8(&result));
 
     }
 }

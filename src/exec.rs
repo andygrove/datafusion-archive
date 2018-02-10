@@ -194,9 +194,9 @@ impl SimpleRelation for LimitRelation {
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum ExecutionPlan {
     /// Run a query and return the results to the client
-    Interactive { plan: LogicalPlan },
+    Interactive { plan: Box<LogicalPlan> },
     /// Partition the relation
-    Partition { plan: LogicalPlan, partition_count: usize, partition_expr: Expr }
+    Partition { plan: Box<LogicalPlan>, partition_count: usize, partition_expr: Expr }
 
 }
 
