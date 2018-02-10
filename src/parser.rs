@@ -245,7 +245,7 @@ impl<'a> Parser<'a> {
 
                                 Ok(ASTNode::SQLFunction { id, args })
                             },
-                            _ => Ok(ASTNode::SQLIdentifier { id: id })
+                            _ => Ok(ASTNode::SQLIdentifier(id))
                         }
                     }
                     Token::Number(n) => match n.parse::<i64>() {
@@ -499,9 +499,23 @@ impl<'a> Parser<'a> {
             None
         };
 
-        //TODO: parse GROUP BY
-        //TODO: parse HAVING
-        //TODO: parse ORDER BY
+        let group_by = if self.parse_keywords(vec!["GROUP", "BY"]) {
+            Some(self.parse_expr_list()?)
+        } else {
+            None
+        };
+
+        let having = if self.parse_keyword("HAVING") {
+            Some(Box::new(self.parse_expr(0)?))
+        } else {
+            None
+        };
+
+        let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
+            Some(self.parse_expr_list()?)
+        } else {
+            None
+        };
 
         let limit = if self.parse_keyword("LIMIT") {
             self.parse_limit()?
@@ -516,11 +530,13 @@ impl<'a> Parser<'a> {
             )))
         } else {
             Ok(ASTNode::SQLSelect {
-                projection: projection,
-                selection: selection,
-                relation: relation,
-                limit: limit,
-                order: None,
+                projection,
+                selection,
+                relation,
+                limit,
+                order_by,
+                group_by,
+                having
             })
         }
     }
@@ -635,6 +651,49 @@ mod tests {
     }
 
     #[test]
+    fn parse_select_order_by() {
+        let sql = String::from("SELECT id, fname, lname FROM customer ORDER BY lname, fname");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(&tokens);
+        let ast = parser.parse().unwrap();
+        //println!("AST = {:?}", ast);
+        match ast {
+            ASTNode::SQLSelect {
+                order_by, ..
+            } => {
+
+                assert_eq!(Some(vec![
+                    ASTNode::SQLIdentifier("lname".to_string()),
+                    ASTNode::SQLIdentifier("fname".to_string())
+                    ]), order_by);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_select_group_by() {
+        let sql = String::from("SELECT id, fname, lname FROM customer GROUP BY lname, fname");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(&tokens);
+        let ast = parser.parse().unwrap();
+        //println!("AST = {:?}", ast);
+        match ast {
+            ASTNode::SQLSelect {
+                group_by, ..
+            } => {
+                assert_eq!(Some(vec![
+                    ASTNode::SQLIdentifier("lname".to_string()),
+                    ASTNode::SQLIdentifier("fname".to_string())
+                ]), group_by);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
     fn parse_limit_accepts_all() {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL");
         let mut tokenizer = Tokenizer::new(&sql);
@@ -686,7 +745,7 @@ mod tests {
             assert_eq!(
                 vec![ASTNode::SQLFunction {
                     id: String::from("sqrt"),
-                    args: vec![ASTNode::SQLIdentifier { id: String::from("id") }],
+                    args: vec![ASTNode::SQLIdentifier(String::from("id"))],
                 }],
                 projection);
         } else {

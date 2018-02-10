@@ -14,7 +14,7 @@
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum ASTNode {
-    SQLIdentifier { id: String },
+    SQLIdentifier(String),
     SQLBinaryExpr { left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode> },
     SQLNested(Box<ASTNode>),
     SQLUnary { operator: SQLOperator, rex: Box<ASTNode> },
@@ -24,7 +24,9 @@ pub enum ASTNode {
         projection: Vec<ASTNode>,
         relation: Option<Box<ASTNode>>,
         selection: Option<Box<ASTNode>>,
-        order: Option<Box<ASTNode>>,
+        order_by: Option<Vec<ASTNode>>,
+        group_by: Option<Vec<ASTNode>>,
+        having: Option<Box<ASTNode>>,
         limit: Option<Box<ASTNode>>,
     },
     SQLCreateTable {

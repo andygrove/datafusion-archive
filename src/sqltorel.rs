@@ -103,7 +103,7 @@ impl SqlToRel {
                 Ok(Box::new(limit_plan))
             }
 
-            &ASTNode::SQLIdentifier { ref id, .. } => {
+            &ASTNode::SQLIdentifier(ref id) => {
                 match self.schemas.get(id) {
                     Some(schema) => Ok(Box::new(LogicalPlan::TableScan {
                         schema_name: String::from("default"),
@@ -124,7 +124,7 @@ impl SqlToRel {
             &ASTNode::SQLLiteralInt(n) =>
                 Ok(Expr::Literal(Value::UnsignedLong(n as u64))), //TODO
 
-            &ASTNode::SQLIdentifier { ref id, .. } => {
+            &ASTNode::SQLIdentifier(ref id) => {
                 match tt.columns.iter().position(|c| c.name.eq(id) ) {
                     Some(index) => Ok(Expr::TupleValue(index)),
                     None => Err(format!("Invalid identifier {}", id))
