@@ -5,6 +5,7 @@ extern crate serde;
 extern crate serde_json;
 
 use std::str;
+use std::time::Instant;
 
 use futures::{Future, Stream};
 use hyper::Client;
@@ -23,7 +24,10 @@ fn main() {
 
     /*
 
+    test data:
+
     CREATE EXTERNAL TABLE uk_cities (name VARCHAR(100) NOT NULL, lat DOUBLE NOT NULL, lng DOUBLE NOT NULL)
+    SELECT name, lat, lng FROM uk_cities WHERE lat < 51
 
     */
 
@@ -70,33 +74,50 @@ impl Console {
     }
 
     fn execute_in_worker(&mut self, sql: &str) {
+
+        let timer = Instant::now();
+
         let mut core = Core::new().unwrap();
         let client = Client::new(&core.handle());
 
         let uri = "http://localhost:8080".parse().unwrap();
 
-        let logical_plan = self.ctx.create_logical_plan(&sql).unwrap();
+        match self.ctx.create_logical_plan(&sql) {
+            Ok(logical_plan) => {
+                let execution_plan = ExecutionPlan::Interactive { plan: logical_plan };
 
-        let execution_plan = ExecutionPlan::Interactive { plan: logical_plan };
+                // serialize plan to JSON
+                match serde_json::to_string(&execution_plan) {
+                    Ok(json) => {
+                        let mut req = Request::new(Method::Post, uri);
+                        req.headers_mut().set(ContentType::json());
+                        req.headers_mut().set(ContentLength(json.len() as u64));
+                        req.set_body(json);
 
-        // serialize plan to JSON
-        let json = serde_json::to_string(&execution_plan).unwrap();
+                        let post = client.request(req).and_then(|res| {
+                            //println!("POST: {}", res.status());
+                            res.body().concat2()
+                        });
 
-        let mut req = Request::new(Method::Post, uri);
-        req.headers_mut().set(ContentType::json());
-        req.headers_mut().set(ContentLength(json.len() as u64));
-        req.set_body(json);
-
-        let post = client.request(req).and_then(|res| {
-            //println!("POST: {}", res.status());
-            res.body().concat2()
-        });
-
-        let result = core.run(post).unwrap();
-
-        //TODO: show response as formatted table
-        println!("response: {:?}", str::from_utf8(&result));
-
+                        match core.run(post) {
+                            Ok(result) => {
+                                //TODO: show response as formatted table
+                                let result = str::from_utf8(&result).unwrap();
+                                println!("{}", result);
+                                let elapsed = timer.elapsed();
+                                let elapsed_seconds = elapsed.as_secs() as f64
+                                    + elapsed.subsec_nanos() as f64 / 1000000000.0;
+                                println!("Query executed in {} seconds",
+                                         elapsed_seconds);
+                            }
+                            Err(e) => println!("Failed to serialize plan: {:?}", e)
+                        }
+                    }
+                    Err(e) => println!("Failed to serialize plan: {:?}", e)
+                }
+            }
+            Err(e) => println!("Query failed: {:?}", e)
+        }
     }
 }
 

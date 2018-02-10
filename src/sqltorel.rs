@@ -110,7 +110,7 @@ impl SqlToRel {
                         table_name: id.clone(),
                         schema: schema.clone()
                     })),
-                    None => Err(format!("no schema found for table"))
+                    None => Err(format!("no schema found for table {}", id))
                 }
             },
 
