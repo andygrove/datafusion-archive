@@ -27,11 +27,9 @@ use super::csv::StringRecord;
 
 use super::api::*;
 use super::rel::*;
-use super::sql::*;
 use super::sql::ASTNode::*;
 use super::sqltorel::*;
 use super::parser::*;
-use super::sqltorel::*;
 use super::dataframe::*;
 use super::functions::math::*;
 use super::functions::geospatial::*;

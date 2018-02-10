@@ -28,7 +28,6 @@ use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
 
 extern crate datafusion;
-use datafusion::rel::*;
 use datafusion::exec::*;
 
 struct Worker {
