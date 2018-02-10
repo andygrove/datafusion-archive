@@ -20,6 +20,7 @@ pub enum ASTNode {
     SQLUnary { operator: SQLOperator, rex: Box<ASTNode> },
     SQLLiteralInt(i64),
     SQLFunction { id: String, args: Vec<ASTNode> },
+    SQLOrderBy { expr: Box<ASTNode>, asc: bool },
     SQLSelect{
         projection: Vec<ASTNode>,
         relation: Option<Box<ASTNode>>,

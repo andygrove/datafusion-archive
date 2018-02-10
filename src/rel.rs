@@ -94,7 +94,7 @@ pub struct FunctionMeta {
 //    fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
 //}
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub struct Row {
     pub values: Vec<Value>
 }
@@ -114,6 +114,7 @@ impl Row {
         value_strings.join(",")
     }
 }
+
 
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
@@ -192,6 +193,8 @@ pub enum Expr {
     Literal(Value),
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
+    /// sort expression
+    Sort { expr: Box<Expr>, asc: bool },
     /// scalar function
     ScalarFunction { name: String, args: Vec<Expr> }
 }
@@ -230,6 +233,7 @@ pub enum LogicalPlan {
     Limit { limit: usize, input: Box<LogicalPlan>, schema: Schema },
     Projection { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
     Selection { expr: Expr, input: Box<LogicalPlan>, schema: Schema },
+    Sort { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
     TableScan { schema_name: String, table_name: String, schema: Schema },
     CsvFile { filename: String, schema: Schema },
     EmptyRelation
@@ -244,6 +248,7 @@ impl LogicalPlan {
             &LogicalPlan::CsvFile { ref schema, .. } => schema.clone(),
             &LogicalPlan::Projection { ref schema, .. } => schema.clone(),
             &LogicalPlan::Selection { ref schema, .. } => schema.clone(),
+            &LogicalPlan::Sort { ref schema, .. } => schema.clone(),
             &LogicalPlan::Limit { ref schema, .. } => schema.clone(),
         }
     }

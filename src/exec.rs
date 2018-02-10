@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering::*;
 use std::collections::HashMap;
 use std::io::Error;
 use std::io::BufReader;
@@ -77,6 +78,12 @@ pub struct ProjectRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
     expr: Vec<Expr>
+}
+
+pub struct SortRelation {
+    schema: Schema,
+    input: Box<SimpleRelation>,
+    expr: Vec<Expr>,
 }
 
 pub struct LimitRelation {
@@ -148,6 +155,49 @@ impl SimpleRelation for FilterRelation {
                 _ => true // let errors through the filter so they can be handled later
             }
         ))
+    }
+
+    fn schema<'a>(&'a self) -> &'a Schema {
+        &self.schema
+    }
+}
+
+impl SimpleRelation for SortRelation {
+
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
+
+        // collect all rows from next relation
+        let it = self.input.scan(ctx);
+
+        let mut v : Vec<Row> = vec![];
+        it.for_each(|item| v.push(item.unwrap()));
+
+        // now sort them
+        v.sort_by(|a,b| {
+
+            for e in &self.expr {
+
+                match e {
+                    &Expr::Sort { ref expr, asc } => {
+                        let a_value = ctx.evaluate(a, &self.schema, expr).unwrap();
+                        let b_value = ctx.evaluate(b, &self.schema, expr).unwrap();
+
+                        if a_value < b_value {
+                            return if asc { Less } else { Greater };
+                        } else if a_value > b_value {
+                            return if asc { Greater } else { Less };
+                        }
+                    },
+                    _ => panic!("wrong expression type for sort")
+                }
+            }
+
+            Equal
+        });
+
+        // now return an iterator
+       // let results : Vec<Result<Row,ExecutionError>> = v.iter().map(|r| Ok(r.clone())).collect();
+        Box::new(v.into_iter().map(|r|Ok(r)))
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -293,7 +343,7 @@ impl ExecutionContext {
         match *plan {
 
             LogicalPlan::EmptyRelation => {
-                panic!()
+                Err(ExecutionError::Custom(String::from("empty relation is not implemented yet")))
             },
 
             LogicalPlan::TableScan { ref table_name, ref schema, .. } => {
@@ -348,6 +398,16 @@ impl ExecutionContext {
                 Ok(Box::new(rel))
             }
 
+            LogicalPlan::Sort { ref expr, ref input, ref schema } => {
+                let input_rel = self.create_execution_plan(input)?;
+                let rel = SortRelation {
+                    input: input_rel,
+                    expr: expr.clone(),
+                    schema: schema.clone()
+                };
+                Ok(Box::new(rel))
+            },
+
             LogicalPlan::Limit { limit, ref input, ref schema, .. } => {
                 let input_rel = self.create_execution_plan(input)?;
                 let rel = LimitRelation {
@@ -361,11 +421,11 @@ impl ExecutionContext {
     }
 
     /// Evaluate a relational expression against a tuple
-    pub fn evaluate(&self, tuple: &Row, tt: &Schema, expr: &Expr) -> Result<Value, Box<ExecutionError>> {
+    pub fn evaluate(&self, row: &Row, schema: &Schema, expr: &Expr) -> Result<Value, Box<ExecutionError>> {
         match expr {
             &Expr::BinaryExpr { ref left, ref op, ref right } => {
-                let left_value = self.evaluate(tuple, tt, left)?;
-                let right_value = self.evaluate(tuple, tt, right)?;
+                let left_value = self.evaluate(row, schema, left)?;
+                let right_value = self.evaluate(row, schema, right)?;
                 match op {
                     &Operator::Eq => Ok(Value::Boolean(left_value == right_value)),
                     &Operator::NotEq => Ok(Value::Boolean(left_value != right_value)),
@@ -375,13 +435,14 @@ impl ExecutionContext {
                     &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
                 }
             },
-            &Expr::TupleValue(index) => Ok(tuple.values[index].clone()),
+            &Expr::TupleValue(index) => Ok(row.values[index].clone()),
             &Expr::Literal(ref value) => Ok(value.clone()),
+            &Expr::Sort { ref expr, .. } => self.evaluate(row, schema, expr),
             &Expr::ScalarFunction { ref name, ref args } => {
 
                 // evaluate the arguments to the function
                 let arg_values : Vec<Value> = args.iter()
-                    .map(|a| self.evaluate(tuple, tt, &a))
+                    .map(|a| self.evaluate(row, schema, &a))
                     .collect::<Result<Vec<Value>, Box<ExecutionError>>>()?;
 
                 let func = self.load_function_impl(name.as_ref())?;
@@ -429,6 +490,19 @@ impl DataFrame for DF {
     fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
 
         let plan = LogicalPlan::Projection {
+            expr: expr,
+            input: self.plan.clone(),
+            schema: self.plan.schema().clone()
+
+        };
+
+        Ok(Box::new(DF { ctx: self.ctx.clone(), plan: Box::new(plan) }))
+
+    }
+
+    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
+
+        let plan = LogicalPlan::Sort {
             expr: expr,
             input: self.plan.clone(),
             schema: self.plan.schema().clone()
@@ -550,6 +624,31 @@ mod tests {
         let df2 = df.select(vec![func_expr]).unwrap();
 
         df2.write("_uk_cities_df.csv").unwrap();
+
+        //TODO: check that generated file has expected contents
+    }
+
+    #[test]
+    fn test_sort() {
+
+        let mut ctx = create_context();
+
+        ctx.define_function(&STPointFunc {});
+
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::String, false),
+            Field::new("lat", DataType::Double, false),
+            Field::new("lng", DataType::Double, false)]);
+
+        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+
+        // sort by lat, lng ascending
+        let df2 = df.sort(vec![
+            Expr::Sort { expr: Box::new(Expr::TupleValue(1)), asc: true },
+            Expr::Sort { expr: Box::new(Expr::TupleValue(2)), asc: true }
+        ]).unwrap();
+
+        df2.write("_uk_cities_sorted_by_lat_lng.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }

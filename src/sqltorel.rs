@@ -36,6 +36,9 @@ impl SqlToRel {
                 ref relation,
                 ref selection,
                 ref limit,
+                ref order_by,
+                ref group_by,
+                ref having,
                 ..
             } => {
                 // parse the input relation so we have access to the tuple type
@@ -85,6 +88,30 @@ impl SqlToRel {
                     },
                 };
 
+                if let &Some(_) = group_by {
+                    return Err(String::from("GROUP BY is not implemented yet"))
+                }
+
+                if let &Some(_) = having {
+                    return Err(String::from("HAVING is not implemented yet"))
+                }
+
+                let order_by_plan = match order_by {
+                    &Some(ref order_by_expr) => {
+                        let input_schema = selection_plan.schema();
+                        let order_by_rex : Result<Vec<Expr>, String> = order_by_expr.iter()
+                            .map(|e| self.sql_to_rex(e, &input_schema))
+                            .collect();
+
+                        LogicalPlan::Sort {
+                            expr: order_by_rex?,
+                            input: Box::new(selection_plan),
+                            schema: input_schema,
+                        }
+                    },
+                    _ => selection_plan
+                };
+
                 let limit_plan = match limit {
                     &Some(ref limit_ast_node) => {
                         let limit_count = match **limit_ast_node {
@@ -93,11 +120,11 @@ impl SqlToRel {
                         };
                         LogicalPlan::Limit {
                             limit: limit_count as usize,
-                            schema: selection_plan.schema(),
-                            input: Box::new(selection_plan),
+                            schema: order_by_plan.schema(),
+                            input: Box::new(order_by_plan),
                         }
                     }
-                    _ => selection_plan,
+                    _ => order_by_plan,
                 };
 
                 Ok(Box::new(limit_plan))
@@ -118,14 +145,14 @@ impl SqlToRel {
         }
     }
 
-    pub fn sql_to_rex(&self, sql: &ASTNode, tt: &Schema) -> Result<Expr, String> {
+    pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
 
             &ASTNode::SQLLiteralInt(n) =>
                 Ok(Expr::Literal(Value::UnsignedLong(n as u64))), //TODO
 
             &ASTNode::SQLIdentifier(ref id) => {
-                match tt.columns.iter().position(|c| c.name.eq(id) ) {
+                match schema.columns.iter().position(|c| c.name.eq(id) ) {
                     Some(index) => Ok(Expr::TupleValue(index)),
                     None => Err(format!("Invalid identifier {}", id))
                 }
@@ -142,22 +169,25 @@ impl SqlToRel {
                     _ => unimplemented!()
                 };
                 Ok(Expr::BinaryExpr {
-                    left: Box::new(self.sql_to_rex(&left, &tt)?),
+                    left: Box::new(self.sql_to_rex(&left, &schema)?),
                     op: operator,
-                    right: Box::new(self.sql_to_rex(&right, &tt)?),
+                    right: Box::new(self.sql_to_rex(&right, &schema)?),
                 })
 
             },
 
+            &ASTNode::SQLOrderBy { ref expr, asc } =>
+                Ok(Expr::Sort { expr: Box::new(self.sql_to_rex(&expr, &schema)?), asc }),
+
             &ASTNode::SQLFunction { ref id, ref args } => {
                 let rex_args = args.iter()
-                    .map(|a| self.sql_to_rex(a, tt))
+                    .map(|a| self.sql_to_rex(a, schema))
                     .collect::<Result<Vec<Expr>, String>>()?;
 
                 Ok(Expr::ScalarFunction { name: id.clone(), args: rex_args })
             },
 
-            _ => Err(String::from(format!("Unsupported ast node {:?}", sql)))
+            _ => Err(String::from(format!("Unsupported ast node {:?} in sqltorel", sql)))
         }
     }
 

@@ -52,7 +52,7 @@ pub enum ParserError {
 static KEYWORDS : &'static [&'static str] = &[
     "SELECT", "FROM", "WHERE", "LIMIT", "ORDER", "GROUP", "BY", "HAVING",
     "UNION", "ALL", "INSERT", "UPDATE", "DELETE", "IN", "NOT", "NULL",
-    "SET", "CREATE", "EXTERNAL", "TABLE", 
+    "SET", "CREATE", "EXTERNAL", "TABLE", "ASC", "DESC",
     "VARCHAR", "DOUBLE"
 ];
 
@@ -175,21 +175,21 @@ impl Tokenizer {
     }
 }
 
-pub struct Parser<'a> {
-    tokens: &'a Vec<Token>,
+pub struct Parser {
+    tokens: Vec<Token>,
     index: usize
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
 
-    pub fn new(tokens: &'a Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Parser { tokens: tokens, index: 0 }
     }
 
     pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(tokens);
         parser.parse()
     }
 
@@ -236,7 +236,7 @@ impl<'a> Parser<'a> {
                     },
                     Token::Identifier(id) => {
                         match self.peek_token() {
-                            Some(&Token::LParen) => {
+                            Some(Token::LParen) => {
                                 self.next_token(); // skip lparen
 
                                 let args = self.parse_expr_list()?;
@@ -318,9 +318,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn peek_token(&mut self) -> Option<&Token> {
+    fn peek_token(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
-            Some(&self.tokens[self.index])
+            Some(self.tokens[self.index].clone())
         } else {
             None
         }
@@ -344,23 +344,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_keyword(&mut self, expected: &'static str) -> bool {
-        //println!("parse_keyword? {}", expected);
-        let b = match self.peek_token() {
-            Some(&Token::Keyword(ref k)) => {
+        match self.peek_token() {
+            Some(Token::Keyword(k)) => {
                 if expected.eq_ignore_ascii_case(k.as_str()) {
+                    self.next_token();
                     true
                 } else {
                     false
                 }
             },
             _ => false
-        };
-
-        if b {
-            self.index += 1;
         }
-
-        b
     }
 
     fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
@@ -413,7 +407,7 @@ impl<'a> Parser<'a> {
                                 }
 
                                 match self.peek_token() {
-                                    Some(&Token::Comma) => {
+                                    Some(Token::Comma) => {
                                         self.next_token();
                                         columns.push(SQLColumnDef {
                                             name: column_name,
@@ -421,7 +415,7 @@ impl<'a> Parser<'a> {
                                             allow_null: true // TODO
                                         });
                                     },
-                                    Some(&Token::RParen) => {
+                                    Some(Token::RParen) => {
                                         self.next_token();
                                         columns.push(SQLColumnDef {
                                             name: column_name,
@@ -512,7 +506,7 @@ impl<'a> Parser<'a> {
         };
 
         let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
-            Some(self.parse_expr_list()?)
+            Some(self.parse_order_by_expr_list()?)
         } else {
             None
         };
@@ -541,26 +535,59 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn helper(&mut self) -> Result<(ASTNode, bool), ParserError> {
-        let expr = self.parse_expr(0)?;
-        if self.index < self.tokens.len() && self.tokens[self.index] == Token::Comma {
-            self.index += 1;
-            Ok((expr, true))
-        } else {
-            Ok((expr, false))
-        }
-    }
-
     fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
         let mut expr_list : Vec<ASTNode> = vec![];
         loop {
-            let (expr, more) = self.helper()?;
-            expr_list.push(expr);
-            if !more {
+            expr_list.push(self.parse_expr(0)?);
+            if let Some(t) = self.peek_token() {
+                if t == Token::Comma {
+                    self.next_token();
+                } else {
+                    break;
+                }
+            } else {
+                //EOF
                 break;
             }
         }
+        Ok(expr_list)
+    }
 
+    fn parse_order_by_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
+        let mut expr_list : Vec<ASTNode> = vec![];
+        loop {
+            let expr = self.parse_expr(0)?;
+
+            // look for optional ASC / DESC specifier
+            let asc = match self.peek_token() {
+                Some(Token::Keyword(k)) => {
+                    self.next_token(); // consume it
+                    match k.to_uppercase().as_ref() {
+                        "ASC" => true,
+                        "DESC" => false,
+                        _ => return Err(ParserError::ParserError(
+                            format!("Invalid modifier for ORDER BY expression: {:?}", k)))
+                    }
+                },
+                Some(Token::Comma) => true,
+                Some(other) => return Err(ParserError::ParserError(
+                    format!("Unexpected token after ORDER BY expr: {:?}", other))),
+                None => true
+            };
+
+            expr_list.push(ASTNode::SQLOrderBy { expr: Box::new(expr), asc });
+
+            if let Some(t) = self.peek_token() {
+                if t == Token::Comma {
+                    self.next_token();
+                } else {
+                    break;
+                }
+            } else {
+                // EOF
+                break;
+            }
+        }
         Ok(expr_list)
     }
 
@@ -636,7 +663,7 @@ mod tests {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
@@ -652,21 +679,20 @@ mod tests {
 
     #[test]
     fn parse_select_order_by() {
-        let sql = String::from("SELECT id, fname, lname FROM customer ORDER BY lname, fname");
+        let sql = String::from("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
             ASTNode::SQLSelect {
                 order_by, ..
             } => {
-
                 assert_eq!(Some(vec![
-                    ASTNode::SQLIdentifier("lname".to_string()),
-                    ASTNode::SQLIdentifier("fname".to_string())
-                    ]), order_by);
+                    ASTNode::SQLOrderBy { expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())), asc: true },
+                    ASTNode::SQLOrderBy { expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())), asc: false },
+                ]), order_by);
             }
             _ => assert!(false),
         }
@@ -677,7 +703,7 @@ mod tests {
         let sql = String::from("SELECT id, fname, lname FROM customer GROUP BY lname, fname");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
@@ -698,7 +724,7 @@ mod tests {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
@@ -721,7 +747,7 @@ mod tests {
 
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
@@ -738,7 +764,7 @@ mod tests {
         let sql = String::from("SELECT sqrt(id) FROM foo");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         if let ASTNode::SQLSelect { projection, .. } = ast {
