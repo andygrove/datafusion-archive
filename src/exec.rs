@@ -293,7 +293,7 @@ impl ExecutionContext {
         match *plan {
 
             LogicalPlan::EmptyRelation => {
-                panic!()
+                Err(ExecutionError::Custom(String::from("empty relation is not implemented yet")))
             },
 
             LogicalPlan::TableScan { ref table_name, ref schema, .. } => {
@@ -347,6 +347,10 @@ impl ExecutionContext {
 
                 Ok(Box::new(rel))
             }
+
+            LogicalPlan::Sort { .. } => {
+                Err(ExecutionError::Custom(String::from("SORT is not implemented yet")))
+            },
 
             LogicalPlan::Limit { limit, ref input, ref schema, .. } => {
                 let input_rel = self.create_execution_plan(input)?;

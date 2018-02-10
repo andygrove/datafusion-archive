@@ -230,6 +230,7 @@ pub enum LogicalPlan {
     Limit { limit: usize, input: Box<LogicalPlan>, schema: Schema },
     Projection { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
     Selection { expr: Expr, input: Box<LogicalPlan>, schema: Schema },
+    Sort { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
     TableScan { schema_name: String, table_name: String, schema: Schema },
     CsvFile { filename: String, schema: Schema },
     EmptyRelation
@@ -244,6 +245,7 @@ impl LogicalPlan {
             &LogicalPlan::CsvFile { ref schema, .. } => schema.clone(),
             &LogicalPlan::Projection { ref schema, .. } => schema.clone(),
             &LogicalPlan::Selection { ref schema, .. } => schema.clone(),
+            &LogicalPlan::Sort { ref schema, .. } => schema.clone(),
             &LogicalPlan::Limit { ref schema, .. } => schema.clone(),
         }
     }

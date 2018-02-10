@@ -36,6 +36,9 @@ impl SqlToRel {
                 ref relation,
                 ref selection,
                 ref limit,
+                ref order_by,
+                ref group_by,
+                ref having,
                 ..
             } => {
                 // parse the input relation so we have access to the tuple type
@@ -85,6 +88,30 @@ impl SqlToRel {
                     },
                 };
 
+                if let &Some(_) = group_by {
+                    return Err(String::from("GROUP BY is not implemented yet"))
+                }
+
+                if let &Some(_) = having {
+                    return Err(String::from("HAVING is not implemented yet"))
+                }
+
+                let order_by_plan = match order_by {
+                    &Some(ref order_by_expr) => {
+                        let input_schema = selection_plan.schema();
+                        let order_by_rex : Result<Vec<Expr>, String> = order_by_expr.iter()
+                            .map(|e| self.sql_to_rex(e, &input_schema))
+                            .collect();
+
+                        LogicalPlan::Sort {
+                            expr: order_by_rex?,
+                            input: Box::new(selection_plan),
+                            schema: input_schema,
+                        }
+                    },
+                    _ => selection_plan
+                };
+
                 let limit_plan = match limit {
                     &Some(ref limit_ast_node) => {
                         let limit_count = match **limit_ast_node {
@@ -93,11 +120,11 @@ impl SqlToRel {
                         };
                         LogicalPlan::Limit {
                             limit: limit_count as usize,
-                            schema: selection_plan.schema(),
-                            input: Box::new(selection_plan),
+                            schema: order_by_plan.schema(),
+                            input: Box::new(order_by_plan),
                         }
                     }
-                    _ => selection_plan,
+                    _ => order_by_plan,
                 };
 
                 Ok(Box::new(limit_plan))
