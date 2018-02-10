@@ -59,24 +59,30 @@ impl Console {
     /// Execute a SQL statement or console command
     fn execute(&mut self, sql: &str) {
 
-        println!("Executing: {}", sql);
+        println!("Executing query ...");
+
+        let timer = Instant::now();
 
         // parse the SQL
         match Parser::parse_sql(String::from(sql)) {
             Ok(ast) => match ast {
                 SQLCreateTable { .. } => {
                     self.ctx.sql(&sql).unwrap();
+                    println!("Registered schema with execution context");
                     ()
                 },
                 _ => self.execute_in_worker(&sql)
             }
             Err(e) => println!("Error: {:?}", e)
         }
+
+        let elapsed = timer.elapsed();
+        let elapsed_seconds = elapsed.as_secs() as f64
+            + elapsed.subsec_nanos() as f64 / 1000000000.0;
+        println!("Query executed in {} seconds", elapsed_seconds);
     }
 
     fn execute_in_worker(&mut self, sql: &str) {
-
-        let timer = Instant::now();
 
         let mut core = Core::new().unwrap();
         let client = Client::new(&core.handle());
@@ -105,11 +111,6 @@ impl Console {
                                 //TODO: show response as formatted table
                                 let result = str::from_utf8(&result).unwrap();
                                 println!("{}", result);
-                                let elapsed = timer.elapsed();
-                                let elapsed_seconds = elapsed.as_secs() as f64
-                                    + elapsed.subsec_nanos() as f64 / 1000000000.0;
-                                println!("Query executed in {} seconds",
-                                         elapsed_seconds);
                             }
                             Err(e) => println!("Failed to serialize plan: {:?}", e)
                         }
