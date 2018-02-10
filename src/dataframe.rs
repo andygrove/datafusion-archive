@@ -49,6 +49,9 @@ pub trait DataFrame {
     /// Selection
     fn filter(&self, expr: Expr) -> Result<Box<DataFrame>,DataFrameError>;
 
+    /// Sorting
+    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>,DataFrameError>;
+
     /// Write to CSV ...  will support other formats in the future
     fn write(&self, filename: &str) -> Result<(),DataFrameError>;
 

@@ -512,7 +512,7 @@ impl<'a> Parser<'a> {
         };
 
         let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
-            Some(self.parse_expr_list()?)
+            Some(self.parse_order_by_expr_list()?)
         } else {
             None
         };
@@ -541,7 +541,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn helper(&mut self) -> Result<(ASTNode, bool), ParserError> {
+
+    /// parse the next epression and check if there is a comma following
+    fn parse_next_expr(&mut self) -> Result<(ASTNode, bool), ParserError> {
         let expr = self.parse_expr(0)?;
         if self.index < self.tokens.len() && self.tokens[self.index] == Token::Comma {
             self.index += 1;
@@ -554,7 +556,20 @@ impl<'a> Parser<'a> {
     fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
         let mut expr_list : Vec<ASTNode> = vec![];
         loop {
-            let (expr, more) = self.helper()?;
+            let (expr, more) = self.parse_next_expr()?;
+            expr_list.push(expr);
+            if !more {
+                break;
+            }
+        }
+
+        Ok(expr_list)
+    }
+
+    fn parse_order_by_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
+        let mut expr_list : Vec<ASTNode> = vec![];
+        loop {
+            let (expr, more) = self.parse_next_expr()?;
             expr_list.push(expr);
             if !more {
                 break;
@@ -652,7 +667,7 @@ mod tests {
 
     #[test]
     fn parse_select_order_by() {
-        let sql = String::from("SELECT id, fname, lname FROM customer ORDER BY lname, fname");
+        let sql = String::from("SELECT id, fname, lname FROM customer ORDER BY lname ASC, fname DESC");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(&tokens);
@@ -662,11 +677,10 @@ mod tests {
             ASTNode::SQLSelect {
                 order_by, ..
             } => {
-
                 assert_eq!(Some(vec![
-                    ASTNode::SQLIdentifier("lname".to_string()),
-                    ASTNode::SQLIdentifier("fname".to_string())
-                    ]), order_by);
+                    ASTNode::SQLOrderBy { expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())), asc: true },
+                    ASTNode::SQLOrderBy { expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())), asc: false },
+                ]), order_by);
             }
             _ => assert!(false),
         }

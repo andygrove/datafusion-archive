@@ -94,7 +94,7 @@ pub struct FunctionMeta {
 //    fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
 //}
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub struct Row {
     pub values: Vec<Value>
 }
@@ -114,6 +114,7 @@ impl Row {
         value_strings.join(",")
     }
 }
+
 
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
@@ -192,6 +193,8 @@ pub enum Expr {
     Literal(Value),
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
+    /// sort expression
+    Sort { expr: Box<Expr>, asc: bool },
     /// scalar function
     ScalarFunction { name: String, args: Vec<Expr> }
 }
