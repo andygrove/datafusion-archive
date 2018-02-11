@@ -11,7 +11,7 @@ DOCKER_REPOSITORY="${DOCKER_REPOSITORY:datafusionrs}"
 DOCKER_VERSION="${DOCKER_VERSION:0.1.4}"
 
 # DOCKER_TAG is the combined tag from the docker repository and version.  Defaults to (repository)/datafusion:(version)
-DOCKER_TAG="${DOCKER_TAG:${DOCKER_REPOSITORY}/datafusion:${DOCKER_VERSION}}"
+DOCKER_TAG="${DOCKER_REPOSITORY}/datafusion:${DOCKER_VERSION}"
 
 # Note: Setting DOCKER_PUSH to "true" outside of this script will cause the docker container to push to a repository.
 DOCKER_PUSH="${DOCKER_PUSH:false}"
