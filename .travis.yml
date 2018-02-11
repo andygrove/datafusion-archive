@@ -15,7 +15,7 @@ script:
   - cargo build
   - cargo build --examples
   - cargo test
-  - sh scripts/docker/build.sh
+  - bash scripts/docker/build.sh
 
 notifications:
   webhooks:
