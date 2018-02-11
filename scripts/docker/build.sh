@@ -27,6 +27,9 @@ if [ "${TARGET}" == "x86_64-unknown-linux-musl" ]; then
   fi
 
   ls -alR target
+
+  file target/release/console
+  file target/release/worker
   
   if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then 
     echo "Building docker: ${TAG}"
