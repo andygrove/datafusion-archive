@@ -51,7 +51,7 @@ fn main() {
             .short("e")
             .long("etcd")
             .value_name("URL")
-
+            .required(true)
             .takes_value(true))
         .arg(Arg::with_name("BIND")
             .short("b")
@@ -85,18 +85,26 @@ fn main() {
         .bind(&bind_addr, move|| Ok(Worker { www_root: www_root.clone() })).unwrap();
 
     // start a loop to register with etcd every 5 seconds with a ttl of 10 seconds
-    let etcd = Client::new(&handle, &[etcd_endpoints], None).unwrap();
-    let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
-        client.register()
-            .and_then(|(client, done)| {
-                if done {
-                    Ok(Loop::Break(client))
-                } else {
-                    Ok(Loop::Continue(client))
-                }
-            })
-    });
-    core.run(heartbeat_loop).unwrap();
+    match Client::new(&handle, &[etcd_endpoints], None) {
+        Ok(etcd) => {
+            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
+                client.register()
+                    .and_then(|(client, done)| {
+                        if done {
+                            Ok(Loop::Break(client))
+                        } else {
+                            Ok(Loop::Continue(client))
+                        }
+                    })
+            });
+            match core.run(heartbeat_loop) {
+                Ok(_) => println!("Heartbeat loop finished"),
+                Err(e) => println!("Heartbeat loop failed: {:?}", e),
+            }
+
+        }
+        Err(e) => println!("Failed to connect to etcd: {:?}", e)
+    }
 
 }
 
