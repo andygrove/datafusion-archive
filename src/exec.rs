@@ -262,11 +262,11 @@ pub struct ExecutionContext {
 
 impl ExecutionContext {
 
-    pub fn new() -> Self {
+    pub fn new(data_dir: String) -> Self {
         ExecutionContext {
             schemas: HashMap::new(),
             functions: HashMap::new(),
-            data_dir: "test/data".to_string() //TODO: fix this
+            data_dir
         }
     }
 
@@ -350,7 +350,9 @@ impl ExecutionContext {
 
             LogicalPlan::TableScan { ref table_name, ref schema, .. } => {
                 // for now, tables are csv files
-                let file = File::open(format!("{}/{}.csv", self.data_dir, table_name))?;
+                let filename = format!("{}/{}.csv", self.data_dir, table_name);
+                println!("Reading {}", filename);
+                let file = File::open(filename)?;
                 let rel = CsvRelation::open(file, schema.clone())?;
                 Ok(Box::new(rel))
             },

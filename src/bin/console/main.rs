@@ -71,7 +71,7 @@ fn main() {
     match workers {
         Some(ref list) if list.len() > 0 => {
 
-            let mut console = Console::new(list[0].clone());
+            let mut console = Console::new(format!("http://{}", list[0]));
 
             loop {
                 match rprompt::prompt_reply_stdout("$ ") {
@@ -104,7 +104,8 @@ impl Console {
 
     fn new(worker_addr: String) -> Self {
         println!("Connecting to worker node at {}", worker_addr);
-        Console { ctx: ExecutionContext::new(), worker_addr: worker_addr }
+        // pass an empty data path since the client doesn't access data directly
+        Console { ctx: ExecutionContext::new("".to_string()), worker_addr: worker_addr }
     }
 
     /// Execute a SQL statement or console command

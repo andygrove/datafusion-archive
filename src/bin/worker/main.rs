@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::time::Duration;
+use std::str;
 use std::thread;
 
 extern crate clap;
@@ -35,7 +36,7 @@ use etcd::kv;
 use datafusion::exec::*;
 use futures::future::{ok, loop_fn, Future, Loop};
 use futures::Stream;
-use hyper::{Method, StatusCode, Chunk};
+use hyper::{Method, StatusCode};
 use hyper::client::HttpConnector;
 use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
@@ -59,6 +60,18 @@ fn main() {
             .help("IP address and port to bind to")
             .default_value("0.0.0.0:8080")
             .takes_value(true))
+        .arg(Arg::with_name("REGISTER")
+            .short("r")
+            .long("register")
+            .help("IP address and port to register in etcd")
+            .default_value("127.0.0.1:8080")
+            .takes_value(true))
+        .arg(Arg::with_name("DATADIR")
+            .short("d")
+            .long("data_dir")
+            .help("Location of data files")
+            .required(true)
+            .takes_value(true))
         .arg(Arg::with_name("WEBROOT")
             .short("w")
             .long("webroot")
@@ -68,10 +81,15 @@ fn main() {
         .get_matches();
 
     let uuid = Uuid::new_v5(&uuid::NAMESPACE_DNS, "datafusion");
-    let bind_addr_str = matches.value_of("BIND").unwrap().to_string();
 
+    let bind_addr_str = matches.value_of("BIND").unwrap().to_string();
     let bind_addr = bind_addr_str.parse().unwrap();
+
+    let register_addr_str = matches.value_of("REGISTER").unwrap().to_string();
+    let register_addr = register_addr_str.parse().unwrap();
+
     let www_root = matches.value_of("WEBROOT").unwrap().to_string();
+    let data_dir = matches.value_of("DATADIR").unwrap().to_string();
 
     let etcd_endpoints = matches.value_of("ETCD").unwrap();
 
@@ -81,13 +99,19 @@ fn main() {
 
     println!("Worker {} listening on {} and serving content from {}", uuid, bind_addr, www_root);
 
-    let _ = Http::new()
-        .bind(&bind_addr, move|| Ok(Worker { www_root: www_root.clone() })).unwrap();
+
+    thread::spawn(move || {
+        let server = Http::new()
+            .bind(&bind_addr, move|| Ok(Worker {
+                www_root: www_root.clone(), data_dir: data_dir.clone()
+            })).unwrap();
+        server.run().unwrap();
+    });
 
     // start a loop to register with etcd every 5 seconds with a ttl of 10 seconds
     match Client::new(&handle, &[etcd_endpoints], None) {
         Ok(etcd) => {
-            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
+            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, register_addr), |client| {
                 client.register()
                     .and_then(|(client, done)| {
                         if done {
@@ -110,7 +134,8 @@ fn main() {
 
 /// Worker struct to store state
 struct Worker {
-    www_root: String
+    www_root: String,
+    data_dir: String
 }
 
 impl Worker {
@@ -127,101 +152,6 @@ impl Worker {
     }
 
 }
-
-fn handle_request(chunk: Chunk) -> Response {
-
-    println!("handle_request()");
-
-    // collect the entire body
-    let body_bytes = chunk.iter()
-        .cloned()
-        .collect::<Vec<u8>>();
-
-
-    match String::from_utf8(body_bytes.clone()) {
-        Ok(json_str) => {
-            println!("Received request");
-            //println!("Request: {}", json_str);
-
-            // this is a crude POC that demonstrates the worker receiving a plan, executing it,
-            // and returning a result set
-
-            //TODO: should stream results to client, not build a result set in memory
-            //TODO: decide on a more appropriate format to return than csv
-            //TODO: should not create a new execution context each time
-
-            match serde_json::from_str(&json_str) {
-                Ok(plan) => {
-                    //println!("Plan: {:?}", plan);
-
-                    // create execution context
-                    let mut ctx = ExecutionContext::new();
-
-                    match plan {
-                        ExecutionPlan::Interactive { plan } => {
-                            match ctx.create_execution_plan(&plan) {
-                                Ok(exec) => {
-                                    let it = exec.scan(&ctx);
-                                    let mut result_set = "".to_string();
-
-                                    it.for_each(|t| {
-                                        match t {
-                                            Ok(tuple) => {
-                                                result_set += &tuple.to_string()
-                                            },
-                                            Err(e) => {
-                                                result_set += &format!("ERROR: {:?}", e)
-                                            }
-                                        }
-                                        result_set += "\n";
-                                    });
-
-                                    Response::new()
-                                        .with_status(StatusCode::Ok)
-                                        .with_header(ContentLength(result_set.len() as u64))
-                                        .with_body(result_set)
-                                },
-                                Err(e) => {
-                                    let msg = format!("Failed to create execution plan: {:?}", e);
-                                    Response::new()
-                                        .with_status(StatusCode::BadRequest)
-                                        .with_header(ContentLength(msg.len() as u64))
-                                        .with_body(msg)
-                                }
-                            }
-
-                        },
-                        _ => {
-                            let msg = format!("Unsupported execution plan");
-                            Response::new()
-                                .with_status(StatusCode::BadRequest)
-                                .with_header(ContentLength(msg.len() as u64))
-                                .with_body(msg)
-                        }
-                    }
-
-                },
-                Err(e) => {
-                    let msg = format!("Failed to parse execution plan: {:?}", e);
-                    Response::new()
-                        .with_status(StatusCode::BadRequest)
-                        .with_header(ContentLength(msg.len() as u64))
-                        .with_body(msg)
-
-                }
-            }
-
-        },
-        _ => {
-            let msg = format!("Failed to parse request JSON");
-            Response::new()
-                .with_status(StatusCode::BadRequest)
-                .with_header(ContentLength(msg.len() as u64))
-                .with_body(msg)
-        }
-    }
-}
-
 
 impl Service for Worker {
     type Request = Request;
@@ -265,11 +195,86 @@ impl Service for Worker {
                 }
             }
             &Method::Post => { // all REST calls are POST
-                Box::new(
-                    req.body()
-                        .concat2()
-                        .map(handle_request)
-                )
+
+                let data_dir = self.data_dir.clone();
+
+                Box::new(req.body().concat2()
+                    .and_then(|body| {
+                        let json = str::from_utf8(&body).unwrap();
+                        println!("{}", json);
+
+                        println!("Received request");
+                        //println!("Request: {}", json_str);
+
+                        // this is a crude POC that demonstrates the worker receiving a plan, executing it,
+                        // and returning a result set
+
+                        //TODO: should stream results to client, not build a result set in memory
+                        //TODO: decide on a more appropriate format to return than csv
+                        //TODO: should not create a new execution context each time
+
+                        ok(match serde_json::from_str(&json) {
+                            Ok(plan) => {
+                                //println!("Plan: {:?}", plan);
+
+                                // create execution context
+                                let mut ctx = ExecutionContext::new(data_dir);
+
+                                match plan {
+                                    ExecutionPlan::Interactive { plan } => {
+                                        match ctx.create_execution_plan(&plan) {
+                                            Ok(exec) => {
+                                                let it = exec.scan(&ctx);
+                                                let mut result_set = "".to_string();
+
+                                                it.for_each(|t| {
+                                                    match t {
+                                                        Ok(tuple) => {
+                                                            result_set += &tuple.to_string()
+                                                        },
+                                                        Err(e) => {
+                                                            result_set += &format!("ERROR: {:?}", e)
+                                                        }
+                                                    }
+                                                    result_set += "\n";
+                                                });
+
+                                                Response::new()
+                                                    .with_status(StatusCode::Ok)
+                                                    .with_header(ContentLength(result_set.len() as u64))
+                                                    .with_body(result_set)
+                                            },
+                                            Err(e) => {
+                                                let msg = format!("Failed to create execution plan: {:?}", e);
+                                                Response::new()
+                                                    .with_status(StatusCode::BadRequest)
+                                                    .with_header(ContentLength(msg.len() as u64))
+                                                    .with_body(msg)
+                                            }
+                                        }
+
+                                    },
+                                    _ => {
+                                        let msg = format!("Unsupported execution plan");
+                                        Response::new()
+                                            .with_status(StatusCode::BadRequest)
+                                            .with_header(ContentLength(msg.len() as u64))
+                                            .with_body(msg)
+                                    }
+                                }
+
+                            },
+                            Err(e) => {
+                                let msg = format!("Failed to parse execution plan: {:?}", e);
+                                Response::new()
+                                    .with_status(StatusCode::BadRequest)
+                                    .with_header(ContentLength(msg.len() as u64))
+                                    .with_body(msg)
+
+                            }
+                        })
+                    }))
+
             }
             _ => {
                 Box::new(futures::future::ok(
@@ -299,8 +304,8 @@ impl Membership {
         let key = format!("/datafusion/workers/{}", self.uuid);
 
         Box::new(kv::set(&self.etcd, &key, &self.bind_address, Some(10))
-            .and_then(|etcd_response| {
-                println!("Registered OK: {:?}", etcd_response);
+            .and_then(|_etcd_response| {
+                println!("Registered with etcd: {} -> {}", self.uuid, self.bind_address);
                 thread::sleep(Duration::from_millis(5000));
                 ok((self,false))
             })
