@@ -15,7 +15,7 @@ script:
   - cargo build
   - cargo build --examples
   - cargo test
-  - docker build -f scripts/docker/Dockerfile .
+  - if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then docker build -f scripts/docker/Dockerfile . ; else echo "Skipping Docker release."; fi
 
 notifications:
   webhooks:
