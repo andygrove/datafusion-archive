@@ -23,8 +23,10 @@ BUILD_RELEASE="${BUILD_RELEASE:false}"
 if [ "${TARGET}" == "x86_64-unknown-linux-musl" ]; then
   if [ "${BUILD_RELEASE}" == true ]; then
     sudo apt-get install musl-tools
-    cargo build --target=x86_64-unknown-linux-musl --release --verbose
+    cargo build --release
   fi
+
+  ls -alR target
   
   if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then 
     echo "Building docker: ${TAG}"
