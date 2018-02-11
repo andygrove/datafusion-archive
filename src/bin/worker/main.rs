@@ -14,6 +14,7 @@
 
 use std::fs::File;
 use std::io::prelude::*;
+use uuid::Uuid;
 
 extern crate clap;
 extern crate datafusion;
@@ -23,6 +24,7 @@ extern crate hyper;
 extern crate serde;
 extern crate serde_json;
 extern crate tokio_core;
+extern crate uuid;
 
 use clap::{Arg, App};
 use etcd::Client;
@@ -60,17 +62,16 @@ fn main() {
             .takes_value(true))
         .get_matches();
 
-    let bind_addr = matches.value_of("BIND").unwrap().parse().unwrap();
+    let uuid = Uuid::new_v5(&uuid::NAMESPACE_DNS, "datafusion");
+    let bind_addr_str = matches.value_of("BIND").unwrap();
+
+    let bind_addr = bind_addr_str.parse().unwrap();
     let www_root = matches.value_of("WEBROOT").unwrap().to_string();
 
     let etcd_endpoints = matches.value_of("ETCD").unwrap();
-    register(&[etcd_endpoints]);
+    register(&[etcd_endpoints], &uuid, bind_addr_str);
 
-
-//        .iter()
-//        .map(|s| format!("http://{:?}", s)).collect();
-
-    println!("Worker listening on {} and serving content from {}", bind_addr, www_root);
+    println!("Worker {} listening on {} and serving content from {}", uuid, bind_addr, www_root);
 
     let server = Http::new()
         .bind(&bind_addr, move|| Ok(Worker { www_root: www_root.clone() })).unwrap();
@@ -251,7 +252,7 @@ impl Service for Worker {
 
 }
 
-fn register(etcd_endpoints: &[&str]) {
+fn register(etcd_endpoints: &[&str], uuid: &Uuid, bind_address: &str) {
 
     println!("Registering with etcd at {:?}", etcd_endpoints);
 
@@ -265,8 +266,10 @@ fn register(etcd_endpoints: &[&str]) {
     // receives a successful response.
     let client = Client::new(&handle, etcd_endpoints, None).unwrap();
 
+    let key = format!("/datafusion/workers/{}", uuid);
+
     // Set the key "/foo" to the value "bar" with no expiration.
-    let work = kv::set(&client, "/datafusion/workers/foo", "bar123", None)
+    let work = kv::set(&client, &key, &bind_address, None)
         .and_then(|_| {
             println!("Registered with etcd");
             Ok(())
