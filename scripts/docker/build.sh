@@ -20,19 +20,23 @@ DOCKER_PUSH="${DOCKER_PUSH:false}"
 BUILD_RELEASE="${BUILD_RELEASE:false}"
 
 # Build the final release candidate, create a docker container from it.
-if [ "${BUILD_RELEASE}" == true ]; then
-  sudo apt-get install musl-tools
-  cargo build --target=x86_64-unknown-linux-musl --release --verbose
-fi
-
-if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then 
-  echo "Building docker: ${TAG}"
-  echo
-
-  docker build -f scripts/docker/Dockerfile -t "${TAG}" .
-  if [ "${DOCKER_PUSH}" == true ]; then
-    docker push "${TAG}"
+if [ "${TARGET}" == "x86_64-unknown-linux-musl" ]; then
+  if [ "${BUILD_RELEASE}" == true ]; then
+    sudo apt-get install musl-tools
+    cargo build --target=x86_64-unknown-linux-musl --release --verbose
+  fi
+  
+  if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then 
+    echo "Building docker: ${TAG}"
+    echo
+  
+    docker build -f scripts/docker/Dockerfile -t "${TAG}" .
+    if [ "${DOCKER_PUSH}" == true ]; then
+      docker push "${TAG}"
+    fi
+  else
+    echo "Skipping Docker release."
   fi
 else
-  echo "Skipping Docker release."
+  echo "Skipping build - expecting x86_64-unknown-linux-musl as target."
 fi
