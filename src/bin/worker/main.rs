@@ -14,7 +14,7 @@
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::time::Duration;
 use std::thread;
 
@@ -284,6 +284,7 @@ struct Membership {
 }
 
 impl Membership {
+
     fn new(etcd: Client<HttpConnector>, uuid: Uuid, bind_address: String) -> Self {
         Membership { etcd, uuid, bind_address }
     }
@@ -294,18 +295,22 @@ impl Membership {
         let key = format!("/datafusion/workers/{}", self.uuid);
         println!("ping");
 
-//        kv::set(&self.etcd, &key, &self.bind_address, Some(10))
-//            .and_then(|_| {
-//                println!("Registered with etcd");
-//                ok(())
-//            })
-//            .and_then(|()|ok((self, false)))
-//            .
+        kv::set(&self.etcd, &key, &self.bind_address, Some(10))
+            .and_then(|_| {
+                println!("Registered OK");
+                ok((self,false))
+            })
+            .map_err(|e : Vec<etcd::Error>| Error::from(ErrorKind::NotFound))
+            //.and_then(|_| ok(self,false))
 
-        ok((self,false))
     }
 }
 
+//impl From<Vec<etcd::Error>> for std::io::Error {
+//    fn from(_: Vec<etcd::Error>) -> Self {
+//        unimplemented!()
+//    }
+//}
 
 //fn register(etcd_endpoints: &[&str], uuid: &Uuid, bind_address: &str) {
 //
