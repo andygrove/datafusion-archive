@@ -2,10 +2,16 @@
 #
 # Build file for the Dockerfile
 
+# DOCKER_REPOSITORY is the master repository where the docker image will be referenced and stored.  Defaults to "datafusionrs"
 DOCKER_REPOSITORY="${DOCKER_REPOSITORY:datafusionrs}"
+
+# DOCKER_VERSION is the current version of the docker image.  Defaults to "0.1.4"
 DOCKER_VERSION="${DOCKER_VERSION:0.1.4}"
+
+# DOCKER_TAG is the combined tag from the docker repository and version.  Defaults to (repository)/datafusion:(version)
 DOCKER_TAG="${DOCKER_TAG:${DOCKER_REPOSITORY}/datafusion:${DOCKER_VERSION}}"
 
+# Note: Setting DOCKER_PUSH to "true" outside of this script will cause the docker container to push to a repository.
 DOCKER_PUSH="${DOCKER_PUSH:false}"
 
 if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then 
