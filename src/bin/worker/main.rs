@@ -12,24 +12,95 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate hyper;
-extern crate futures;
-extern crate serde;
-extern crate serde_json;
-
 use std::fs::File;
 use std::io::prelude::*;
+use std::io::{Error, ErrorKind};
+use std::time::Duration;
+use std::thread;
 
-use futures::future::Future;
+extern crate clap;
+extern crate datafusion;
+extern crate etcd;
+extern crate futures;
+extern crate futures_timer;
+extern crate hyper;
+extern crate serde;
+extern crate serde_json;
+extern crate tokio_core;
+extern crate uuid;
+
+use clap::{Arg, App};
+use etcd::Client;
+use etcd::kv;
+use datafusion::exec::*;
+use futures::future::{ok, loop_fn, Future, Loop};
 use futures::Stream;
-
 use hyper::{Method, StatusCode, Chunk};
+use hyper::client::HttpConnector;
 use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
+use tokio_core::reactor::Core;
+use uuid::Uuid;
 
-extern crate datafusion;
-use datafusion::exec::*;
+fn main() {
 
+    let matches = App::new("DataFusion Worker Node")
+        .version("0.1.4") //TODO get dynamically based on crate version
+        .arg(Arg::with_name("ETCD")
+            .help("etcd endpoints")
+            .short("e")
+            .long("etcd")
+            .value_name("URL")
+
+            .takes_value(true))
+        .arg(Arg::with_name("BIND")
+            .short("b")
+            .long("bind")
+            .help("IP address and port to bind to")
+            .default_value("0.0.0.0:8080")
+            .takes_value(true))
+        .arg(Arg::with_name("WEBROOT")
+            .short("w")
+            .long("webroot")
+            .help("Location of HTML files")
+            .default_value("./src/bin/worker/")
+            .takes_value(true))
+        .get_matches();
+
+    let uuid = Uuid::new_v5(&uuid::NAMESPACE_DNS, "datafusion");
+    let bind_addr_str = matches.value_of("BIND").unwrap().to_string();
+
+    let bind_addr = bind_addr_str.parse().unwrap();
+    let www_root = matches.value_of("WEBROOT").unwrap().to_string();
+
+    let etcd_endpoints = matches.value_of("ETCD").unwrap();
+
+    // create futures event loop
+    let mut core = Core::new().unwrap();
+    let handle = core.handle();
+
+    println!("Worker {} listening on {} and serving content from {}", uuid, bind_addr, www_root);
+
+    let _ = Http::new()
+        .bind(&bind_addr, move|| Ok(Worker { www_root: www_root.clone() })).unwrap();
+
+    // start a loop to register with etcd every 5 seconds with a ttl of 10 seconds
+    let etcd = Client::new(&handle, &[etcd_endpoints], None).unwrap();
+    let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
+        client.register()
+            .and_then(|(client, done)| {
+                if done {
+                    Ok(Loop::Break(client))
+                } else {
+                    Ok(Loop::Continue(client))
+                }
+            })
+    });
+    core.run(heartbeat_loop).unwrap();
+
+}
+
+/// Worker struct to store state
 struct Worker {
     www_root: String
 }
@@ -203,15 +274,30 @@ impl Service for Worker {
 
 }
 
-fn main() {
-
-    //TODO: make command-line params
-    let addr = "0.0.0.0:8080".parse().unwrap();
-    let www_root = "./src/bin/worker/";
-
-    println!("Worker listening on {}", addr);
-
-    let server = Http::new()
-        .bind(&addr, move|| Ok(Worker { www_root: www_root.to_string() })).unwrap();
-    server.run().unwrap();
+struct Membership {
+    etcd: Client<HttpConnector>,
+    uuid: Uuid,
+    bind_address: String
 }
+
+impl Membership {
+
+    fn new(etcd: Client<HttpConnector>, uuid: Uuid, bind_address: String) -> Self {
+        Membership { etcd, uuid, bind_address }
+    }
+
+    fn register(self) -> Box<Future<Item=(Self,bool),Error=Error>> {
+
+        let key = format!("/datafusion/workers/{}", self.uuid);
+
+        Box::new(kv::set(&self.etcd, &key, &self.bind_address, Some(10))
+            .and_then(|etcd_response| {
+                println!("Registered OK: {:?}", etcd_response);
+                thread::sleep(Duration::from_millis(5000));
+                ok((self,false))
+            })
+            .map_err(|_| Error::from(ErrorKind::NotFound)))
+    }
+
+}
+
