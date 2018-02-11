@@ -45,48 +45,48 @@ fn main() {
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
-    //TODO get worker address from etcd
-    let worker_addr = "http://127.0.0.1:8080".to_string();
-
-    let etcd = EtcdClient::new(&handle, &[etcd_endpoints], None).unwrap();
-
-    let workers = core.run(kv::get(&etcd, "/datafusion/workers/", kv::GetOptions::default())).unwrap();
-
-    println!("workers: {:?}", workers);
-
-    // curl http://127.0.0.1:2379/v2/keys/datafusion/workers/?dir=true -XDELETE
-
-    //TODO: clean up this horrible mess
+    // get list of workers from etcd
+    let workers : Option<Vec<String>> = if let Ok(etcd) = EtcdClient::new(&handle, &[etcd_endpoints], None) {
+        match core.run(kv::get(&etcd, "/datafusion/workers/", kv::GetOptions::default())) {
+            Ok(Response { ref data, .. }) =>  match data {
+                &KeyValueInfo { ref node, .. } => match &node.nodes {
+                    &Some(ref workers) => {
+                        Some(workers.iter()
+                            .flat_map(|w| w.value.clone())
+                            .collect())
+                    },
+                    _ => None
+                }
+            }
+            _ => {
+                println!("Failed to find workers in etcd");
+                None
+            }
+        }
+    } else {
+        println!("Failed to connect to etcd");
+        None
+    };
 
     match workers {
-        Response { ref data, .. } => match data {
-            &KeyValueInfo { ref node, .. } => {
-                node.nodes.iter().for_each(|n| {
-                    println!("node {:?}", n);
+        Some(ref list) if list.len() > 0 => {
 
-                    if n.len() == 0 {
-                        println!("Could not locate a worker node");
-                    } else {
-                        let x = &n[0].value;
+            let mut console = Console::new(list[0].clone());
 
-                        println!("found worker {:?}", x);
-
-                        let mut console = Console::new(worker_addr.clone());
-
-                        loop {
-                            match rprompt::prompt_reply_stdout("$ ") {
-                                Ok(command) => match command.as_ref() {
-                                    "exit" | "quit" => break,
-                                    _ => console.execute(&command)
-                                },
-                                Err(e) => println!("Error parsing command: {:?}", e)
-                            }
-                        }
-                    }
-
-
-                })
+            loop {
+                match rprompt::prompt_reply_stdout("$ ") {
+                    Ok(command) => match command.as_ref() {
+                        "exit" | "quit" => break,
+                        _ => console.execute(&command)
+                    },
+                    Err(e) => println!("Error parsing command: {:?}", e)
+                }
             }
+
+        }
+        _ => {
+            println!("Could not locate a worker node in etcd")
+
         }
     }
 
@@ -103,6 +103,7 @@ struct Console {
 impl Console {
 
     fn new(worker_addr: String) -> Self {
+        println!("Connecting to worker node at {}", worker_addr);
         Console { ctx: ExecutionContext::new(), worker_addr: worker_addr }
     }
 
