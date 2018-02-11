@@ -27,12 +27,12 @@ if [ "${TARGET}" == "x86_64-unknown-linux-musl" ]; then
   fi
   
   if [ -f "target/release/console" ]; then 
-    echo "Building docker: ${TAG}"
+    echo "Building docker: ${DOCKER_TAG}"
     echo
   
-    docker build -f scripts/docker/Dockerfile -t "${TAG}" .
+    docker build -f scripts/docker/Dockerfile -t "${DOCKER_TAG}" .
     if [ "${DOCKER_PUSH}" == true ]; then
-      docker push "${TAG}"
+      docker push "${DOCKER_TAG}"
     fi
   else
     echo "Skipping Docker release."
