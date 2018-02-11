@@ -256,6 +256,7 @@ pub enum ExecutionPlan {
 pub struct ExecutionContext {
     schemas: HashMap<String, Schema>,
     functions: HashMap<String, FunctionMeta>,
+    data_dir: String
 
 }
 
@@ -264,7 +265,8 @@ impl ExecutionContext {
     pub fn new() -> Self {
         ExecutionContext {
             schemas: HashMap::new(),
-            functions: HashMap::new()
+            functions: HashMap::new(),
+            data_dir: "test/data".to_string() //TODO: fix this
         }
     }
 
@@ -348,7 +350,7 @@ impl ExecutionContext {
 
             LogicalPlan::TableScan { ref table_name, ref schema, .. } => {
                 // for now, tables are csv files
-                let file = File::open(format!("test/data/{}.csv", table_name))?;
+                let file = File::open(format!("{}/{}.csv", self.data_dir, table_name))?;
                 let rel = CsvRelation::open(file, schema.clone())?;
                 Ok(Box::new(rel))
             },
