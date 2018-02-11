@@ -674,7 +674,7 @@ mod tests {
     fn create_context() -> ExecutionContext {
 
         // create execution context
-        let mut ctx = ExecutionContext::new();
+        let mut ctx = ExecutionContext::new("./test/data".to_string());
 
         // define schemas for test data
         ctx.define_schema("people", &Schema::new(vec![
