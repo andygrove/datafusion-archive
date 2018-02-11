@@ -1,60 +1,110 @@
+extern crate clap;
+extern crate datafusion;
+extern crate etcd;
 extern crate futures;
 extern crate hyper;
-extern crate tokio_core;
+extern crate rprompt;
 extern crate serde;
 extern crate serde_json;
+extern crate tokio_core;
 
 use std::str;
 use std::time::Instant;
 
+use clap::{Arg, App};
+use etcd::Client as EtcdClient;
+use etcd::{kv, Response};
+use etcd::kv::KeyValueInfo;
+use datafusion::exec::*;
+use datafusion::parser::*;
+use datafusion::sql::ASTNode::*;
 use futures::{Future, Stream};
 use hyper::Client;
 use tokio_core::reactor::Core;
 use hyper::{Method, Request};
 use hyper::header::{ContentLength, ContentType};
 
-extern crate rprompt;
-extern crate datafusion;
-
-use datafusion::exec::*;
-use datafusion::parser::*;
-use datafusion::sql::ASTNode::*;
-
 fn main() {
 
-    /*
-
-    sample queries to run:
-
-    CREATE EXTERNAL TABLE uk_cities (name VARCHAR(100) NOT NULL, lat DOUBLE NOT NULL, lng DOUBLE NOT NULL)
-    SELECT lat, lng, name FROM uk_cities WHERE lat < 51 ORDER BY lat, lng
-    SELECT lat, lng, name FROM uk_cities WHERE lat < 51 ORDER BY lat DESC, lng DESC
-
-    */
+    let matches = App::new("DataFusion Console")
+        .version("0.1.4") //TODO get dynamically based on crate version
+        .arg(Arg::with_name("ETCD")
+            .help("etcd endpoints")
+            .short("e")
+            .long("etcd")
+            .value_name("URL")
+            .required(true)
+            .takes_value(true))
+        .get_matches();
 
     println!("DataFusion Console");
 
-    let mut console = Console { ctx: ExecutionContext::new() };
+    let etcd_endpoints = matches.value_of("ETCD").unwrap();
 
-    loop {
-        match rprompt::prompt_reply_stdout("$ ") {
-            Ok(command) => match command.as_ref() {
-                "exit" | "quit" => break,
-                _ => console.execute(&command)
-            },
-            Err(e) => println!("Error parsing command: {:?}", e)
+    // create futures event loop
+    let mut core = Core::new().unwrap();
+    let handle = core.handle();
+
+    //TODO get worker address from etcd
+    let worker_addr = "http://127.0.0.1:8080".to_string();
+
+    let etcd = EtcdClient::new(&handle, &[etcd_endpoints], None).unwrap();
+
+    let workers = core.run(kv::get(&etcd, "/datafusion/workers/", kv::GetOptions::default())).unwrap();
+
+    println!("workers: {:?}", workers);
+
+    // curl http://127.0.0.1:2379/v2/keys/datafusion/workers/?dir=true -XDELETE
+
+    //TODO: clean up this horrible mess
+
+    match workers {
+        Response { ref data, .. } => match data {
+            &KeyValueInfo { ref node, .. } => {
+                node.nodes.iter().for_each(|n| {
+                    println!("node {:?}", n);
+
+                    if n.len() == 0 {
+                        println!("Could not locate a worker node");
+                    } else {
+                        let x = &n[0].value;
+
+                        println!("found worker {:?}", x);
+
+                        let mut console = Console::new(worker_addr.clone());
+
+                        loop {
+                            match rprompt::prompt_reply_stdout("$ ") {
+                                Ok(command) => match command.as_ref() {
+                                    "exit" | "quit" => break,
+                                    _ => console.execute(&command)
+                                },
+                                Err(e) => println!("Error parsing command: {:?}", e)
+                            }
+                        }
+                    }
+
+
+                })
+            }
         }
     }
+
 
 }
 
 
 /// Interactive SQL console
 struct Console {
-    ctx: ExecutionContext
+    ctx: ExecutionContext,
+    worker_addr: String
 }
 
 impl Console {
+
+    fn new(worker_addr: String) -> Self {
+        Console { ctx: ExecutionContext::new(), worker_addr: worker_addr }
+    }
 
     /// Execute a SQL statement or console command
     fn execute(&mut self, sql: &str) {
@@ -87,7 +137,7 @@ impl Console {
         let mut core = Core::new().unwrap();
         let client = Client::new(&core.handle());
 
-        let uri = "http://localhost:8080".parse().unwrap();
+        let uri = self.worker_addr.parse().unwrap();
 
         match self.ctx.create_logical_plan(&sql) {
             Ok(logical_plan) => {
