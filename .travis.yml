@@ -15,15 +15,15 @@ matrix:
           - musl
           - musl-dev
           - musl-tools
-    - os: linux
-      rust: stable
-      env: TARGET=i686-unknown-linux-gnu
-    - os: linux
-      rust: stable
-      env: TARGET=i686-unknown-linux-musl
-      addons:
-        apt:
-          packages: *musl_packages
+#    - os: linux
+#      rust: stable
+#      env: TARGET=i686-unknown-linux-gnu
+#    - os: linux
+#      rust: stable
+#      env: TARGET=i686-unknown-linux-musl
+#      addons:
+#        apt:
+#          packages: *musl_packages
     - os: osx
       rust: stable
       env: TARGET=x86_64-apple-darwin
