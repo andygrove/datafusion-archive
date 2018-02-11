@@ -14,6 +14,14 @@ DOCKER_TAG="${DOCKER_TAG:${DOCKER_REPOSITORY}/datafusion:${DOCKER_VERSION}}"
 # Note: Setting DOCKER_PUSH to "true" outside of this script will cause the docker container to push to a repository.
 DOCKER_PUSH="${DOCKER_PUSH:false}"
 
+# BUILD_RELEASE set to true will perform a "cargo build --release"; otherwise this step will be skipped.  Defaults to "false"
+BUILD_RELEASE="${BUILD_RELEASE:false}"
+
+# Build the final release candidate, create a docker container from it.
+if [ "${BUILD_RELEASE}" == true ]; then
+  cargo build --release
+fi
+
 if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then 
   echo "Building docker: ${TAG}"
   echo

@@ -15,7 +15,7 @@ script:
   - cargo build
   - cargo build --examples
   - cargo test
-  - bash scripts/docker/build.sh
+  - BUILD_RELEASE="true" bash scripts/docker/build.sh
 
 notifications:
   webhooks:
