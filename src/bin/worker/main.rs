@@ -12,24 +12,72 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate hyper;
-extern crate futures;
-extern crate serde;
-extern crate serde_json;
-
 use std::fs::File;
 use std::io::prelude::*;
 
+extern crate clap;
+extern crate datafusion;
+extern crate etcd;
+extern crate futures;
+extern crate hyper;
+extern crate serde;
+extern crate serde_json;
+extern crate tokio_core;
+
+use clap::{Arg, App};
+use etcd::Client;
+use etcd::kv;
+use datafusion::exec::*;
 use futures::future::Future;
 use futures::Stream;
-
 use hyper::{Method, StatusCode, Chunk};
 use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
+use tokio_core::reactor::Core;
 
-extern crate datafusion;
-use datafusion::exec::*;
+fn main() {
 
+    let matches = App::new("DataFusion Worker Node")
+        .version("0.1.4") //TODO get dynamically based on crate version
+        .arg(Arg::with_name("ETCD")
+            .help("etcd endpoints")
+            .short("e")
+            .long("etcd")
+            .value_name("URL")
+
+            .takes_value(true))
+        .arg(Arg::with_name("BIND")
+            .short("b")
+            .long("bind")
+            .help("IP address and port to bind to")
+            .default_value("0.0.0.0:8080")
+            .takes_value(true))
+        .arg(Arg::with_name("WEBROOT")
+            .short("w")
+            .long("webroot")
+            .help("Location of HTML files")
+            .default_value("./src/bin/worker/")
+            .takes_value(true))
+        .get_matches();
+
+    let bind_addr = matches.value_of("BIND").unwrap().parse().unwrap();
+    let www_root = matches.value_of("WEBROOT").unwrap().to_string();
+
+    let etcd_endpoints = matches.value_of("ETCD").unwrap();
+    register(&[etcd_endpoints]);
+
+
+//        .iter()
+//        .map(|s| format!("http://{:?}", s)).collect();
+
+    println!("Worker listening on {} and serving content from {}", bind_addr, www_root);
+
+    let server = Http::new()
+        .bind(&bind_addr, move|| Ok(Worker { www_root: www_root.clone() })).unwrap();
+    server.run().unwrap();
+}
+
+/// Worker struct to store state
 struct Worker {
     www_root: String
 }
@@ -203,15 +251,28 @@ impl Service for Worker {
 
 }
 
-fn main() {
+fn register(etcd_endpoints: &[&str]) {
 
-    //TODO: make command-line params
-    let addr = "0.0.0.0:8080".parse().unwrap();
-    let www_root = "./src/bin/worker/";
+    println!("Registering with etcd at {:?}", etcd_endpoints);
 
-    println!("Worker listening on {}", addr);
+    // Create a `Core`, which is the event loop which will drive futures to completion.
+    let mut core = Core::new().unwrap();
+    // Get a "handle" to the event loop that the client can use to schedule work.
+    let handle = core.handle();
 
-    let server = Http::new()
-        .bind(&addr, move|| Ok(Worker { www_root: www_root.to_string() })).unwrap();
-    server.run().unwrap();
+    // Create a client to access a single cluster member. Addresses of multiple cluster
+    // members can be provided and the client will try each one in sequence until it
+    // receives a successful response.
+    let client = Client::new(&handle, etcd_endpoints, None).unwrap();
+
+    // Set the key "/foo" to the value "bar" with no expiration.
+    let work = kv::set(&client, "/datafusion/workers/foo", "bar123", None)
+        .and_then(|_| {
+            println!("Registered with etcd");
+            Ok(())
+        });
+
+    // Start the event loop, driving the asynchronous code to completion.
+    core.run(work).unwrap();
 }
+
