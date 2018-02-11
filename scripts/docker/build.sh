@@ -22,7 +22,7 @@ BUILD_RELEASE="${BUILD_RELEASE:false}"
 # Build the final release candidate, create a docker container from it.
 if [ "${BUILD_RELEASE}" == true ]; then
   sudo apt-get install musl-tools
-  cargo build --target=x86_64-unknown-linux-musl --release
+  cargo build --target=x86_64-unknown-linux-musl --release --verbose
 fi
 
 if [ -f "target/x86_64-unknown-linux-musl/release/console" ]; then 
