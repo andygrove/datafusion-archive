@@ -14,12 +14,15 @@
 
 use std::fs::File;
 use std::io::prelude::*;
-use uuid::Uuid;
+use std::io::Error;
+use std::time::Duration;
+use std::thread;
 
 extern crate clap;
 extern crate datafusion;
 extern crate etcd;
 extern crate futures;
+extern crate futures_timer;
 extern crate hyper;
 extern crate serde;
 extern crate serde_json;
@@ -30,12 +33,16 @@ use clap::{Arg, App};
 use etcd::Client;
 use etcd::kv;
 use datafusion::exec::*;
-use futures::future::Future;
+use futures::future::{ok, loop_fn, Future, FutureResult, Loop, LoopFn};
+use futures::prelude::*;
 use futures::Stream;
+use futures_timer::Interval;
 use hyper::{Method, StatusCode, Chunk};
+use hyper::client::HttpConnector;
 use hyper::header::{ContentLength};
 use hyper::server::{Http, Request, Response, Service};
 use tokio_core::reactor::Core;
+use uuid::Uuid;
 
 fn main() {
 
@@ -63,19 +70,37 @@ fn main() {
         .get_matches();
 
     let uuid = Uuid::new_v5(&uuid::NAMESPACE_DNS, "datafusion");
-    let bind_addr_str = matches.value_of("BIND").unwrap();
+    let bind_addr_str = matches.value_of("BIND").unwrap().to_string();
 
     let bind_addr = bind_addr_str.parse().unwrap();
     let www_root = matches.value_of("WEBROOT").unwrap().to_string();
 
     let etcd_endpoints = matches.value_of("ETCD").unwrap();
-    register(&[etcd_endpoints], &uuid, bind_addr_str);
+
+    // create futures event loop
+    let mut core = Core::new().unwrap();
+    let handle = core.handle();
 
     println!("Worker {} listening on {} and serving content from {}", uuid, bind_addr, www_root);
 
     let server = Http::new()
         .bind(&bind_addr, move|| Ok(Worker { www_root: www_root.clone() })).unwrap();
-    server.run().unwrap();
+
+    let etcd = Client::new(&handle, &[etcd_endpoints], None).unwrap();
+
+    let ping_til_done = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
+        client.register()
+            .and_then(|(client, done)| {
+                if done {
+                    Ok(Loop::Break(client))
+                } else {
+                    Ok(Loop::Continue(client))
+                }
+            })
+    });
+
+    core.run(ping_til_done).unwrap();
+
 }
 
 /// Worker struct to store state
@@ -252,30 +277,58 @@ impl Service for Worker {
 
 }
 
-fn register(etcd_endpoints: &[&str], uuid: &Uuid, bind_address: &str) {
-
-    println!("Registering with etcd at {:?}", etcd_endpoints);
-
-    // Create a `Core`, which is the event loop which will drive futures to completion.
-    let mut core = Core::new().unwrap();
-    // Get a "handle" to the event loop that the client can use to schedule work.
-    let handle = core.handle();
-
-    // Create a client to access a single cluster member. Addresses of multiple cluster
-    // members can be provided and the client will try each one in sequence until it
-    // receives a successful response.
-    let client = Client::new(&handle, etcd_endpoints, None).unwrap();
-
-    let key = format!("/datafusion/workers/{}", uuid);
-
-    // Set the key "/foo" to the value "bar" with no expiration.
-    let work = kv::set(&client, &key, &bind_address, None)
-        .and_then(|_| {
-            println!("Registered with etcd");
-            Ok(())
-        });
-
-    // Start the event loop, driving the asynchronous code to completion.
-    core.run(work).unwrap();
+struct Membership {
+    etcd: Client<HttpConnector>,
+    uuid: Uuid,
+    bind_address: String
 }
 
+impl Membership {
+    fn new(etcd: Client<HttpConnector>, uuid: Uuid, bind_address: String) -> Self {
+        Membership { etcd, uuid, bind_address }
+    }
+
+    fn register(self) -> FutureResult<(Self, bool), Error> {
+        thread::sleep(Duration::from_millis(1000));
+
+        let key = format!("/datafusion/workers/{}", self.uuid);
+        println!("ping");
+
+//        kv::set(&self.etcd, &key, &self.bind_address, Some(10))
+//            .and_then(|_| {
+//                println!("Registered with etcd");
+//                ok(())
+//            })
+//            .and_then(|()|ok((self, false)))
+//            .
+
+        ok((self,false))
+    }
+}
+
+
+//fn register(etcd_endpoints: &[&str], uuid: &Uuid, bind_address: &str) {
+//
+//    println!("Registering with etcd at {:?}", etcd_endpoints);
+//
+//    // Create a client to access a single cluster member. Addresses of multiple cluster
+//    // members can be provided and the client will try each one in sequence until it
+//    // receives a successful response.
+//    let client = Client::new(&handle, etcd_endpoints, None).unwrap();
+//
+//    let key = format!("/datafusion/workers/{}", uuid);
+//
+//    // Set the key "/foo" to the value "bar" with no expiration.
+//    let work = kv::set(&client, &key, &bind_address, Some(10))
+//        .and_then(|_| {
+//            println!("Registered with etcd");
+//            Ok(())
+//        });
+//
+//    // Start the event loop, driving the asynchronous code to completion.
+//    match core.run(work) {
+//        Ok(_) => println!("etcd future finished"),
+//        Err(e) => println!("etcd future failed with error: {:?}", e)
+//    }
+//}
+//
