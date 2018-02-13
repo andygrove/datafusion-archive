@@ -43,10 +43,12 @@ use hyper::server::{Http, Request, Response, Service};
 use tokio_core::reactor::Core;
 use uuid::Uuid;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 fn main() {
 
     let matches = App::new("DataFusion Worker Node")
-        .version("0.1.4") //TODO get dynamically based on crate version
+        .version(VERSION)
         .arg(Arg::with_name("ETCD")
             .help("etcd endpoints")
             .short("e")

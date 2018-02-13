@@ -24,10 +24,12 @@ use tokio_core::reactor::Core;
 use hyper::{Method, Request};
 use hyper::header::{ContentLength, ContentType};
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 fn main() {
 
     let matches = App::new("DataFusion Console")
-        .version("0.1.4") //TODO get dynamically based on crate version
+        .version(VERSION)
         .arg(Arg::with_name("ETCD")
             .help("etcd endpoints")
             .short("e")
