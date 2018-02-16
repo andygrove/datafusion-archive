@@ -22,7 +22,7 @@ extern crate serde_json;
 fn main() {
 
     // create execution context
-    let ctx = ExecutionContext::new();
+    let ctx = ExecutionContext::new("./test/data".to_string());
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![

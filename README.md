@@ -27,24 +27,25 @@ Both of these examples run a trivial query against a trivial CSV file using a si
 
 ## Distributed
 
-It is possible to start a single worker node and use a SQL console to execute queries in the remote worker.
+It is possible to start a cluster of worker nodes and use a SQL console to execute queries against the cluster. There must be a running etcd cluster for the workers to register with. 
 
 ### Run Worker
 
 ```bash
-cargo run --bin worker
+cargo run --bin worker -- --bind 0.0.0.0:8080 --etcd http://127.0.0.1:2379
 ```
 
+The worker should produce output similar to the following:
 
 ```
-Worker listening on 0.0.0.0:8080
+Worker 8987a3f3-71e1-5cca-aadf-bc165f528fac listening on 0.0.0.0:8080 and serving content from ./src/bin/worker/
 
 ```
 
 ### Run Console
 
 ```bash
-cargo run --bin console
+cargo run --bin console -- --etcd http://127.0.0.1:2379
 ```
 
 ```
