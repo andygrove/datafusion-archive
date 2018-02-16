@@ -37,12 +37,24 @@ rust:
   - stable
   - nightly
 
-# The main build
-script:
-  - cargo build
-  - cargo build --examples
-  - cargo test
-  - BUILD_RELEASE="true" bash scripts/docker/build.sh
+# Build stages
+jobs:
+  include:
+    stage: compile
+      script:
+      - cargo build
+      - cargo build --examples
+    stage: test
+      - cargo test
+    stage: deploy
+      if: branch = master
+      script:
+        - BUILD_RELEASE="true" bash scripts/docker/build.sh
+
+stages:
+- compile
+- test
+- deploy
 
 notifications:
   webhooks:
