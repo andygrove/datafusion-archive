@@ -40,13 +40,14 @@ rust:
 # Build stages
 jobs:
   include:
-    stage: compile
+    - stage: compile
       script:
-      - cargo build
-      - cargo build --examples
-    stage: test
+        - cargo build
+        - cargo build --examples
+    - stage: test
+      script:
       - cargo test
-    stage: deploy
+    - stage: deploy
       if: branch = master
       script:
         - BUILD_RELEASE="true" bash scripts/docker/build.sh
