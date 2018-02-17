@@ -8,17 +8,9 @@ jobs:
       - run:
           name: Building Main Code
           command: sh scripts/circle/build.sh
-  build:
-    docker:
-      - image: circleci/ruby:latest
-    steps:
       - run:
           name: Building Examples
           command: sh scripts/circle/build-examples.sh
-  build:
-    docker:
-      - image: circleci/ruby:latest
-    steps:
       - run:
           name: Test Code
           command: sh scripts/circle/test.sh
