@@ -14,8 +14,25 @@ jobs:
       - run:
           name: Test Code
           command: sh scripts/circle/test.sh
+  build_nightly:
+    docker:
+      - image: rustlang/rust:nightly
+    steps:
+      - checkout
+      - run:
+          name: Building Main Code
+          command: sh scripts/circle/build.sh
+      - run:
+          name: Building Examples
+          command: sh scripts/circle/build-examples.sh
+      - run:
+          name: Test Code
+          command: sh scripts/circle/test.sh
 workflows:
   version: 2
   stable:
     jobs:
       - build_stable
+  nightly:
+    jobs:
+      - build_nightly
