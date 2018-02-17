@@ -1,0 +1,33 @@
+version: 2
+jobs:
+  build_main_code:
+    docker:
+      - image: circleci/ruby:latest
+    steps:
+      - checkout
+      - run:
+          name: Building Main Code
+          command: sh scripts/circle/build.sh
+  build_examples:
+    docker:
+      - image: circleci/ruby:latest
+    steps:
+      - run:
+          name: Building Examples
+          command: sh scripts/circle/build-examples.sh
+  test:
+    docker:
+      - image: circleci/ruby:latest
+    steps:
+      - run:
+          name: Test Code
+          command: sh scripts/circle/test.sh
+#workflows:
+#  version: 2
+#  build_with_examples:
+#    jobs:
+#      - build_main_code
+#      - build_examples
+#      - test:
+#        requires:
+#          - build_main_code
