@@ -89,6 +89,7 @@ workflows:
       - build_nightly
   build-deploy:
     jobs:
+      - build_for_deployment
       - do_deployment:
           requires:
             - build_for_deployment
