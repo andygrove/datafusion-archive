@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  build_main_code:
+  build:
     docker:
       - image: circleci/ruby:latest
     steps:
@@ -8,14 +8,14 @@ jobs:
       - run:
           name: Building Main Code
           command: sh scripts/circle/build.sh
-  build_examples:
+  build:
     docker:
       - image: circleci/ruby:latest
     steps:
       - run:
           name: Building Examples
           command: sh scripts/circle/build-examples.sh
-  test:
+  build:
     docker:
       - image: circleci/ruby:latest
     steps:
