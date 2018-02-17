@@ -63,11 +63,10 @@ jobs:
       - save_cache:
           key: v1-{{ .Branch }}
           paths:
-            - target/release
+            - ~/package
   do_deployment:
     machine: true
     steps:
-      - checkout
       - restore_cache:
           keys:
             - v1-{{ .Branch }}
