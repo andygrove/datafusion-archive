@@ -60,6 +60,17 @@ jobs:
       - run:
           name: Building Code for Release
           command: cargo build --release
+      - save_cache:
+          key: v1-{{ .Branch }}-{{ epoch }}
+          paths:
+            - /root/project/target/release
+  do_deployment:
+    machine: true
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-{{ .Branch }}-{{ epoch }}
       - run:
           name: Installing payload required for Docker Utilities
           command: sh scripts/docker/install-docker.sh
@@ -78,9 +89,9 @@ workflows:
       - build_nightly
   build-deploy:
     jobs:
-      - build_for_deployment:
-#          requires:
-#            - build_release_build
+      - do_deployment:
+          requires:
+            - build_for_deployment
           filters:
             branches:
               only: circleci
