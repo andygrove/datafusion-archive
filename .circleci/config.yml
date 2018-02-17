@@ -61,6 +61,9 @@ jobs:
           name: Building Code for Release
           command: cargo build --release
       - run:
+          name: Installing payload required for Docker Utilities
+          command: sh scripts/docker/install-docker.sh
+      - run:
           name: Building Docker Container with Deployment
           command: DOCKER_PUSH="true" sh scripts/docker/build.sh
 workflows:
