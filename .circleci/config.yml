@@ -88,4 +88,4 @@ workflows:
             - build_release_build
           filters:
             branches:
-              only: master
+              only: circleci
