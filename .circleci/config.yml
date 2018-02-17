@@ -1,8 +1,10 @@
 version: 2
 jobs:
-  machine: true
-  steps:
-    - checkout
+  build:
+    machine: true
+    steps:
+      - checkout
+
 #  refresh_cache:
 #    docker:
 #      - image: rust:latest
