@@ -75,7 +75,9 @@ workflows:
     jobs:
       - refresh_cache
       - build_stable
-      - do_deploy
+      - do_deploy:
+          requires:
+            - build_stable
   nightly:
     jobs:
       - refresh_cache
