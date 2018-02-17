@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  build:
+  build_stable:
     docker:
       - image: rust:latest
     steps:
@@ -14,12 +14,8 @@ jobs:
       - run:
           name: Test Code
           command: sh scripts/circle/test.sh
-#workflows:
-#  version: 2
-#  build_with_examples:
-#    jobs:
-#      - build_main_code
-#      - build_examples
-#      - test:
-#        requires:
-#          - build_main_code
+workflows:
+  version: 2
+  stable:
+    jobs:
+      - build_stable
