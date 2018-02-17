@@ -52,21 +52,14 @@ jobs:
       - run:
           name: Test Code
           command: sh scripts/circle/test.sh
-  build_release_build:
-    docker:
-      - image: rust:latest
-    steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - cargo-v1-{{ checksum "Cargo.toml" }}
-      - run:
-          name: Building Code for Release
-          command: cargo build --release
   build_for_deployment:
     docker:
       - image: rust:latest
     steps:
+      - checkout
+      - run:
+          name: Building Code for Release
+          command: cargo build --release
       - run:
           name: Building Docker Container with Deployment
           command: DOCKER_PUSH="true" sh scripts/docker/build.sh
@@ -82,10 +75,9 @@ workflows:
       - build_nightly
   build-deploy:
     jobs:
-      - build_release_build
       - build_for_deployment:
-          requires:
-            - build_release_build
+#          requires:
+#            - build_release_build
           filters:
             branches:
               only: circleci
