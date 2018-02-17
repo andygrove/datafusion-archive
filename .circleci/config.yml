@@ -1,10 +1,28 @@
 version: 2
 jobs:
+  refresh_cache:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ checksum "Cargo.toml" }}
+      - run: cargo update
+      - run: cargo fetch
+      - save_cache:
+          key: cargo-v1-{{ checksum "Cargo.toml" }}
+          paths:
+            - /usr/local/cargo/registry
+            - /usr/local/cargo/git
   build_stable:
     docker:
       - image: rust:latest
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ checksum "Cargo.toml" }}
       - run:
           name: Building Main Code
           command: sh scripts/circle/build.sh
@@ -19,6 +37,12 @@ jobs:
       - image: rustlang/rust:nightly
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ checksum "Cargo.toml" }}
+      - run:
+          name: Nightly Version Info
+          command: rustc --version; cargo --version
       - run:
           name: Building Main Code
           command: sh scripts/circle/build.sh
@@ -32,7 +56,9 @@ workflows:
   version: 2
   stable:
     jobs:
+      - refresh_cache
       - build_stable
   nightly:
     jobs:
+      - refresh_cache
       - build_nightly
