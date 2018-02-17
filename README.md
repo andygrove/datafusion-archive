@@ -12,7 +12,7 @@ DataFusion can also be used as a crate dependency in your project if you want th
 
 # Project Home Page
 
-The project home page is now at [https://datafusion.rs](https://datafusion.rs) and contains the [roadmap](https://datafusion.rs/roadmap) as well as documentation for using this crate or running DataFusion as a distributed cluster. I am using [github issues]() to track development tasks and feedback.
+The project home page is now at [https://datafusion.rs](https://datafusion.rs) and contains the [roadmap](https://datafusion.rs/roadmap) as well as documentation for using this crate or running DataFusion as a distributed cluster. I am using [github issues](https://github.com/andygrove/datafusion-rs/issues) to track development tasks and feedback.
 
 # Gitter
 
