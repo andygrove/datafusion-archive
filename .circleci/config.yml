@@ -63,7 +63,7 @@ jobs:
       - save_cache:
           key: v1-{{ .Branch }}
           paths:
-            - /root/project/target/release
+            - target/release
   do_deployment:
     machine: true
     steps:
