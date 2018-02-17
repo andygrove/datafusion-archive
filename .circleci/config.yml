@@ -61,7 +61,7 @@ jobs:
           name: Building Code for Release
           command: cargo build --release
       - save_cache:
-          key: v1-{{ .Branch }}-{{ epoch }}
+          key: v1-{{ .Branch }}
           paths:
             - /root/project/target/release
   do_deployment:
@@ -70,7 +70,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - v1-{{ .Branch }}-{{ epoch }}
+            - v1-{{ .Branch }}
       - run:
           name: Building Docker Container with Deployment
           command: DOCKER_PUSH="true" sh scripts/docker/build.sh
