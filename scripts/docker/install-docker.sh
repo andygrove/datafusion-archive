@@ -4,6 +4,8 @@
 
 set -e
 
+apt update
+apt upgrade
 apt install -y sudo
 apt install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
 curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | apt-key add -
