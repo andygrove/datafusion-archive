@@ -77,9 +77,11 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             let r = compile_expr(ctx,right)?;
             match op {
                 &Operator::Eq => Ok(Box::new(move |row| Value::Boolean(l(row) == r(row)))),
+                &Operator::NotEq => Ok(Box::new(move |row| Value::Boolean(l(row) != r(row)))),
                 &Operator::Lt => Ok(Box::new(move |row| Value::Boolean(l(row) < r(row)))),
+                &Operator::LtEq => Ok(Box::new(move |row| Value::Boolean(l(row) <= r(row)))),
                 &Operator::Gt => Ok(Box::new(move |row| Value::Boolean(l(row) > r(row)))),
-                _ => unimplemented!()
+                &Operator::GtEq => Ok(Box::new(move |row| Value::Boolean(l(row) >= r(row)))),
             }
         }
         &Expr::Sort { ref expr, .. } => {
@@ -99,48 +101,28 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 .map(|e| compile_expr(ctx,e))
                 .collect();
 
-//            let func = ctx.load_function_impl(name.as_ref())?;
-//
-//            match func.execute(compiled_args?) {
-//                Ok(value) => Ok(value),
-//                Err(e) => Err(Box::new(ExecutionError::Custom(
-//                    format!("Function returned error {:?}", e))))
-//            }
+            let compiled_args_ok = compiled_args?;
 
-            unimplemented!()
+            let func = ctx.load_function_impl(name.as_ref())?;
 
-//            Ok(Box::new(move || {
-//
-//            }))
+            Ok(Box::new(move |row| {
+
+                let arg_values = compiled_args_ok.iter()
+                    .map(|a| a(row))
+                    .collect();
+
+                match func.execute(arg_values) {
+                    Ok(value) => value,
+                    Err(e) => panic!("Function returned error {:?}", e)
+                }
+
+            }))
         }
         _ => Err(ExecutionError::Custom(format!("{:?}", expr)))
 
     }
 }
 
-/*
-    /// Evaluate a relational expression against a tuple
-    pub fn evaluate(&self, row: &Row, schema: &Schema, expr: &Expr) -> Result<Value, Box<ExecutionError>> {
-        match expr {
-            &Expr::BinaryExpr { ref left, ref op, ref right } => {
-                let left_value = self.evaluate(row, schema, left)?;
-                let right_value = self.evaluate(row, schema, right)?;
-                match op {
-                    &Operator::Eq => Ok(Value::Boolean(left_value == right_value)),
-                    &Operator::NotEq => Ok(Value::Boolean(left_value != right_value)),
-                    &Operator::Lt => Ok(Value::Boolean(left_value < right_value)),
-                    &Operator::LtEq => Ok(Value::Boolean(left_value <= right_value)),
-                    &Operator::Gt => Ok(Value::Boolean(left_value > right_value)),
-                    &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
-                }
-            },
-            &Expr::Sort { ref expr, .. } => self.evaluate(row, schema, expr),
-        }
-
-    }
-
-
-*/
 /// Represents a csv file with a known schema
 #[derive(Debug)]
 pub struct CsvRelation {
@@ -153,7 +135,6 @@ pub struct FilterRelation {
     input: Box<SimpleRelation>,
     expr: CompiledExpr
 }
-
 pub struct ProjectRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
