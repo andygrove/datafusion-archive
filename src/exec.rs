@@ -14,8 +14,7 @@
 
 use std::cmp::Ordering::*;
 use std::collections::HashMap;
-use std::io::Error;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter, Error};
 use std::io::prelude::*;
 use std::iter::Iterator;
 use std::fs::File;
@@ -179,7 +178,7 @@ impl SimpleRelation for CsvRelation {
 
     fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row,ExecutionError>> + 'a> {
 
-        let buf_reader = BufReader::new(&self.file);
+        let buf_reader = BufReader::with_capacity(8*1024*1024,&self.file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
 
@@ -560,7 +559,9 @@ impl DataFrame for DF {
 
         // create output file
         // println!("Writing csv to {}", filename);
-        let mut file = File::create(filename)?;
+        let file = File::create(filename)?;
+
+        let mut writer = BufWriter::with_capacity(8*1024*1024,file);
 
         // implement execution here for now but should be a common method for processing a plan
         let it = execution_plan.scan(&self.ctx);
@@ -568,7 +569,7 @@ impl DataFrame for DF {
             match t {
                 Ok(tuple) => {
                     let csv = format!("{}\n", tuple.to_string());
-                    file.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
+                    writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
                 },
                 Err(e) => panic!(format!("Error processing tuple: {:?}", e)) //TODO: error handling
             }
