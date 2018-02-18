@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod api;
-pub mod compiler;
 pub mod dataframe;
 pub mod exec;
 pub mod functions;
