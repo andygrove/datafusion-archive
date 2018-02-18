@@ -69,6 +69,9 @@ jobs:
             - v1-release
       - setup_remote_docker:
           docker_layer_caching: true
+      - run:
+          name: Deploy Docker Container
+          command: DOCKER_PUSH="true" sh scripts/docker/build.sh
 workflows:
   version: 2
   stable:
