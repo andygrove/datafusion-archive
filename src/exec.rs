@@ -61,6 +61,60 @@ impl From<ParserError> for ExecutionError {
     }
 }
 
+/// Compiled Expression (basically just a closure to evaluate the expression at runtime)
+pub type CompiledExpr = Box<Fn(&Row)-> Value>;
+
+/// Compiles a relational expression into a closure
+pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
+    match expr {
+        &Expr::Literal(ref lit) => {
+            let foo = lit.clone();
+            Ok(Box::new(move |_| foo.clone()))
+        }
+        &Expr::TupleValue(index) => Ok(Box::new(move |row| row.values[index].clone())),
+        &Expr::BinaryExpr { ref left, ref op, ref right } => {
+            let l = compile_expr(ctx,left)?;
+            let r = compile_expr(ctx,right)?;
+            match op {
+                &Operator::Eq => Ok(Box::new(move |row| Value::Boolean(l(row) == r(row)))),
+                &Operator::NotEq => Ok(Box::new(move |row| Value::Boolean(l(row) != r(row)))),
+                &Operator::Lt => Ok(Box::new(move |row| Value::Boolean(l(row) < r(row)))),
+                &Operator::LtEq => Ok(Box::new(move |row| Value::Boolean(l(row) <= r(row)))),
+                &Operator::Gt => Ok(Box::new(move |row| Value::Boolean(l(row) > r(row)))),
+                &Operator::GtEq => Ok(Box::new(move |row| Value::Boolean(l(row) >= r(row)))),
+            }
+        }
+        &Expr::Sort { ref expr, .. } => {
+            //NOTE sort order is ignored here and is handled during sort execution
+            compile_expr(ctx, expr)
+        },
+        &Expr::ScalarFunction { ref name, ref args } => {
+
+            // evaluate the arguments to the function
+            let compiled_args : Result<Vec<CompiledExpr>, ExecutionError> = args.iter()
+                .map(|e| compile_expr(ctx,e))
+                .collect();
+
+            let compiled_args_ok = compiled_args?;
+
+            let func = ctx.load_function_impl(name.as_ref())?;
+
+            Ok(Box::new(move |row| {
+
+                let arg_values = compiled_args_ok.iter()
+                    .map(|a| a(row))
+                    .collect();
+
+                match func.execute(arg_values) {
+                    Ok(value) => value,
+                    Err(e) => panic!("Function returned error {:?}", e)
+                }
+
+            }))
+        }
+    }
+}
+
 /// Represents a csv file with a known schema
 #[derive(Debug)]
 pub struct CsvRelation {
@@ -71,19 +125,19 @@ pub struct CsvRelation {
 pub struct FilterRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
-    expr: Expr
+    expr: CompiledExpr
 }
-
 pub struct ProjectRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
-    expr: Vec<Expr>
+    expr: Vec<CompiledExpr>
 }
 
 pub struct SortRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
-    expr: Vec<Expr>,
+    sort_expr: Vec<CompiledExpr>,
+    sort_asc: Vec<bool>
 }
 
 pub struct LimitRelation {
@@ -103,7 +157,7 @@ impl<'a> CsvRelation {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
             //TODO: remove unwrap use here
-            DataType::UnsignedLong => Value::UnsignedLong(s.parse::<u64>().unwrap()),
+            DataType::UnsignedLong => Value::Long(s.parse::<i64>().unwrap()),
             DataType::String => Value::String(s.to_string()),
             DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
             _ => panic!("csv unsupported type")
@@ -148,8 +202,8 @@ impl SimpleRelation for FilterRelation {
     fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).filter(move|t|
             match t {
-                &Ok(ref tuple) => match ctx.evaluate(tuple, &self.schema, &self.expr) {
-                    Ok(Value::Boolean(b)) => b,
+                &Ok(ref row) => match (*self.expr)(row) {
+                    Value::Boolean(b) => b,
                     _ => panic!("Predicate expression evaluated to non-boolean value")
                 },
                 _ => true // let errors through the filter so they can be handled later
@@ -175,20 +229,18 @@ impl SimpleRelation for SortRelation {
         // now sort them
         v.sort_by(|a,b| {
 
-            for e in &self.expr {
+            for i in 0 .. self.sort_expr.len() {
 
-                match e {
-                    &Expr::Sort { ref expr, asc } => {
-                        let a_value = ctx.evaluate(a, &self.schema, expr).unwrap();
-                        let b_value = ctx.evaluate(b, &self.schema, expr).unwrap();
+                let evaluate = &self.sort_expr[i];
+                let asc = self.sort_asc[i];
 
-                        if a_value < b_value {
-                            return if asc { Less } else { Greater };
-                        } else if a_value > b_value {
-                            return if asc { Greater } else { Less };
-                        }
-                    },
-                    _ => panic!("wrong expression type for sort")
+                let a_value = evaluate(a);
+                let b_value = evaluate(b);
+
+                if a_value < b_value {
+                    return if asc { Less } else { Greater };
+                } else if a_value > b_value {
+                    return if asc { Greater } else { Less };
                 }
             }
 
@@ -196,7 +248,6 @@ impl SimpleRelation for SortRelation {
         });
 
         // now return an iterator
-       // let results : Vec<Result<Row,ExecutionError>> = v.iter().map(|r| Ok(r.clone())).collect();
         Box::new(v.into_iter().map(|r|Ok(r)))
     }
 
@@ -209,14 +260,9 @@ impl SimpleRelation for ProjectRelation {
 
     fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
         let foo = self.input.scan(ctx).map(move|r| match r {
-            Ok(tuple) => {
+            Ok(row) => {
                 let values = self.expr.iter()
-                    .map(|e| match e {
-                        &Expr::TupleValue(i) => tuple.values[i].clone(),
-                        //TODO: relation delegating back to execution context seems wrong way around
-                        _ => ctx.evaluate(&tuple,&self.schema, e).unwrap() //TODO: remove unwrap
-                        //unimplemented!("Unsupported expression for projection")
-                    })
+                    .map(|e| (*e)(&row))
                     .collect();
                 Ok(Row::new(values))
             },
@@ -365,9 +411,10 @@ impl ExecutionContext {
 
             LogicalPlan::Selection { ref expr, ref input, ref schema } => {
                 let input_rel = self.create_execution_plan(input)?;
+
                 let rel = FilterRelation {
                     input: input_rel,
-                    expr: expr.clone(),
+                    expr: compile_expr(&self, expr)?,
                     schema: schema.clone()
                 };
                 Ok(Box::new(rel))
@@ -392,9 +439,13 @@ impl ExecutionContext {
 
                 let project_schema = Schema { columns: project_columns };
 
+                let compiled_expr : Result<Vec<CompiledExpr>, ExecutionError> = expr.iter()
+                    .map(|e| compile_expr(&self,e))
+                    .collect();
+
                 let rel = ProjectRelation {
                     input: input_rel,
-                    expr: expr.clone(),
+                    expr: compiled_expr?,
                     schema: project_schema,
 
                 };
@@ -404,9 +455,22 @@ impl ExecutionContext {
 
             LogicalPlan::Sort { ref expr, ref input, ref schema } => {
                 let input_rel = self.create_execution_plan(input)?;
+
+                let compiled_expr : Result<Vec<CompiledExpr>, ExecutionError> = expr.iter()
+                    .map(|e| compile_expr(&self,e))
+                    .collect();
+
+                let sort_asc : Vec<bool> = expr.iter()
+                    .map(|e| match e {
+                        &Expr::Sort { asc, .. } => asc,
+                        _ => panic!()
+                    })
+                    .collect();
+
                 let rel = SortRelation {
                     input: input_rel,
-                    expr: expr.clone(),
+                    sort_expr: compiled_expr?,
+                    sort_asc: sort_asc,
                     schema: schema.clone()
                 };
                 Ok(Box::new(rel))
@@ -424,45 +488,8 @@ impl ExecutionContext {
         }
     }
 
-    /// Evaluate a relational expression against a tuple
-    pub fn evaluate(&self, row: &Row, schema: &Schema, expr: &Expr) -> Result<Value, Box<ExecutionError>> {
-        match expr {
-            &Expr::BinaryExpr { ref left, ref op, ref right } => {
-                let left_value = self.evaluate(row, schema, left)?;
-                let right_value = self.evaluate(row, schema, right)?;
-                match op {
-                    &Operator::Eq => Ok(Value::Boolean(left_value == right_value)),
-                    &Operator::NotEq => Ok(Value::Boolean(left_value != right_value)),
-                    &Operator::Lt => Ok(Value::Boolean(left_value < right_value)),
-                    &Operator::LtEq => Ok(Value::Boolean(left_value <= right_value)),
-                    &Operator::Gt => Ok(Value::Boolean(left_value > right_value)),
-                    &Operator::GtEq => Ok(Value::Boolean(left_value >= right_value)),
-                }
-            },
-            &Expr::TupleValue(index) => Ok(row.values[index].clone()),
-            &Expr::Literal(ref value) => Ok(value.clone()),
-            &Expr::Sort { ref expr, .. } => self.evaluate(row, schema, expr),
-            &Expr::ScalarFunction { ref name, ref args } => {
-
-                // evaluate the arguments to the function
-                let arg_values : Vec<Value> = args.iter()
-                    .map(|a| self.evaluate(row, schema, &a))
-                    .collect::<Result<Vec<Value>, Box<ExecutionError>>>()?;
-
-                let func = self.load_function_impl(name.as_ref())?;
-
-                match func.execute(arg_values) {
-                    Ok(value) => Ok(value),
-                    Err(e) => Err(Box::new(ExecutionError::Custom(
-                        format!("Function returned error {:?}", e))))
-                }
-            }
-        }
-
-    }
-
     /// load a function implementation
-    fn load_function_impl(&self, function_name: &str) -> Result<Box<ScalarFunction>,Box<ExecutionError>> {
+    fn load_function_impl(&self, function_name: &str) -> Result<Box<ScalarFunction>,ExecutionError> {
 
         //TODO: this is a huge hack since the functions have already been registered with the
         // execution context ... I need to implement this so it dynamically loads the functions
@@ -471,7 +498,7 @@ impl ExecutionContext {
             "sqrt" => Ok(Box::new(SqrtFunction {})),
             "st_point" => Ok(Box::new(STPointFunc {})),
             "st_astext" => Ok(Box::new(STAsText {})),
-            _ => Err(Box::new(ExecutionError::Custom(format!("Unknown function {}", function_name))))
+            _ => Err(ExecutionError::Custom(format!("Unknown function {}", function_name)))
         }
     }
 

@@ -13,13 +13,13 @@
 // limitations under the License.
 
 pub mod api;
-pub mod sql;
-pub mod parser;
-pub mod rel;
 pub mod dataframe;
-pub mod sqltorel;
-pub mod functions;
 pub mod exec;
+pub mod functions;
+pub mod rel;
+pub mod sql;
+pub mod sqltorel;
+pub mod parser;
 
 extern crate serde;
 extern crate serde_json;

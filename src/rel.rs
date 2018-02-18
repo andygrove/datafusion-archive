@@ -115,15 +115,19 @@ impl Row {
     }
 }
 
-
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub enum Value {
-    UnsignedLong(u64),
-    String(String),
     Boolean(bool),
     Double(f64),
-    ComplexValue(Vec<Value>)
+    Long(i64),
+    UnsignedLong(u64),
+    String(String),
+    /// Complex value which is a list of values (which in turn can be complex
+    /// values to support nested types)
+    ComplexValue(Vec<Value>),
+    /// values for user-defined types are stored as binary
+    UserDefined(Vec<u8>)
 }
 
 impl PartialOrd for Value {
@@ -134,12 +138,12 @@ impl PartialOrd for Value {
         match self {
             &Value::Double(l) => match other {
                 &Value::Double(r) => l.partial_cmp(&r),
-                &Value::UnsignedLong(r) => l.partial_cmp(&(r as f64)),
+                &Value::Long(r) => l.partial_cmp(&(r as f64)),
                 _ => unimplemented!("type coercion rules missing")
             },
-            &Value::UnsignedLong(l) => match other {
+            &Value::Long(l) => match other {
                 &Value::Double(r) => (l as f64).partial_cmp(&r),
-                &Value::UnsignedLong(r) => l.partial_cmp(&r),
+                &Value::Long(r) => l.partial_cmp(&r),
                 _ => unimplemented!("type coercion rules missing")
             },
             &Value::String(ref l) => match other {
@@ -159,6 +163,7 @@ impl Value {
 
     fn to_string(&self) -> String {
         match self {
+            &Value::Long(l) => l.to_string(),
             &Value::UnsignedLong(l) => l.to_string(),
             &Value::Double(d) => d.to_string(),
             &Value::Boolean(b) => b.to_string(),
@@ -168,7 +173,8 @@ impl Value {
                     .map(|v| v.to_string())
                     .collect();
                 s.join(",")
-            }
+            },
+            _ => unimplemented!()
         }
     }
 
@@ -278,7 +284,7 @@ mod tests {
         let filter_expr = BinaryExpr {
             left: Box::new(TupleValue(0)),
             op: Operator::Eq,
-            right: Box::new(Literal(UnsignedLong(2)))
+            right: Box::new(Literal(Long(2)))
         };
 
         let plan = Selection {

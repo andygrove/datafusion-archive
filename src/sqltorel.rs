@@ -149,7 +149,7 @@ impl SqlToRel {
         match sql {
 
             &ASTNode::SQLLiteralInt(n) =>
-                Ok(Expr::Literal(Value::UnsignedLong(n as u64))), //TODO
+                Ok(Expr::Literal(Value::Long(n as i64))),
 
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.columns.iter().position(|c| c.name.eq(id) ) {
