@@ -85,14 +85,8 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             }
         }
         &Expr::Sort { ref expr, .. } => {
-
-            // compile the sort expressions
-//            let compiled_args : Result<Vec<CompiledExpr>, ExecutionError> = expr.iter()
-//                .map(|e| compile_expr(ctx,e))
-//                .collect();
-
-            //self.evaluate(row, schema, expr)
-            unimplemented!()
+            //NOTE sort order is ignored here and is handled during sort execution
+            compile_expr(ctx, expr)
         },
         &Expr::ScalarFunction { ref name, ref args } => {
 
@@ -118,8 +112,6 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             }))
         }
-        _ => Err(ExecutionError::Custom(format!("{:?}", expr)))
-
     }
 }
 
@@ -144,7 +136,8 @@ pub struct ProjectRelation {
 pub struct SortRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
-    expr: Vec<CompiledExpr>,
+    sort_expr: Vec<CompiledExpr>,
+    sort_asc: Vec<bool>
 }
 
 pub struct LimitRelation {
@@ -234,33 +227,28 @@ impl SimpleRelation for SortRelation {
         it.for_each(|item| v.push(item.unwrap()));
 
         // now sort them
-//        v.sort_by(|a,b| {
-//
-//            for e in &self.expr {
-//
-//                match e {
-//                    &Expr::Sort { ref expr, asc } => {
-//                        let a_value = ctx.evaluate(a, &self.schema, expr).unwrap();
-//                        let b_value = ctx.evaluate(b, &self.schema, expr).unwrap();
-//
-//                        if a_value < b_value {
-//                            return if asc { Less } else { Greater };
-//                        } else if a_value > b_value {
-//                            return if asc { Greater } else { Less };
-//                        }
-//                    },
-//                    _ => panic!("wrong expression type for sort")
-//                }
-//            }
-//
-//            Equal
-//        });
+        v.sort_by(|a,b| {
 
-        unimplemented!()
+            for i in 0 .. self.sort_expr.len() {
+
+                let evaluate = &self.sort_expr[i];
+                let asc = self.sort_asc[i];
+
+                let a_value = evaluate(a);
+                let b_value = evaluate(b);
+
+                if a_value < b_value {
+                    return if asc { Less } else { Greater };
+                } else if a_value > b_value {
+                    return if asc { Greater } else { Less };
+                }
+            }
+
+            Equal
+        });
 
         // now return an iterator
-       // let results : Vec<Result<Row,ExecutionError>> = v.iter().map(|r| Ok(r.clone())).collect();
-        //Box::new(v.into_iter().map(|r|Ok(r)))
+        Box::new(v.into_iter().map(|r|Ok(r)))
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -472,9 +460,17 @@ impl ExecutionContext {
                     .map(|e| compile_expr(&self,e))
                     .collect();
 
+                let sort_asc : Vec<bool> = expr.iter()
+                    .map(|e| match e {
+                        &Expr::Sort { asc, .. } => asc,
+                        _ => panic!()
+                    })
+                    .collect();
+
                 let rel = SortRelation {
                     input: input_rel,
-                    expr: compiled_expr?,
+                    sort_expr: compiled_expr?,
+                    sort_asc: sort_asc,
                     schema: schema.clone()
                 };
                 Ok(Box::new(rel))
