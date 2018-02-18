@@ -91,7 +91,7 @@ workflows:
             - build_stable
           filters:
             branches:
-              only: circleci
+              only: master
   nightly:
     jobs:
       - refresh_cache
