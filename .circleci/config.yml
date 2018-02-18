@@ -79,7 +79,7 @@ jobs:
             mv /tmp/docker/* /usr/bin
       - run:
           name: Deploy Docker Container
-          command: DOCKER_PUSH="true" sh scripts/docker/build.sh
+          command: sh scripts/docker/build.sh
 workflows:
   version: 2
   stable:
@@ -89,6 +89,10 @@ workflows:
       - do_deploy:
           requires:
             - build_stable
+          filters:
+            branches:
+              - master
+              - circleci
   nightly:
     jobs:
       - refresh_cache

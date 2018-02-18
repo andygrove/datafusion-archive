@@ -23,9 +23,7 @@ if [ -f "target/release/console" ]; then
   echo "Building docker: ${DOCKER_TAG}"
   echo
 
-  if [ ${DOCKER_PUSH} == true ]; then
-    docker push "${DOCKER_TAG}"
-  fi
+  docker push "${DOCKER_TAG}"
 else
   echo "Skipping Docker release."
 fi
