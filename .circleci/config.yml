@@ -1,0 +1,98 @@
+version: 2
+jobs:
+  refresh_cache:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ checksum "Cargo.toml" }}
+      - run: cargo update
+      - run: cargo fetch
+      - save_cache:
+          key: cargo-v1-{{ checksum "Cargo.toml" }}
+          paths:
+            - /usr/local/cargo/registry
+            - /usr/local/cargo/git
+  build_stable:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ checksum "Cargo.toml" }}
+      - run:
+          name: Building Main Code
+          command: sh scripts/circle/build.sh
+      - run:
+          name: Building Examples
+          command: sh scripts/circle/build-examples.sh
+      - run:
+          name: Building Release
+          command: sh scripts/circle/build-release.sh
+      - save_cache:
+          key: v1-release
+          paths:
+            - ~/project/target/release
+      - run:
+          name: Test Code
+          command: sh scripts/circle/test.sh
+  build_nightly:
+    docker:
+      - image: rustlang/rust:nightly
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ checksum "Cargo.toml" }}
+      - run:
+          name: Nightly Version Info
+          command: rustc --version; cargo --version
+      - run:
+          name: Building Main Code
+          command: sh scripts/circle/build.sh
+      - run:
+          name: Building Examples
+          command: sh scripts/circle/build-examples.sh
+      - run:
+          name: Test Code
+          command: sh scripts/circle/test.sh
+  do_deploy:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-release
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Install Docker client
+          command: |
+            set -x
+            VER="17.03.0-ce"
+            curl -L -o /tmp/docker-$VER.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$VER.tgz
+            tar -xz -C /tmp -f /tmp/docker-$VER.tgz
+            mv /tmp/docker/* /usr/bin
+      - run:
+          name: Deploy Docker Container
+          command: sh scripts/docker/build.sh
+workflows:
+  version: 2
+  stable:
+    jobs:
+      - refresh_cache
+      - build_stable
+      - do_deploy:
+          requires:
+            - build_stable
+          filters:
+            branches:
+              only: master
+  nightly:
+    jobs:
+      - refresh_cache
+      - build_nightly
