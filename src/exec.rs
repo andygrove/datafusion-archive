@@ -103,7 +103,7 @@ impl<'a> CsvRelation {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
             //TODO: remove unwrap use here
-            DataType::UnsignedLong => Value::UnsignedLong(s.parse::<u64>().unwrap()),
+            DataType::UnsignedLong => Value::Long(s.parse::<i64>().unwrap()),
             DataType::String => Value::String(s.to_string()),
             DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
             _ => panic!("csv unsupported type")
