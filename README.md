@@ -17,9 +17,9 @@ The project home page is now at [https://datafusion.rs](https://datafusion.rs) a
 
 There is a [Gitter channel](https://gitter.im/datafusion-rs/Lobby) where you can ask questions about the project or make feature suggestions too.
 
-# Supported Rust versions
+# Building DataFusion
 
-DataFusion uses travis CI to build against Rust stable and nightly and the goal is to keep it compatible with both.
+See [BUILDING.md](/BUILDING.md).
 
 # Contributing
 

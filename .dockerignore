@@ -1,0 +1,5 @@
+.circleci
+.idea
+bin
+target
+test
