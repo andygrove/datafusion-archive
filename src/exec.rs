@@ -67,10 +67,10 @@ pub type CompiledExpr = Box<Fn(&Row)-> Value>;
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
     match expr {
         &Expr::Literal(ref lit) => {
-            let foo = lit.clone();
-            Ok(Box::new(move |_| foo.clone()))
+            let literal_value = lit.clone();
+            Ok(Box::new(move |_| literal_value.clone()))
         }
-        &Expr::TupleValue(index) => Ok(Box::new(move |row| row.values[index].clone())),
+        &Expr::Column(index) => Ok(Box::new(move |row| row.values[index].clone())),
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
             let l = compile_expr(ctx,left)?;
             let r = compile_expr(ctx,right)?;
@@ -151,8 +151,8 @@ impl<'a> CsvRelation {
         Ok(CsvRelation { file, schema })
     }
 
-    /// Convert StringRecord into our internal tuple type based on the known schema
-    fn create_tuple(&self, r: &StringRecord) -> Result<Row,ExecutionError> {
+    /// Convert StringRecord into our internal row type based on the known schema
+    fn create_row(&self, r: &StringRecord) -> Result<Row,ExecutionError> {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
             //TODO: remove unwrap use here
@@ -165,7 +165,7 @@ impl<'a> CsvRelation {
     }
 }
 
-/// trait for all relations (a relation is essentially just an iterator over tuples with
+/// trait for all relations (a relation is essentially just an iterator over rows with
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
@@ -182,12 +182,12 @@ impl SimpleRelation for CsvRelation {
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
 
-        let tuple_iter = record_iter.map(move|r| match r {
-            Ok(record) => self.create_tuple(&record),
+        let row_iter = record_iter.map(move|r| match r {
+            Ok(record) => self.create_row(&record),
             Err(e) => Err(ExecutionError::CsvError(e))
         });
 
-        Box::new(tuple_iter)
+        Box::new(row_iter)
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -426,7 +426,7 @@ impl ExecutionContext {
                 //TODO: seems to be duplicate of sql_to_rel code
                 let project_columns: Vec<Field> = expr.iter().map(|e| {
                     match e {
-                        &Expr::TupleValue(i) => input_schema.columns[i].clone(),
+                        &Expr::Column(i) => input_schema.columns[i].clone(),
                         &Expr::ScalarFunction {ref name, .. } => Field {
                             name: name.clone(),
                             data_type: DataType::Double, //TODO: hard-coded .. no function metadata yet
@@ -567,11 +567,11 @@ impl DataFrame for DF {
         let it = execution_plan.scan(&self.ctx);
         it.for_each(|t| {
             match t {
-                Ok(tuple) => {
-                    let csv = format!("{}\n", tuple.to_string());
+                Ok(row) => {
+                    let csv = format!("{}\n", row.to_string());
                     writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
                 },
-                Err(e) => panic!(format!("Error processing tuple: {:?}", e)) //TODO: error handling
+                Err(e) => panic!(format!("Error processing row: {:?}", e)) //TODO: error handling
             }
         });
 
@@ -580,7 +580,7 @@ impl DataFrame for DF {
 
     fn col(&self, column_name: &str) -> Result<Expr, DataFrameError> {
         match self.plan.schema().column(column_name) {
-            Some((i,_)) => Ok(Expr::TupleValue(i)),
+            Some((i,_)) => Ok(Expr::Column(i)),
             _ => Err(DataFrameError::InvalidColumn(column_name.to_string()))
         }
     }
@@ -676,8 +676,8 @@ mod tests {
 
         // sort by lat, lng ascending
         let df2 = df.sort(vec![
-            Expr::Sort { expr: Box::new(Expr::TupleValue(1)), asc: true },
-            Expr::Sort { expr: Box::new(Expr::TupleValue(2)), asc: true }
+            Expr::Sort { expr: Box::new(Expr::Column(1)), asc: true },
+            Expr::Sort { expr: Box::new(Expr::Column(2)), asc: true }
         ]).unwrap();
 
         df2.write("_uk_cities_sorted_by_lat_lng.csv").unwrap();

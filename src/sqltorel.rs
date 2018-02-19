@@ -41,7 +41,7 @@ impl SqlToRel {
                 ref having,
                 ..
             } => {
-                // parse the input relation so we have access to the tuple type
+                // parse the input relation so we have access to the row type
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
                     &None => Box::new(LogicalPlan::EmptyRelation)
@@ -56,7 +56,7 @@ impl SqlToRel {
 
                 let projection_schema = Schema {
                     columns: expr.iter().map( |e| match e {
-                        &Expr::TupleValue(i) => input_schema.columns[i].clone(),
+                        &Expr::Column(i) => input_schema.columns[i].clone(),
                         &Expr::ScalarFunction { ref name, .. } => Field {
                             name: name.clone(),
                             data_type: DataType::Double, //TODO: hard-coded until I have function metadata in place
@@ -153,7 +153,7 @@ impl SqlToRel {
 
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.columns.iter().position(|c| c.name.eq(id) ) {
-                    Some(index) => Ok(Expr::TupleValue(index)),
+                    Some(index) => Ok(Expr::Column(index)),
                     None => Err(format!("Invalid identifier {}", id))
                 }
             },

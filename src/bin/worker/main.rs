@@ -231,8 +231,8 @@ impl Service for Worker {
 
                                                 it.for_each(|t| {
                                                     match t {
-                                                        Ok(tuple) => {
-                                                            result_set += &tuple.to_string()
+                                                        Ok(row) => {
+                                                            result_set += &row.to_string()
                                                         },
                                                         Err(e) => {
                                                             result_set += &format!("ERROR: {:?}", e)

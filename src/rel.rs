@@ -60,7 +60,7 @@ pub struct Schema {
 
 impl Schema {
 
-    /// create an empty tuple
+    /// create an empty schema
     pub fn empty() -> Self { Schema { columns: vec![] } }
 
     pub fn new(columns: Vec<Field>) -> Self { Schema { columns: columns } }
@@ -87,12 +87,6 @@ pub struct FunctionMeta {
     pub args: Vec<Field>,
     pub return_type: DataType
 }
-
-/// A tuple represents one row within a relation and is implemented as a trait to allow for
-/// specific implementations for different data sources
-//pub trait Tuple {
-//    fn get_value(&self, index: usize) -> Result<Value, Box<Error>>;
-//}
 
 #[derive(Debug,Clone,PartialEq)]
 pub struct Row {
@@ -193,8 +187,8 @@ pub enum Operator {
 /// Relation Expression
 #[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Expr {
-    /// index into a value within the tuple
-    TupleValue(usize),
+    /// index into a value within the row
+    Column(usize),
     /// literal value
     Literal(Value),
     /// binary expression e.g. "age > 21"
@@ -272,17 +266,17 @@ mod tests {
     #[test]
     fn serde() {
 
-        let tt = Schema {
+        let schema = Schema {
             columns: vec![
                 Field { name: "id".to_string(), data_type: DataType::UnsignedLong, nullable: false },
                 Field { name: "name".to_string(), data_type: DataType::String, nullable: false }
             ]
         };
 
-        let csv = CsvFile { filename: "test/data/people.csv".to_string(), schema: tt.clone() };
+        let csv = CsvFile { filename: "test/data/people.csv".to_string(), schema: schema.clone() };
 
         let filter_expr = BinaryExpr {
-            left: Box::new(TupleValue(0)),
+            left: Box::new(Column(0)),
             op: Operator::Eq,
             right: Box::new(Literal(Long(2)))
         };
@@ -290,7 +284,7 @@ mod tests {
         let plan = Selection {
             expr: filter_expr,
             input: Box::new(csv),
-            schema: tt.clone()
+            schema: schema.clone()
 
         };
 
