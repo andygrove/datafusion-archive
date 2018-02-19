@@ -39,8 +39,8 @@ EXPOSE 8080
 # Export /opt/datafusion for any logs
 VOLUME ["/opt/datafusion", "/var/log/datafusion"]
 
-ADD scripts/docker/entrypoint.sh /opt/datafusion/run_worker.sh
+ADD scripts/docker/entrypoint.sh /root
 
-#ENTRYPOINT [ "/opt/datafusion/run_worker.sh" ]
+ENTRYPOINT [ "/root/entrypoint.sh" ]
 
 
