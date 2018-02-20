@@ -51,31 +51,21 @@ fn main() {
         .version(VERSION)
         .arg(Arg::with_name("ETCD")
             .help("etcd endpoints")
-            .short("e")
             .long("etcd")
             .value_name("URL")
             .required(true)
             .takes_value(true))
         .arg(Arg::with_name("BIND")
-            .short("b")
             .long("bind")
             .help("IP address and port to bind to")
             .default_value("0.0.0.0:8080")
             .takes_value(true))
-        .arg(Arg::with_name("REGISTER")
-            .short("r")
-            .long("register")
-            .help("IP address and port to register in etcd")
-            .default_value("127.0.0.1:8080")
-            .takes_value(true))
         .arg(Arg::with_name("DATADIR")
-            .short("d")
             .long("data_dir")
             .help("Location of data files")
             .required(true)
             .takes_value(true))
         .arg(Arg::with_name("WEBROOT")
-            .short("w")
             .long("webroot")
             .help("Location of HTML files")
             .default_value("./src/bin/worker/")
@@ -86,9 +76,6 @@ fn main() {
 
     let bind_addr_str = matches.value_of("BIND").unwrap().to_string();
     let bind_addr = bind_addr_str.parse().unwrap();
-
-    let register_addr_str = matches.value_of("REGISTER").unwrap().to_string();
-    let register_addr = register_addr_str.parse().unwrap();
 
     let www_root = matches.value_of("WEBROOT").unwrap().to_string();
     let data_dir = matches.value_of("DATADIR").unwrap().to_string();
@@ -113,7 +100,7 @@ fn main() {
     // start a loop to register with etcd every 5 seconds with a ttl of 10 seconds
     match Client::new(&handle, &[etcd_endpoints], None) {
         Ok(etcd) => {
-            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, register_addr), |client| {
+            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
                 client.register()
                     .and_then(|(client, done)| {
                         if done {

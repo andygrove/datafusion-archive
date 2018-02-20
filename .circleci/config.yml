@@ -79,7 +79,10 @@ jobs:
             mv /tmp/docker/* /usr/bin
 #      - run:
 #          name: Deploy Docker Container
-#          command: sh scripts/docker/build.sh
+#          command: |
+#            sh scripts/docker/base/build.sh
+#            sh scripts/docker/worker/build.sh
+#            sh scripts/docker/console/build.sh
 workflows:
   version: 2
   stable:

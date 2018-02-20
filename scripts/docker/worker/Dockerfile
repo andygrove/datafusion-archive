@@ -1,10 +1,4 @@
-FROM ubuntu:16.04
-
-RUN apt-get update
-RUN apt-get install -y curl vim
-RUN apt-get install -y pkg-config libssl-dev
-
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+FROM datafusionrs/base:latest
 
 # Copy the source files into the image
 RUN mkdir -p /tmp/datafusion_source
@@ -26,7 +20,6 @@ RUN mkdir -p /opt/datafusion/bin && \
     mkdir -p /opt/datafusion/www/css && \
     mkdir -p /var/log/datafusion
 
-RUN cp /tmp/datafusion_source/target/release/console /opt/datafusion/bin/
 RUN cp /tmp/datafusion_source/target/release/worker /opt/datafusion/bin/
 RUN cp /tmp/datafusion_source/src/bin/worker/*.html /opt/datafusion/www/
 RUN cp /tmp/datafusion_source/src/bin/worker/css/* /opt/datafusion/www/css/
@@ -36,11 +29,11 @@ RUN rm -rf /tmp/datafusion_source
 # Expose port 8080 for the worker, if the worker is run
 EXPOSE 8080
 
-# Export /opt/datafusion for any logs
-VOLUME ["/opt/datafusion", "/var/log/datafusion"]
+# Export /var/datafusion for data and logs
+VOLUME [ "/var/datafusion/data", "/var/datafusion/logs" ]
 
-ADD scripts/docker/entrypoint.sh /root
+ENTRYPOINT [ "/opt/datafusion/bin/worker" ]
 
-ENTRYPOINT [ "/root/entrypoint.sh" ]
+CMD [ "--help" ]
 
 
