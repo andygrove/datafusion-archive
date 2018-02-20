@@ -197,7 +197,10 @@ impl SqlToRel {
 pub fn convert_data_type(sql: &SQLType) -> DataType {
     match sql {
         &SQLType::Varchar(_) => DataType::String,
-        &SQLType::Double => DataType::Double
+        &SQLType::Int => DataType::UnsignedLong,
+        &SQLType::Long => DataType::UnsignedLong,
+        &SQLType::Float => DataType::Double,
+        &SQLType::Double => DataType::Double,
     }
 }
 

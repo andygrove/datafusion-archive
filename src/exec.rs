@@ -288,9 +288,11 @@ impl SimpleRelation for LimitRelation {
 
 /// Execution plans are sent to worker nodes for execution
 #[derive(Debug,Clone,Serialize,Deserialize)]
-pub enum ExecutionPlan {
+pub enum PhysicalPlan {
     /// Run a query and return the results to the client
     Interactive { plan: Box<LogicalPlan> },
+    /// Execute a logical plan and write the output to a file
+    Write { plan: Box<LogicalPlan>, filename: String },
     /// Partition the relation
     Partition { plan: Box<LogicalPlan>, partition_count: usize, partition_expr: Expr }
 
@@ -511,8 +513,8 @@ impl ExecutionContext {
 
 
 pub struct DF {
-    ctx: Box<ExecutionContext>,
-    plan: Box<LogicalPlan>
+    pub ctx: Box<ExecutionContext>,
+    pub plan: Box<LogicalPlan>
 }
 
 impl DataFrame for DF {

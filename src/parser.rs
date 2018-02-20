@@ -463,6 +463,9 @@ impl Parser {
     fn parse_data_type(&mut self) -> Result<SQLType, ParserError> {
         match self.next_token() {
             Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
+                "INT" | "INTEGER" => Ok(SQLType::Int),
+                "LONG" => Ok(SQLType::Long),
+                "FLOAT" => Ok(SQLType::Float),
                 "DOUBLE" => Ok(SQLType::Double),
                 "VARCHAR" => {
                     self.consume_token(&Token::LParen)?;

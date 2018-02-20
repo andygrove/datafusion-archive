@@ -33,6 +33,7 @@ extern crate uuid;
 use clap::{Arg, App};
 use etcd::Client;
 use etcd::kv;
+use datafusion::dataframe::DataFrame;
 use datafusion::exec::*;
 use futures::future::{ok, loop_fn, Future, Loop};
 use futures::Stream;
@@ -210,7 +211,7 @@ impl Service for Worker {
                                 let mut ctx = ExecutionContext::new(data_dir);
 
                                 match plan {
-                                    ExecutionPlan::Interactive { plan } => {
+                                    PhysicalPlan::Interactive { plan } => {
                                         match ctx.create_execution_plan(&plan) {
                                             Ok(exec) => {
                                                 let it = exec.scan(&ctx);
@@ -243,6 +244,23 @@ impl Service for Worker {
                                         }
 
                                     },
+                                    PhysicalPlan::Write { plan, filename } => {
+                                        let df = DF { plan: plan, ctx: Box::new(ctx.clone()) };
+                                        match df.write(&filename) {
+                                            Ok(_) => {
+                                                Response::new()
+                                                    .with_status(StatusCode::Ok)
+                                            }
+                                            Err(e) => {
+                                                let msg = format!("Failed to create execution plan: {:?}", e);
+                                                Response::new()
+                                                    .with_status(StatusCode::BadRequest)
+                                                    .with_header(ContentLength(msg.len() as u64))
+                                                    .with_body(msg)
+
+                                            }
+                                        }
+                                    }
                                     _ => {
                                         let msg = format!("Unsupported execution plan");
                                         Response::new()
