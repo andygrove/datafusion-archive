@@ -1,10 +1,10 @@
 [package]
 name = "datafusion"
-description = "DataFusion is a datasource-agnostic distributed query processing framework for Rust inspired by Apache Spark"
-version = "0.1.7"
+description = "DataFusion is a SQL query parser, planner, and distributed query processing framework for Rust inspired by Apache Calcite and Apache Spark"
+version = "0.1.8"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://datafusion.rs"
-keywords = [ "distributed", "query", "data", "processing", "spark" ]
+keywords = [ "distributed", "query", "data", "processing", "sql" ]
 repository = "https://github.com/andygrove/datafusion-rs"
 license = "Apache-2.0"
 

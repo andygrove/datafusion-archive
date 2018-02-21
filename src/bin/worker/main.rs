@@ -188,7 +188,7 @@ impl Service for Worker {
                 let data_dir = self.data_dir.clone();
 
                 Box::new(req.body().concat2()
-                    .and_then(|body| {
+                    .and_then(move |body| {
                         let json = str::from_utf8(&body).unwrap();
                         println!("{}", json);
 
@@ -207,11 +207,11 @@ impl Service for Worker {
                                 //println!("Plan: {:?}", plan);
 
                                 // create execution context
-                                let mut ctx = ExecutionContext::new(data_dir);
+                                let mut ctx = ExecutionContext::local(data_dir.clone());
 
                                 match plan {
                                     PhysicalPlan::Interactive { plan } => {
-                                        match ctx.create_execution_plan(&plan) {
+                                        match ctx.create_execution_plan(data_dir.clone(), &plan) {
                                             Ok(exec) => {
                                                 let it = exec.scan(&ctx);
                                                 let mut result_set = "".to_string();
@@ -238,13 +238,17 @@ impl Service for Worker {
 
                                     },
                                     PhysicalPlan::Write { plan, filename } => {
+                                        println!("Writing dataframe to {}", filename);
                                         let df = DF { plan: plan };
                                         match ctx.write(Box::new(df), &filename) {
-                                            Ok(_) => Response::new().with_status(StatusCode::Ok),
+                                            Ok(count) => {
+                                                println!("Wrote {} rows to {}", count, filename);
+                                                Response::new().with_status(StatusCode::Ok)
+                                            },
                                             Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
                                         }
                                     }
-                                    _ => error_response(format!("Unsupported execution plan"))
+                                    //_ => error_response(format!("Unsupported execution plan"))
                                 }
 
                             },

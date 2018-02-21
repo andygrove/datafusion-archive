@@ -1,19 +1,13 @@
 #!/usr/bin/env bash
-#
-# Build file for the Dockerfile
-
 set -e
 
 # get the product version from Cargo.toml
 DATAFUSION_VERSION=`grep version Cargo.toml | head -1 | awk -F' ' '{ print $3 }' | sed 's/\"//g'`
 
-# Note: Setting DOCKER_PUSH to "true" outside of this script will cause the docker container to push to a repository.
-DOCKER_PUSH="${DOCKER_PUSH:-false}"
+# build the image
+echo "Building docker image for DataFusion Worker ${DATAFUSION_VERSION} ..."
+sleep 0.2
+docker build -f scripts/docker/worker/Dockerfile -t "datafusionrs/worker:${DATAFUSION_VERSION}" .
 
-# DOCKER_TAG is the combined tag from the docker repository and version.  Defaults to (repository)/datafusion:(version)
-DOCKER_TAG="${DOCKER_TAG:-datafusionrs/worker:${DATAFUSION_VERSION}}"
-
-echo "Building docker: ${DOCKER_TAG}"
-docker build -f scripts/docker/worker/Dockerfile -t "${DOCKER_TAG}" .
-
-#docker push "${DOCKER_TAG}"
+# tag as latest
+docker tag "datafusionrs/worker:${DATAFUSION_VERSION}" "datafusionrs/worker:latest"

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod api;
+pub mod cluster;
 pub mod dataframe;
 pub mod exec;
 pub mod functions;
