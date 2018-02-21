@@ -12,7 +12,7 @@ extern crate serde_json;
 fn sql() {
 
     // create execution context
-    let mut ctx = ExecutionContext::new();
+    let mut ctx = ExecutionContext::local();
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![

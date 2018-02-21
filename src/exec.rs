@@ -47,6 +47,11 @@ use super::dataframe::*;
 use super::functions::math::*;
 use super::functions::geospatial::*;
 
+#[derive(Debug,Clone)]
+pub enum DFConfig {
+    Local { data_dir: String },
+    Remote { worker_uri: Uri },
+}
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -307,9 +312,11 @@ pub enum PhysicalPlan {
     Interactive { plan: Box<LogicalPlan> },
     /// Execute a logical plan and write the output to a file
     Write { plan: Box<LogicalPlan>, filename: String },
-    /// Partition the relation
-    Partition { plan: Box<LogicalPlan>, partition_count: usize, partition_expr: Expr }
+}
 
+enum ExecutionResult {
+    Unit,
+    Count(usize),
 }
 
 
@@ -317,17 +324,26 @@ pub enum PhysicalPlan {
 pub struct ExecutionContext {
     schemas: HashMap<String, Schema>,
     functions: HashMap<String, FunctionMeta>,
-    data_dir: String
+    config: DFConfig
 
 }
 
 impl ExecutionContext {
 
-    pub fn new(data_dir: String) -> Self {
+    pub fn local(data_dir: String) -> Self {
         ExecutionContext {
             schemas: HashMap::new(),
             functions: HashMap::new(),
-            data_dir
+            config: DFConfig::Local { data_dir }
+        }
+    }
+
+    pub fn remote(worker_uri: String) -> Self {
+
+        ExecutionContext {
+            schemas: HashMap::new(),
+            functions: HashMap::new(),
+            config: DFConfig::Remote { worker_uri: worker_uri.parse().unwrap() }
         }
     }
 
@@ -402,7 +418,7 @@ impl ExecutionContext {
         self.schemas.insert(name, schema);
     }
 
-    pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>,ExecutionError> {
+    pub fn create_execution_plan(&self, data_dir: String, plan: &LogicalPlan) -> Result<Box<SimpleRelation>,ExecutionError> {
         match *plan {
 
             LogicalPlan::EmptyRelation => {
@@ -411,7 +427,7 @@ impl ExecutionContext {
 
             LogicalPlan::TableScan { ref table_name, ref schema, .. } => {
                 // for now, tables are csv files
-                let filename = format!("{}/{}.csv", self.data_dir, table_name);
+                let filename = format!("{}/{}.csv", data_dir, table_name);
                 println!("Reading {}", filename);
                 let file = File::open(filename)?;
                 let rel = CsvRelation::open(file, schema.clone())?;
@@ -425,7 +441,7 @@ impl ExecutionContext {
             },
 
             LogicalPlan::Selection { ref expr, ref input, ref schema } => {
-                let input_rel = self.create_execution_plan(input)?;
+                let input_rel = self.create_execution_plan(data_dir,input)?;
 
                 let rel = FilterRelation {
                     input: input_rel,
@@ -436,7 +452,7 @@ impl ExecutionContext {
             },
 
             LogicalPlan::Projection { ref expr, ref input, .. } => {
-                let input_rel = self.create_execution_plan(&input)?;
+                let input_rel = self.create_execution_plan(data_dir,&input)?;
                 let input_schema = input_rel.schema().clone();
 
                 //TODO: seems to be duplicate of sql_to_rel code
@@ -469,7 +485,7 @@ impl ExecutionContext {
             }
 
             LogicalPlan::Sort { ref expr, ref input, ref schema } => {
-                let input_rel = self.create_execution_plan(input)?;
+                let input_rel = self.create_execution_plan(data_dir, input)?;
 
                 let compiled_expr : Result<Vec<CompiledExpr>, ExecutionError> = expr.iter()
                     .map(|e| compile_expr(&self,e))
@@ -492,7 +508,7 @@ impl ExecutionContext {
             },
 
             LogicalPlan::Limit { limit, ref input, ref schema, .. } => {
-                let input_rel = self.create_execution_plan(input)?;
+                let input_rel = self.create_execution_plan(data_dir,input)?;
                 let rel = LimitRelation {
                     input: input_rel,
                     limit: limit,
@@ -522,44 +538,67 @@ impl ExecutionContext {
     }
 
     pub fn write(&self, df: Box<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
-        let execution_plan = self.create_execution_plan(&df.plan())?;
 
-        // create output file
-        // println!("Writing csv to {}", filename);
-        let file = File::create(filename)?;
-
-        let mut writer = BufWriter::with_capacity(8*1024*1024,file);
-
-        // implement execution here for now but should be a common method for processing a plan
-        let it = execution_plan.scan(self);
-        let mut count : usize = 0;
-        it.for_each(|t| {
-            match t {
-                Ok(row) => {
-                    let csv = format!("{}\n", row.to_string());
-                    writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
-                    count += 1;
-                },
-                Err(e) => panic!(format!("Error processing row: {:?}", e)) //TODO: error handling
-            }
-        });
-
-        Ok(count)
-    }
-
-
-    /// hacky way to send plan to worker for now
-    pub fn write_in_worker(&self, df: Box<DataFrame>, filename: &str, worker_uri: Uri) {
-
-        let mut core = Core::new().unwrap();
-        let client = Client::new(&core.handle());
-        let execution_plan = PhysicalPlan::Write {
+        let physical_plan = PhysicalPlan::Write {
             plan: df.plan().clone(),
             filename: filename.to_string()
         };
 
+        match self.execute(&physical_plan)? {
+            ExecutionResult::Count(count) => Ok(count),
+            _ => Err(DataFrameError::NotImplemented) //TODO better error
+        }
+
+    }
+
+    fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
+        match &self.config {
+            &DFConfig::Local { ref data_dir } => self.execute_local(physical_plan, data_dir.clone()),
+            &DFConfig::Remote { ref worker_uri } => self.execute_remote(physical_plan, worker_uri.clone())
+        }
+    }
+
+    fn execute_local(&self, physical_plan: &PhysicalPlan, data_dir: String) -> Result<ExecutionResult, ExecutionError> {
+
+        match physical_plan {
+            &PhysicalPlan::Interactive { .. } => {
+                Err(ExecutionError::Custom(format!("not implemented")))
+            }
+            &PhysicalPlan::Write { ref plan, ref filename} => {
+                // create output file
+                // println!("Writing csv to {}", filename);
+                let file = File::create(filename)?;
+
+                let mut writer = BufWriter::with_capacity(8*1024*1024,file);
+
+                let execution_plan = self.create_execution_plan(data_dir, plan)?;
+
+                // implement execution here for now but should be a common method for processing a plan
+                let it = execution_plan.scan(self);
+                let mut count : usize = 0;
+                it.for_each(|t| {
+                    match t {
+                        Ok(row) => {
+                            let csv = format!("{}\n", row.to_string());
+                            writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
+                            count += 1;
+                        },
+                        Err(e) => panic!(format!("Error processing row: {:?}", e)) //TODO: error handling
+                    }
+                });
+
+                Ok(ExecutionResult::Count(count))
+            }
+        }
+    }
+
+    fn execute_remote(&self, physical_plan: &PhysicalPlan, worker_uri: Uri) -> Result<ExecutionResult, ExecutionError> {
+
+        let mut core = Core::new().unwrap();
+        let client = Client::new(&core.handle());
+
         // serialize plan to JSON
-        match serde_json::to_string(&execution_plan) {
+        match serde_json::to_string(&physical_plan) {
             Ok(json) => {
                 let mut req = Request::new(Method::Post, worker_uri);
                 req.headers_mut().set(ContentType::json());
@@ -573,14 +612,15 @@ impl ExecutionContext {
 
                 match core.run(post) {
                     Ok(result) => {
-                        //TODO: show response as formatted table
+                        //TODO: parse result
                         let result = str::from_utf8(&result).unwrap();
-                        println!("{}", result);
+                        println!("Remote worker returned: {}", result);
+                        Ok(ExecutionResult::Unit)
                     }
-                    Err(e) => println!("Failed to serialize plan: {:?}", e)
+                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
                 }
             }
-            Err(e) => println!("Failed to serialize plan: {:?}", e)
+            Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
         }
     }
 
@@ -761,7 +801,7 @@ mod tests {
     fn create_context() -> ExecutionContext {
 
         // create execution context
-        let mut ctx = ExecutionContext::new("./test/data".to_string());
+        let mut ctx = ExecutionContext::local("./test/data".to_string());
 
         // define schemas for test data
         ctx.define_schema("people", &Schema::new(vec![

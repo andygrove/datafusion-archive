@@ -19,7 +19,7 @@ use datafusion::exec::*;
 fn main() {
 
     // create execution context
-    let mut ctx = ExecutionContext::new("./test/data".to_string());
+    let mut ctx = ExecutionContext::local("./test/data".to_string());
 
     // define an external table (csv file)
     ctx.sql("CREATE EXTERNAL TABLE uk_cities (\

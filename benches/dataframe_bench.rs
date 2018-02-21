@@ -12,7 +12,7 @@ extern crate serde_json;
 fn dataframe() {
 
     // create execution context
-    let ctx = ExecutionContext::new();
+    let ctx = ExecutionContext::local();
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![

@@ -107,7 +107,7 @@ impl Console {
     fn new(worker_addr: String) -> Self {
         println!("Connecting to worker node at {}", worker_addr);
         // pass an empty data path since the client doesn't access data directly
-        Console { ctx: ExecutionContext::new("".to_string()), worker_addr: worker_addr }
+        Console { ctx: ExecutionContext::local("".to_string()), worker_addr: worker_addr }
     }
 
     /// Execute a SQL statement or console command
