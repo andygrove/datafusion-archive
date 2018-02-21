@@ -210,7 +210,7 @@ impl Service for Worker {
                                 let mut ctx = ExecutionContext::new(data_dir);
 
                                 match plan {
-                                    ExecutionPlan::Interactive { plan } => {
+                                    PhysicalPlan::Interactive { plan } => {
                                         match ctx.create_execution_plan(&plan) {
                                             Ok(exec) => {
                                                 let it = exec.scan(&ctx);
@@ -233,34 +233,22 @@ impl Service for Worker {
                                                     .with_header(ContentLength(result_set.len() as u64))
                                                     .with_body(result_set)
                                             },
-                                            Err(e) => {
-                                                let msg = format!("Failed to create execution plan: {:?}", e);
-                                                Response::new()
-                                                    .with_status(StatusCode::BadRequest)
-                                                    .with_header(ContentLength(msg.len() as u64))
-                                                    .with_body(msg)
-                                            }
+                                            Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
                                         }
 
                                     },
-                                    _ => {
-                                        let msg = format!("Unsupported execution plan");
-                                        Response::new()
-                                            .with_status(StatusCode::BadRequest)
-                                            .with_header(ContentLength(msg.len() as u64))
-                                            .with_body(msg)
+                                    PhysicalPlan::Write { plan, filename } => {
+                                        let df = DF { plan: plan };
+                                        match ctx.write(Box::new(df), &filename) {
+                                            Ok(_) => Response::new().with_status(StatusCode::Ok),
+                                            Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
+                                        }
                                     }
+                                    _ => error_response(format!("Unsupported execution plan"))
                                 }
 
                             },
-                            Err(e) => {
-                                let msg = format!("Failed to parse execution plan: {:?}", e);
-                                Response::new()
-                                    .with_status(StatusCode::BadRequest)
-                                    .with_header(ContentLength(msg.len() as u64))
-                                    .with_body(msg)
-
-                            }
+                            Err(e) => error_response(format!("Failed to parse execution plan: {:?}", e))
                         })
                     }))
 
@@ -274,6 +262,13 @@ impl Service for Worker {
         }
     }
 
+}
+
+fn error_response(msg: String) -> Response {
+    Response::new()
+        .with_status(StatusCode::BadRequest)
+        .with_header(ContentLength(msg.len() as u64))
+        .with_body(msg)
 }
 
 struct Membership {

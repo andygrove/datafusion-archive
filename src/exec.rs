@@ -288,9 +288,11 @@ impl SimpleRelation for LimitRelation {
 
 /// Execution plans are sent to worker nodes for execution
 #[derive(Debug,Clone,Serialize,Deserialize)]
-pub enum ExecutionPlan {
+pub enum PhysicalPlan {
     /// Run a query and return the results to the client
     Interactive { plan: Box<LogicalPlan> },
+    /// Execute a logical plan and write the output to a file
+    Write { plan: Box<LogicalPlan>, filename: String },
     /// Partition the relation
     Partition { plan: Box<LogicalPlan>, partition_count: usize, partition_expr: Expr }
 
@@ -356,7 +358,7 @@ impl ExecutionContext {
                 self.define_schema(&name, &schema);
 
                 //TODO: not sure what to return here
-                Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: Box::new(LogicalPlan::EmptyRelation) })) //TODO: don't clone context
+                Ok(Box::new(DF { plan: Box::new(LogicalPlan::EmptyRelation) })) 
 
 
             },
@@ -368,7 +370,7 @@ impl ExecutionContext {
                 let plan = query_planner.sql_to_rel(&ast)?;
 
                 // return the DataFrame
-                Ok(Box::new(DF { ctx: Box::new(self.clone()), plan: plan })) //TODO: don't clone context
+                Ok(Box::new(DF {  plan: plan }))
             }
         }
 
@@ -379,7 +381,7 @@ impl ExecutionContext {
     ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
     pub fn load(&self, filename: &str, schema: &Schema) -> Result<Box<DataFrame>, ExecutionError> {
         let plan = LogicalPlan::CsvFile { filename: filename.to_string(), schema: schema.clone() };
-        Ok(Box::new(DF { ctx: Box::new((*self).clone()), plan: Box::new(plan) }))
+        Ok(Box::new(DF { plan: Box::new(plan) }))
     }
 
     pub fn register_table(&mut self, name: String, schema: Schema) {
@@ -505,57 +507,8 @@ impl ExecutionContext {
         Expr::ScalarFunction { name: name.to_string(), args: args.clone() }
     }
 
-}
-
-
-
-
-pub struct DF {
-    ctx: Box<ExecutionContext>,
-    plan: Box<LogicalPlan>
-}
-
-impl DataFrame for DF {
-
-    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
-
-        let plan = LogicalPlan::Projection {
-            expr: expr,
-            input: self.plan.clone(),
-            schema: self.plan.schema().clone()
-
-        };
-
-        Ok(Box::new(DF { ctx: self.ctx.clone(), plan: Box::new(plan) }))
-
-    }
-
-    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
-
-        let plan = LogicalPlan::Sort {
-            expr: expr,
-            input: self.plan.clone(),
-            schema: self.plan.schema().clone()
-
-        };
-
-        Ok(Box::new(DF { ctx: self.ctx.clone(), plan: Box::new(plan) }))
-
-    }
-
-    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError> {
-
-        let plan = LogicalPlan::Selection {
-            expr: expr,
-            input: self.plan.clone(),
-            schema: self.plan.schema().clone()
-        };
-
-        Ok(Box::new(DF { ctx: self.ctx.clone(), plan: Box::new(plan) }))
-    }
-
-    fn write(&self, filename: &str) -> Result<(), DataFrameError> {
-        let execution_plan = self.ctx.create_execution_plan(&self.plan)?;
+    pub fn write(&self, df: Box<DataFrame>, filename: &str) -> Result<(), DataFrameError> {
+        let execution_plan = self.create_execution_plan(&df.plan())?;
 
         // create output file
         // println!("Writing csv to {}", filename);
@@ -564,7 +517,7 @@ impl DataFrame for DF {
         let mut writer = BufWriter::with_capacity(8*1024*1024,file);
 
         // implement execution here for now but should be a common method for processing a plan
-        let it = execution_plan.scan(&self.ctx);
+        let it = execution_plan.scan(self);
         it.for_each(|t| {
             match t {
                 Ok(row) => {
@@ -578,6 +531,54 @@ impl DataFrame for DF {
         Ok(())
     }
 
+}
+
+
+
+
+pub struct DF {
+    pub plan: Box<LogicalPlan>
+}
+
+impl DataFrame for DF {
+
+    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
+
+        let plan = LogicalPlan::Projection {
+            expr: expr,
+            input: self.plan.clone(),
+            schema: self.plan.schema().clone()
+
+        };
+
+        Ok(Box::new(DF { plan: Box::new(plan) }))
+
+    }
+
+    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
+
+        let plan = LogicalPlan::Sort {
+            expr: expr,
+            input: self.plan.clone(),
+            schema: self.plan.schema().clone()
+
+        };
+
+        Ok(Box::new(DF { plan: Box::new(plan) }))
+
+    }
+
+    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError> {
+
+        let plan = LogicalPlan::Selection {
+            expr: expr,
+            input: self.plan.clone(),
+            schema: self.plan.schema().clone()
+        };
+
+        Ok(Box::new(DF { plan: Box::new(plan) }))
+    }
+
     fn col(&self, column_name: &str) -> Result<Expr, DataFrameError> {
         match self.plan.schema().column(column_name) {
             Some((i,_)) => Ok(Expr::Column(i)),
@@ -589,8 +590,13 @@ impl DataFrame for DF {
         self.plan.schema().clone()
     }
 
+
     fn repartition(&self, _n: u32) -> Result<Box<DataFrame>, DataFrameError> {
         unimplemented!()
+    }
+
+    fn plan(&self) -> Box<LogicalPlan> {
+        self.plan.clone()
     }
 }
 
@@ -607,7 +613,7 @@ mod tests {
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
-        df.write("_sqrt_out.csv").unwrap();
+        ctx.write(df,"_sqrt_out.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -621,7 +627,7 @@ mod tests {
 
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities").unwrap();
 
-        df.write("_uk_cities_sql.csv").unwrap();
+        ctx.write(df,"_uk_cities_sql.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -655,7 +661,7 @@ mod tests {
 
         let df2 = df.select(vec![func_expr]).unwrap();
 
-        df2.write("_uk_cities_df.csv").unwrap();
+        ctx.write(df2,"_uk_cities_df.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -680,7 +686,7 @@ mod tests {
             Expr::Sort { expr: Box::new(Expr::Column(2)), asc: true }
         ]).unwrap();
 
-        df2.write("_uk_cities_sorted_by_lat_lng.csv").unwrap();
+        ctx.write(df2,"_uk_cities_sorted_by_lat_lng.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -694,7 +700,7 @@ mod tests {
 
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities").unwrap();
 
-        df.write("_uk_cities_wkt.csv").unwrap();
+        ctx.write(df,"_uk_cities_wkt.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }

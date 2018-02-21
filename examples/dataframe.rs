@@ -50,6 +50,6 @@ fn main() {
     println!("df3: {}", df1.schema().to_string());
 
     // write the results to a file
-    df3.write("_northern_cities.csv").unwrap();
+    ctx.write(df3, "_northern_cities.csv").unwrap();
 
 }

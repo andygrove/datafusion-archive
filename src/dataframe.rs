@@ -52,13 +52,12 @@ pub trait DataFrame {
     /// Sorting
     fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>,DataFrameError>;
 
-    /// Write to CSV ...  will support other formats in the future
-    fn write(&self, filename: &str) -> Result<(),DataFrameError>;
-
     /// Return an expression representing the specified column
     fn col(&self, column_name: &str) -> Result<Expr,DataFrameError>;
 
     fn schema(&self) -> Schema;
+
+    fn plan(&self) -> Box<LogicalPlan>;
 
 }
 

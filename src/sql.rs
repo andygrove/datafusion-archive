@@ -46,7 +46,10 @@ pub struct SQLColumnDef {
 #[derive(Debug,Clone,PartialEq)]
 pub enum SQLType {
     Varchar(usize),
-    Double
+    Float,
+    Double,
+    Int,
+    Long,
 }
 
 #[derive(Debug, PartialEq, Clone)]

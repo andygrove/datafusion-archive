@@ -145,7 +145,7 @@ impl Console {
 
         match self.ctx.create_logical_plan(&sql) {
             Ok(logical_plan) => {
-                let execution_plan = ExecutionPlan::Interactive { plan: logical_plan };
+                let execution_plan = PhysicalPlan::Interactive { plan: logical_plan };
 
                 // serialize plan to JSON
                 match serde_json::to_string(&execution_plan) {
