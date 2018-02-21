@@ -238,9 +238,13 @@ impl Service for Worker {
 
                                     },
                                     PhysicalPlan::Write { plan, filename } => {
+                                        println!("Writing dataframe to {}", filename);
                                         let df = DF { plan: plan };
                                         match ctx.write(Box::new(df), &filename) {
-                                            Ok(_) => Response::new().with_status(StatusCode::Ok),
+                                            Ok(count) => {
+                                                println!("Wrote {} rows to {}", count, filename);
+                                                Response::new().with_status(StatusCode::Ok)
+                                            },
                                             Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
                                         }
                                     }

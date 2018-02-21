@@ -18,8 +18,21 @@ use std::io::{BufReader, BufWriter, Error};
 use std::io::prelude::*;
 use std::iter::Iterator;
 use std::fs::File;
+use std::str;
 use std::string::String;
 use std::convert::*;
+
+extern crate futures;
+extern crate hyper;
+extern crate serde;
+extern crate serde_json;
+extern crate tokio_core;
+
+use self::futures::{Future, Stream};
+use self::hyper::Client;
+use self::tokio_core::reactor::Core;
+use self::hyper::{Method, Request, Uri};
+use self::hyper::header::{ContentLength, ContentType};
 
 extern crate csv;
 
@@ -33,6 +46,7 @@ use super::parser::*;
 use super::dataframe::*;
 use super::functions::math::*;
 use super::functions::geospatial::*;
+
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -507,7 +521,7 @@ impl ExecutionContext {
         Expr::ScalarFunction { name: name.to_string(), args: args.clone() }
     }
 
-    pub fn write(&self, df: Box<DataFrame>, filename: &str) -> Result<(), DataFrameError> {
+    pub fn write(&self, df: Box<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
         let execution_plan = self.create_execution_plan(&df.plan())?;
 
         // create output file
@@ -518,17 +532,56 @@ impl ExecutionContext {
 
         // implement execution here for now but should be a common method for processing a plan
         let it = execution_plan.scan(self);
+        let mut count : usize = 0;
         it.for_each(|t| {
             match t {
                 Ok(row) => {
                     let csv = format!("{}\n", row.to_string());
                     writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
+                    count += 1;
                 },
                 Err(e) => panic!(format!("Error processing row: {:?}", e)) //TODO: error handling
             }
         });
 
-        Ok(())
+        Ok(count)
+    }
+
+
+    /// hacky way to send plan to worker for now
+    pub fn write_in_worker(&self, df: Box<DataFrame>, filename: &str, worker_uri: Uri) {
+
+        let mut core = Core::new().unwrap();
+        let client = Client::new(&core.handle());
+        let execution_plan = PhysicalPlan::Write {
+            plan: df.plan().clone(),
+            filename: filename.to_string()
+        };
+
+        // serialize plan to JSON
+        match serde_json::to_string(&execution_plan) {
+            Ok(json) => {
+                let mut req = Request::new(Method::Post, worker_uri);
+                req.headers_mut().set(ContentType::json());
+                req.headers_mut().set(ContentLength(json.len() as u64));
+                req.set_body(json);
+
+                let post = client.request(req).and_then(|res| {
+                    //println!("POST: {}", res.status());
+                    res.body().concat2()
+                });
+
+                match core.run(post) {
+                    Ok(result) => {
+                        //TODO: show response as formatted table
+                        let result = str::from_utf8(&result).unwrap();
+                        println!("{}", result);
+                    }
+                    Err(e) => println!("Failed to serialize plan: {:?}", e)
+                }
+            }
+            Err(e) => println!("Failed to serialize plan: {:?}", e)
+        }
     }
 
 }
