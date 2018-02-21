@@ -31,7 +31,7 @@ extern crate tokio_core;
 use self::futures::{Future, Stream};
 use self::hyper::Client;
 use self::tokio_core::reactor::Core;
-use self::hyper::{Method, Request, Uri};
+use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 extern crate csv;
@@ -43,6 +43,7 @@ use super::rel::*;
 use super::sql::ASTNode::*;
 use super::sqltorel::*;
 use super::parser::*;
+use super::cluster::*;
 use super::dataframe::*;
 use super::functions::math::*;
 use super::functions::geospatial::*;
@@ -50,7 +51,7 @@ use super::functions::geospatial::*;
 #[derive(Debug,Clone)]
 pub enum DFConfig {
     Local { data_dir: String },
-    Remote { worker_uri: Uri },
+    Remote { etcd: String },
 }
 
 #[derive(Debug)]
@@ -314,11 +315,11 @@ pub enum PhysicalPlan {
     Write { plan: Box<LogicalPlan>, filename: String },
 }
 
-enum ExecutionResult {
+#[derive(Debug,Clone)]
+pub enum ExecutionResult {
     Unit,
     Count(usize),
 }
-
 
 #[derive(Debug,Clone)]
 pub struct ExecutionContext {
@@ -338,12 +339,12 @@ impl ExecutionContext {
         }
     }
 
-    pub fn remote(worker_uri: String) -> Self {
+    pub fn remote(etcd: String) -> Self {
 
         ExecutionContext {
             schemas: HashMap::new(),
             functions: HashMap::new(),
-            config: DFConfig::Remote { worker_uri: worker_uri.parse().unwrap() }
+            config: DFConfig::Remote { etcd: etcd }
         }
     }
 
@@ -551,15 +552,29 @@ impl ExecutionContext {
 
     }
 
-    fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
+//    pub fn collect(&self, df: Box<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
+//
+//        let physical_plan = PhysicalPlan::Write {
+//            plan: df.plan().clone(),
+//            filename: filename.to_string()
+//        };
+//
+//        match self.execute(&physical_plan)? {
+//            ExecutionResult::Count(count) => Ok(count),
+//            _ => Err(DataFrameError::NotImplemented) //TODO better error
+//        }
+//
+//    }
+
+    pub fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
         match &self.config {
             &DFConfig::Local { ref data_dir } => self.execute_local(physical_plan, data_dir.clone()),
-            &DFConfig::Remote { ref worker_uri } => self.execute_remote(physical_plan, worker_uri.clone())
+            &DFConfig::Remote { ref etcd } => self.execute_remote(physical_plan, etcd.clone())
         }
     }
 
     fn execute_local(&self, physical_plan: &PhysicalPlan, data_dir: String) -> Result<ExecutionResult, ExecutionError> {
-
+        println!("Executing query in-process");
         match physical_plan {
             &PhysicalPlan::Interactive { .. } => {
                 Err(ExecutionError::Custom(format!("not implemented")))
@@ -592,42 +607,55 @@ impl ExecutionContext {
         }
     }
 
-    fn execute_remote(&self, physical_plan: &PhysicalPlan, worker_uri: Uri) -> Result<ExecutionResult, ExecutionError> {
+    fn execute_remote(&self, physical_plan: &PhysicalPlan, etcd: String) -> Result<ExecutionResult, ExecutionError> {
+        println!("Executing query remotely");
+        let workers = get_worker_list(&etcd);
 
-        let mut core = Core::new().unwrap();
-        let client = Client::new(&core.handle());
+        match workers {
+            Ok(ref list) if list.len() > 0 => {
+                let worker_uri = format!("http://{}", list[0]);
+                match worker_uri.parse() {
+                    Ok(uri) => {
 
-        // serialize plan to JSON
-        match serde_json::to_string(&physical_plan) {
-            Ok(json) => {
-                let mut req = Request::new(Method::Post, worker_uri);
-                req.headers_mut().set(ContentType::json());
-                req.headers_mut().set(ContentLength(json.len() as u64));
-                req.set_body(json);
+                        println!("Sending query to worker at {}", uri);
 
-                let post = client.request(req).and_then(|res| {
-                    //println!("POST: {}", res.status());
-                    res.body().concat2()
-                });
+                        let mut core = Core::new().unwrap();
+                        let client = Client::new(&core.handle());
 
-                match core.run(post) {
-                    Ok(result) => {
-                        //TODO: parse result
-                        let result = str::from_utf8(&result).unwrap();
-                        println!("Remote worker returned: {}", result);
-                        Ok(ExecutionResult::Unit)
+                        // serialize plan to JSON
+                        match serde_json::to_string(&physical_plan) {
+                            Ok(json) => {
+                                let mut req = Request::new(Method::Post, uri);
+                                req.headers_mut().set(ContentType::json());
+                                req.headers_mut().set(ContentLength(json.len() as u64));
+                                req.set_body(json);
+
+                                let post = client.request(req).and_then(|res| {
+                                    //println!("POST: {}", res.status());
+                                    res.body().concat2()
+                                });
+
+                                match core.run(post) {
+                                    Ok(result) => {
+                                        //TODO: parse result
+                                        let result = str::from_utf8(&result).unwrap();
+                                        println!("Remote worker returned: {}", result);
+                                        Ok(ExecutionResult::Unit)
+                                    }
+                                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+                                }
+                            }
+                            Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+                        }
                     }
                     Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
                 }
             }
-            Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+            Ok(_) => Err(ExecutionError::Custom(format!("No workers found in cluster"))),
+            Err(e) => Err(ExecutionError::Custom(format!("Failed to find a worker node: {}", e)))
         }
     }
-
 }
-
-
-
 
 pub struct DF {
     pub plan: Box<LogicalPlan>
