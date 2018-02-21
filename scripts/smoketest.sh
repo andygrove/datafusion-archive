@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-#cargo test
-#cargo run --example sql_query
-#cargo run --example dataframe
-#./scripts/docker/worker/build.sh
-docker/console/build.sh
+cargo test
+cargo run --example sql_query
+cargo run --example dataframe
+./scripts/docker/worker/build.sh
+./scripts/docker/console/build.sh
 
-# stop things first
-docker stop etcd 2>/dev/null
-docker rm etcd 2>/dev/null
-docker stop datafusionrs/datafusion 2>/dev/null
-docker rm datafusion 2>/dev/null
+# stop etcd
+docker kill etcd
+docker rm etcd
+
+# stop datafusion worker
+docker kill datafusion
+docker rm datafusion
 
 # run etcd
 docker run -d -v /usr/share/ca-certificates/:/etc/ssl/certs -p 4001:4001 -p 2380:2380 -p 2379:2379 \
@@ -28,17 +30,20 @@ sleep 2
 
 # run worker
 docker run --network=host -d -p 8088:8088 \
+ -v`pwd`/test/data:/var/datafusion/data \
  --name datafusion datafusionrs/worker:latest \
  --etcd http://127.0.0.1:2379 \
  --bind 127.0.0.1:8088 \
- --data_dir /tmp \
+ --data_dir /var/datafusion/data \
  --webroot /opt/datafusion/www
 
 # give the worker a chance to start up
 sleep 2
 
 # run the console in interactive mode and run a test script
-docker run --network=host \
+docker run \
+  --network=host \
+  -v`pwd`/test/data:/test/data \
   -it datafusionrs/console:latest \
  --etcd http://127.0.0.1:2379 \
- --script test/data/smoketest.sql
+ --script /test/data/smoketest.sql

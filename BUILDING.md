@@ -3,22 +3,20 @@
 
 ## Prerequisites
 
-- Follow instructions at https://github.com/sfackler/rust-openssl to install OpenSSL
-- If you want to build the docker image then it is necessary to install OpenSSL from source
+- Docker
 
 ## Building Locally
 
+Generally, you just need to run cargo.
+
 ```bash
-$ cargo build --release
+$ cargo build
 ```
 
-## Building Docker Image
+## Smoketest
+
+Run this before committing code to make sure everything is working.
 
 ```bash
-$ cd openssl
-$ ./Configure --prefix=/usr linux-x86_64 -fPIC
-```
-
-```bash
-$ cargo build --target=x86_64-unknown-linux-musl --release
+./scripts/smoketest.sh
 ```
