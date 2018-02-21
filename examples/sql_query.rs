@@ -34,7 +34,7 @@ fn main() {
     let df1 = ctx.sql(&sql).unwrap();
 
     // write the results to a file
-    df1.write("_southern_cities.csv").unwrap();
+    ctx.write(df1,"_southern_cities.csv").unwrap();
 
 
 }

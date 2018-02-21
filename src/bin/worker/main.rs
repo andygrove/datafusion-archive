@@ -33,7 +33,6 @@ extern crate uuid;
 use clap::{Arg, App};
 use etcd::Client;
 use etcd::kv;
-use datafusion::dataframe::DataFrame;
 use datafusion::exec::*;
 use futures::future::{ok, loop_fn, Future, Loop};
 use futures::Stream;
@@ -239,8 +238,8 @@ impl Service for Worker {
 
                                     },
                                     PhysicalPlan::Write { plan, filename } => {
-                                        let df = DF { plan: plan, ctx: Box::new(ctx.clone()) };
-                                        match df.write(&filename) {
+                                        let df = DF { plan: plan };
+                                        match ctx.write(Box::new(df), &filename) {
                                             Ok(_) => Response::new().with_status(StatusCode::Ok),
                                             Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
                                         }
