@@ -1,8 +1,8 @@
 extern crate clap;
 extern crate datafusion;
-extern crate rprompt;
 extern crate serde;
 extern crate serde_json;
+extern crate linefeed;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -14,6 +14,8 @@ use clap::{Arg, App};
 use datafusion::exec::*;
 use datafusion::parser::*;
 use datafusion::sql::ASTNode::SQLCreateTable;
+
+mod linereader;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -58,13 +60,14 @@ fn main() {
             }
         },
         None => {
+            let mut reader = linereader::LineReader::new();
             loop {
-                match rprompt::prompt_reply_stdout("$ ") {
-                    Ok(command) => match command.as_ref() {
-                        "exit" | "quit" => break,
-                        _ => console.execute(&command)
-                    },
-                    Err(e) => println!("Error parsing command: {:?}", e)
+                let result = reader.read_lines();
+                match result {
+                    linereader::LineResult::Break => break,
+                    linereader::LineResult::Input(command) => {
+                        console.execute(&command)
+                    }
                 }
             }
         }
