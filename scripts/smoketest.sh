@@ -46,4 +46,15 @@ docker run \
   -v`pwd`/test/data:/test/data \
   -it datafusionrs/console:latest \
  --etcd http://127.0.0.1:2379 \
- --script /test/data/smoketest.sql
+ --script /test/data/smoketest.sql \
+ > _smoketest.txt
+
+
+# did we get the expected results?
+grep -v seconds _smoketest.txt > _a.txt
+grep -v seconds test/data/smoketest-expected.txt > _b.txt
+diff -b _a.txt _b.txt
+
+# clean up
+rm -f _*.txt 2>/dev/null
+rm -f _*.csv 2>/dev/null

@@ -574,7 +574,6 @@ impl ExecutionContext {
     }
 
     fn execute_local(&self, physical_plan: &PhysicalPlan, data_dir: String) -> Result<ExecutionResult, ExecutionError> {
-        println!("Executing query in-process");
         match physical_plan {
             &PhysicalPlan::Interactive { .. } => {
                 Err(ExecutionError::Custom(format!("not implemented")))
@@ -608,7 +607,6 @@ impl ExecutionContext {
     }
 
     fn execute_remote(&self, physical_plan: &PhysicalPlan, etcd: String) -> Result<ExecutionResult, ExecutionError> {
-        println!("Executing query remotely");
         let workers = get_worker_list(&etcd);
 
         match workers {
@@ -616,8 +614,6 @@ impl ExecutionContext {
                 let worker_uri = format!("http://{}", list[0]);
                 match worker_uri.parse() {
                     Ok(uri) => {
-
-                        println!("Sending query to worker at {}", uri);
 
                         let mut core = Core::new().unwrap();
                         let client = Client::new(&core.handle());
@@ -639,7 +635,7 @@ impl ExecutionContext {
                                     Ok(result) => {
                                         //TODO: parse result
                                         let result = str::from_utf8(&result).unwrap();
-                                        println!("Remote worker returned: {}", result);
+                                        println!("{}", result);
                                         Ok(ExecutionResult::Unit)
                                     }
                                     Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))

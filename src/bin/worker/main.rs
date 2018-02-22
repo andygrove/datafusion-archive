@@ -190,7 +190,7 @@ impl Service for Worker {
                 Box::new(req.body().concat2()
                     .and_then(move |body| {
                         let json = str::from_utf8(&body).unwrap();
-                        println!("{}", json);
+                        //println!("{}", json);
 
                         println!("Received request");
                         //println!("Request: {}", json_str);
