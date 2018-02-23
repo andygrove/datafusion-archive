@@ -64,10 +64,15 @@ fn main() {
             loop {
                 let result = reader.read_lines();
                 match result {
-                    linereader::LineResult::Break => break,
-                    linereader::LineResult::Input(command) => {
-                        console.execute(&command)
-                    }
+                    Ok(line) => {
+                        match line {
+                            linereader::LineResult::Break => break,
+                            linereader::LineResult::Input(command) => {
+                                console.execute(&command)
+                            }
+                        }
+                    },
+                    Err(err) => println!("error: {}", err)
                 }
             }
         }

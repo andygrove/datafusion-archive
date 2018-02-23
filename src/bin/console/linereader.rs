@@ -1,7 +1,21 @@
+use std::fmt;
 use linefeed::{DefaultTerminal, ReadResult, Reader};
 
 const DEFAULT_PROMPT: &'static str = "datafusion> ";
 const CONTINUE_PROMTP: &'static str = "> ";
+
+#[derive(Debug)]
+pub enum LineReaderError {
+    Command(String),
+}
+
+impl fmt::Display for LineReaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LineReaderError::Command(ref err) => write!(f, "no such command: `{}`", err),
+        }
+    }
+}
 
 pub enum LineResult {
     Break,
@@ -20,7 +34,7 @@ impl LineReader {
         LineReader { reader }
     }
 
-    pub fn read_lines(&mut self) -> LineResult {
+    pub fn read_lines(&mut self) -> Result<LineResult, LineReaderError> {
         let mut result = String::new();
         loop {
             let line = self.reader.read_line().unwrap();
@@ -29,16 +43,21 @@ impl LineReader {
                 ReadResult::Input(i) => {
                     result.push_str(i.as_str());
 
-                    // Handle Commands
+                    // Handles commands if the input starts
+                    // whit a colon.
                     if i.as_str().starts_with(':') {
                         match i.as_str() {
                             ":quit" | ":exit" => {
-                                return LineResult::Break;
+                                return Ok(LineResult::Break);
                             }
-                            _ => continue,
+                            _ => return Err(LineReaderError::Command(i)),
                         }
                     }
 
+                    // Handle the two types of statements, Default and Continue.
+                    // CONTINUE: are statements that don't end with a semicolon
+                    // DEFAULT: are statements that end with a semicolon
+                    // and can be returned to being executed.
                     if i.as_str().ends_with(';') {
                         self.reader.set_prompt(DEFAULT_PROMPT);
                         break;
@@ -57,6 +76,6 @@ impl LineReader {
         }
 
         // Return the command without semicolon
-        LineResult::Input(result[..result.len()-1].to_string())
+        Ok(LineResult::Input(result[..result.len()-1].to_string()))
     }
 }
