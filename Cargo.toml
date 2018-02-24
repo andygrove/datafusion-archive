@@ -33,7 +33,7 @@ rprompt = "1.0"
 etcd = "0.8.0"
 clap = "2.29.4"
 uuid = { version = "0.6.0-beta", features = ["v5"] }
-linefeed = "0.4"
+liner = "0.4.3"
 
 [dev-dependencies]
 criterion = "0.2.0"

@@ -2,7 +2,7 @@ extern crate clap;
 extern crate datafusion;
 extern crate serde;
 extern crate serde_json;
-extern crate linefeed;
+extern crate liner;
 
 use std::fs::File;
 use std::io::BufReader;

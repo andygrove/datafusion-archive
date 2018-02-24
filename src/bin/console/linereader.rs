@@ -1,5 +1,6 @@
 use std::fmt;
-use linefeed::{DefaultTerminal, ReadResult, Reader};
+use std::io;
+use liner::Context;
 
 const DEFAULT_PROMPT: &'static str = "datafusion> ";
 const CONTINUE_PROMTP: &'static str = "> ";
@@ -22,25 +23,31 @@ pub enum LineResult {
     Input(String),
 }
 
-pub struct LineReader {
-    reader: Reader<DefaultTerminal>,
+pub struct LineReader<'a> {
+    reader: Context,
+    prompt: &'a str,
 }
 
-impl LineReader {
+impl<'a> LineReader<'a> {
     pub fn new() -> Self {
-        let mut reader = Reader::new("datafusion").unwrap();
-        reader.set_prompt(DEFAULT_PROMPT);
+        let reader = Context::new();
+        LineReader {
+            reader,
+            prompt: DEFAULT_PROMPT,
+        }
+    }
 
-        LineReader { reader }
+    pub fn set_prompt(&mut self, prompt: &'a str) {
+        self.prompt = prompt;
     }
 
     pub fn read_lines(&mut self) -> Result<LineResult, LineReaderError> {
         let mut result = String::new();
         loop {
-            let line = self.reader.read_line().unwrap();
+            let line = self.reader.read_line(self.prompt, &mut |_| {});
 
             match line {
-                ReadResult::Input(i) => {
+                Ok(i) => {
                     result.push_str(i.as_str());
 
                     // Handles commands if the input starts
@@ -59,23 +66,38 @@ impl LineReader {
                     // DEFAULT: are statements that end with a semicolon
                     // and can be returned to being executed.
                     if i.as_str().ends_with(';') {
-                        self.reader.set_prompt(DEFAULT_PROMPT);
+                        self.set_prompt(DEFAULT_PROMPT);
                         break;
                     } else {
-                        self.reader.set_prompt(CONTINUE_PROMTP);
+                        self.set_prompt(CONTINUE_PROMTP);
                         result.push_str(" ");
                         continue;
                     }
                 }
-                _ => {}
+                Err(e) => {
+                    match e.kind() {
+                        // ctrl-c pressed
+                        io::ErrorKind::Interrupted => {}
+                        // ctrl-d pressed
+                        io::ErrorKind::UnexpectedEof => {
+                            return Ok(LineResult::Break);
+                        }
+                        _ => {
+                            // Ensure that all writes to the history file
+                            // are written before exiting.
+                            self.reader.history.commit_history();
+                            panic!("error: {:?}", e)
+                        }
+                    }
+                }
             };
         }
 
         if !result.trim().is_empty() {
-            self.reader.add_history(result.clone());
+            self.reader.history.push(result.clone().into()).unwrap();
         }
 
         // Return the command without semicolon
-        Ok(LineResult::Input(result[..result.len()-1].to_string()))
+        Ok(LineResult::Input(result[..result.len() - 1].to_string()))
     }
 }
