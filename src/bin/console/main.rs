@@ -64,7 +64,7 @@ fn main() {
             loop {
                 let result = reader.read_lines();
                 match result {
-                    Ok(line) => {
+                    Some(line) => {
                         match line {
                             linereader::LineResult::Break => break,
                             linereader::LineResult::Input(command) => {
@@ -72,7 +72,7 @@ fn main() {
                             }
                         }
                     },
-                    Err(err) => println!("error: {}", err)
+                    None => (),
                 }
             }
         }
