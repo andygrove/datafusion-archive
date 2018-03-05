@@ -219,7 +219,7 @@ impl Service for Worker {
                                                 it.for_each(|t| {
                                                     match t {
                                                         Ok(row) => {
-                                                            result_set += &row.to_string()
+                                                            result_set += &row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
                                                         },
                                                         Err(e) => {
                                                             result_set += &format!("ERROR: {:?}", e)

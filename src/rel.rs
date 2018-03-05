@@ -88,26 +88,31 @@ pub struct FunctionMeta {
     pub return_type: DataType
 }
 
-#[derive(Debug,Clone,PartialEq)]
-pub struct Row {
-    pub values: Vec<Value>
+pub trait Row {
+    fn get(&self, index: usize) -> &Value;
 }
 
-impl Row {
-
-    pub fn new(v: Vec<Value>) -> Self {
-        Row { values: v }
-    }
-
-    pub fn to_string(&self) -> String {
-        let value_strings : Vec<String> = self.values.iter()
-            .map(|v| v.to_string())
-            .collect();
-
-        // return comma-separated
-        value_strings.join(",")
+impl Row for Vec<Value> {
+    fn get(&self, index: usize) -> &Value {
+        &self[index]
     }
 }
+
+//impl Row {
+//
+//    pub fn new(v: Vec<Value>) -> Self {
+//        Row { values: v }
+//    }
+//
+//    pub fn to_string(&self) -> String {
+//        let value_strings : Vec<String> = self.values.iter()
+//            .map(|v| v.to_string())
+//            .collect();
+//
+//        // return comma-separated
+//        value_strings.join(",")
+//    }
+//}
 
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
@@ -155,7 +160,7 @@ impl PartialOrd for Value {
 
 impl Value {
 
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         match self {
             &Value::Long(l) => l.to_string(),
             &Value::UnsignedLong(l) => l.to_string(),

@@ -90,7 +90,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             let literal_value = lit.clone();
             Ok(Box::new(move |_| literal_value.clone()))
         }
-        &Expr::Column(index) => Ok(Box::new(move |row| row.values[index].clone())),
+        &Expr::Column(index) => Ok(Box::new(move |row| row.get(index).clone())),
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
             let l = compile_expr(ctx,left)?;
             let r = compile_expr(ctx,right)?;
@@ -172,7 +172,7 @@ impl<'a> CsvRelation {
     }
 
     /// Convert StringRecord into our internal row type based on the known schema
-    fn create_row(&self, r: &StringRecord) -> Result<Row,ExecutionError> {
+    fn create_row(&self, r: &StringRecord) -> Result<Vec<Value>,ExecutionError> {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
             //TODO: remove unwrap use here
@@ -181,7 +181,7 @@ impl<'a> CsvRelation {
             DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
             _ => panic!("csv unsupported type")
         }).collect();
-        Ok(Row::new(values))
+        Ok(values)
     }
 }
 
@@ -189,14 +189,14 @@ impl<'a> CsvRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row,ExecutionError>> + 'a>;
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>,ExecutionError>> + 'a>;
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
 }
 
 impl SimpleRelation for CsvRelation {
 
-    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row,ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>,ExecutionError>> + 'a> {
 
         let buf_reader = BufReader::with_capacity(8*1024*1024,&self.file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
@@ -218,7 +218,7 @@ impl SimpleRelation for CsvRelation {
 
 impl SimpleRelation for FilterRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).filter(move|t|
             match t {
                 &Ok(ref row) => match (*self.expr)(row) {
@@ -237,13 +237,16 @@ impl SimpleRelation for FilterRelation {
 
 impl SimpleRelation for SortRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
 
         // collect all rows from next relation
         let it = self.input.scan(ctx);
 
-        let mut v : Vec<Row> = vec![];
-        it.for_each(|item| v.push(item.unwrap()));
+        let mut v : Vec<Vec<Value>> = vec![];
+        it.for_each(|row_result| match row_result {
+            Ok(row) => v.push(row),
+            _ => panic!()
+        });
 
         // now sort them
         v.sort_by(|a,b| {
@@ -277,13 +280,13 @@ impl SimpleRelation for SortRelation {
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
         let foo = self.input.scan(ctx).map(move|r| match r {
             Ok(row) => {
                 let values = self.expr.iter()
                     .map(|e| (*e)(&row))
                     .collect();
-                Ok(Row::new(values))
+                Ok(values)
             },
             Err(_) => r
         });
@@ -297,7 +300,7 @@ impl SimpleRelation for ProjectRelation {
 }
 
 impl SimpleRelation for LimitRelation {
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Row, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).take(self.limit))
     }
 
@@ -593,7 +596,7 @@ impl ExecutionContext {
                 it.for_each(|t| {
                     match t {
                         Ok(row) => {
-                            let csv = format!("{}\n", row.to_string());
+                            let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
                             writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
                             count += 1;
                         },
