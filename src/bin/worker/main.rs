@@ -34,6 +34,7 @@ use clap::{Arg, App};
 use etcd::Client;
 use etcd::kv;
 use datafusion::exec::*;
+use datafusion::rel::Row;
 use futures::future::{ok, loop_fn, Future, Loop};
 use futures::Stream;
 use hyper::{Method, StatusCode};
@@ -219,7 +220,7 @@ impl Service for Worker {
                                                 it.for_each(|t| {
                                                     match t {
                                                         Ok(row) => {
-                                                            result_set += &row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
+                                                            result_set += &row.to_string();
                                                         },
                                                         Err(e) => {
                                                             result_set += &format!("ERROR: {:?}", e)

@@ -90,29 +90,24 @@ pub struct FunctionMeta {
 
 pub trait Row {
     fn get(&self, index: usize) -> &Value;
+    fn to_string(&self) -> String;
 }
 
 impl Row for Vec<Value> {
+
     fn get(&self, index: usize) -> &Value {
         &self[index]
     }
-}
 
-//impl Row {
-//
-//    pub fn new(v: Vec<Value>) -> Self {
-//        Row { values: v }
-//    }
-//
-//    pub fn to_string(&self) -> String {
-//        let value_strings : Vec<String> = self.values.iter()
-//            .map(|v| v.to_string())
-//            .collect();
-//
-//        // return comma-separated
-//        value_strings.join(",")
-//    }
-//}
+    fn to_string(&self) -> String {
+        let value_strings : Vec<String> = self.iter()
+            .map(|v| v.to_string())
+            .collect();
+
+        // return comma-separated
+        value_strings.join(",")
+    }
+}
 
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]

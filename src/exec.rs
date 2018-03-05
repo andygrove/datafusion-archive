@@ -596,7 +596,8 @@ impl ExecutionContext {
                 it.for_each(|t| {
                     match t {
                         Ok(row) => {
-                            let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
+//                            let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
+                            let csv = row.to_string();
                             writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
                             count += 1;
                         },
