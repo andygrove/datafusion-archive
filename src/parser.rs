@@ -328,12 +328,7 @@ impl Parser {
             &Token::Neq | &Token::Gt | &Token::GtEq => Ok(20),
             &Token::Plus | &Token::Minus => Ok(30),
             &Token::Mult | &Token::Div => Ok(40),
-            _ => {
-                println!("unhandled token in get_precedence: {:?}", tok);
-                Ok(0)
-            }
-                /*Err(ParserError::TokenizerError(
-                format!("invalid token {:?} for get_precedence", tok)))*/
+            _ => Ok(0)
         }
     }
 
