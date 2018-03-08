@@ -53,7 +53,7 @@ static KEYWORDS : &'static [&'static str] = &[
     "SELECT", "FROM", "WHERE", "LIMIT", "ORDER", "GROUP", "BY", "HAVING",
     "UNION", "ALL", "INSERT", "UPDATE", "DELETE", "IN", "NOT", "NULL",
     "SET", "CREATE", "EXTERNAL", "TABLE", "ASC", "DESC",
-    "VARCHAR", "DOUBLE"
+    "VARCHAR", "DOUBLE", "AND", "OR"
 ];
 
 pub struct Tokenizer {
@@ -198,26 +198,26 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
-        //println!("parse_expr() precendence = {}", precedence);
+//        println!("parse_expr() precendence = {}", precedence);
 
         let mut expr = self.parse_prefix()?;
-        //println!("parsed prefix: {:?}", expr);
+//        println!("parsed prefix: {:?}", expr);
 
         loop {
 
             let next_precedence = self.get_next_precedence()?;
             if precedence >= next_precedence {
-                //println!("break on precedence change ({} >= {})", precedence, next_precedence);
+//                println!("break on precedence change ({} >= {})", precedence, next_precedence);
                 break;
             }
 
             if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
-                //println!("parsed infix: {:?}", infix_expr);
+//                println!("parsed infix: {:?}", infix_expr);
                 expr = infix_expr;
             }
         }
 
-        //println!("parse_expr() returning {:?}", expr);
+//        println!("parse_expr() returning {:?}", expr);
 
         Ok(expr)
     }
@@ -270,14 +270,22 @@ impl Parser {
         match self.next_token() {
             Some(tok) => {
                 match tok {
-                    Token::Eq | Token::Gt | Token::GtEq |
-                    Token::Lt | Token::LtEq => Ok(Some(ASTNode::SQLBinaryExpr {
+                    Token::Keyword(_) => Ok(Some(ASTNode::SQLBinaryExpr {
                         left: Box::new(expr),
                         op: self.to_sql_operator(&tok)?,
                         right: Box::new(self.parse_expr(precedence)?)
                     })),
+                    Token::Eq | Token::Gt | Token::GtEq | Token::Lt | Token::LtEq |
+                    Token::Plus | Token::Minus | Token::Mult | Token::Div => {
+                        Ok(Some(ASTNode::SQLBinaryExpr {
+                            left: Box::new(expr),
+                            op: self.to_sql_operator(&tok)?,
+                            right: Box::new(self.parse_expr(precedence)?)
+                        }))
+
+                    },
                     _ => Err(ParserError::ParserError(
-                        format!("No infix parser for token {:?}", tok))),
+                            format!("No infix parser for token {:?}", tok))),
                 }
             },
             None => Ok(None)
@@ -291,6 +299,12 @@ impl Parser {
             &Token::LtEq => Ok(SQLOperator::LTEQ),
             &Token::Gt => Ok(SQLOperator::GT),
             &Token::GtEq => Ok(SQLOperator::GTEQ),
+            &Token::Plus => Ok(SQLOperator::ADD),
+            &Token::Minus => Ok(SQLOperator::SUB),
+            &Token::Mult => Ok(SQLOperator::MULT),
+            &Token::Div => Ok(SQLOperator::DIV),
+            &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::AND),
+            &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::OR),
             //TODO: the rest
             _ => Err(ParserError::ParserError(format!("Unsupported operator {:?}", tok)))
         }
@@ -308,11 +322,16 @@ impl Parser {
         //println!("get_precedence() {:?}", tok);
 
         match tok {
-            &Token::Eq | &Token::Lt | & Token::LtEq |
-            &Token::Neq | &Token::Gt | & Token::GtEq => Ok(20),
+            &Token::Keyword(ref k) if k == "OR" => Ok(5),
+            &Token::Keyword(ref k) if k == "AND" => Ok(10),
+            &Token::Eq | &Token::Lt | &Token::LtEq |
+            &Token::Neq | &Token::Gt | &Token::GtEq => Ok(20),
             &Token::Plus | &Token::Minus => Ok(30),
             &Token::Mult | &Token::Div => Ok(40),
-            _ => Ok(0)
+            _ => {
+                println!("unhandled token in get_precedence: {:?}", tok);
+                Ok(0)
+            }
                 /*Err(ParserError::TokenizerError(
                 format!("invalid token {:?} for get_precedence", tok)))*/
         }
@@ -678,6 +697,47 @@ mod tests {
             }
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn parse_compound_expr_1() {
+        use self::ASTNode::*;
+        use self::SQLOperator::*;
+        let sql = String::from("a + b * c");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        println!("AST = {:?}", ast);
+        assert_eq!(SQLBinaryExpr {
+            left: Box::new(SQLIdentifier("a".to_string())),
+            op: ADD,
+            right: Box::new(SQLBinaryExpr {
+                left: Box::new(SQLIdentifier("b".to_string())),
+                op: MULT,
+                right: Box::new(SQLIdentifier("c".to_string()))
+            })}, ast);
+    }
+
+    #[test]
+    fn parse_compound_expr_2() {
+        use self::ASTNode::*;
+        use self::SQLOperator::*;
+        let sql = String::from("a * b + c");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        //println!("AST = {:?}", ast);
+        assert_eq!(SQLBinaryExpr {
+            left: Box::new(SQLBinaryExpr {
+                left: Box::new(SQLIdentifier("a".to_string())),
+                op: MULT,
+                right: Box::new(SQLIdentifier("b".to_string()))
+            }),
+            op: ADD,
+            right: Box::new(SQLIdentifier("c".to_string()))
+        }, ast);
     }
 
     #[test]
