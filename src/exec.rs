@@ -81,7 +81,7 @@ impl From<ParserError> for ExecutionError {
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Row)-> Value>;
+pub type CompiledExpr = Box<Fn(&Row) -> Value>;
 
 /// Compiles a relational expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
