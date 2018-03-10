@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::clone::Clone;
 use std::cmp::Ordering::*;
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, Error};
@@ -175,23 +176,49 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             }))
         }
         &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| batch.column(index).clone())),
-        /*
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
             let l = compile_expr(ctx,left)?;
             let r = compile_expr(ctx,right)?;
             match op {
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
-                     // if knew it w
-                    //l(batch).iter().zip(r.iter()).all(|(a,b)| a == b)
+                    let left_values : Vec<Value> = l(batch);
+                    let right_values : Vec<Value> = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a==b)).collect()
                 })),
-                &Operator::NotEq => Ok(Box::new(move |row| Value::Boolean(l(row) != r(row)))),
-                &Operator::Lt => Ok(Box::new(move |row| Value::Boolean(l(row) < r(row)))),
-                &Operator::LtEq => Ok(Box::new(move |row| Value::Boolean(l(row) <= r(row)))),
-                &Operator::Gt => Ok(Box::new(move |row| Value::Boolean(l(row) > r(row)))),
-                &Operator::GtEq => Ok(Box::new(move |row| Value::Boolean(l(row) >= r(row)))),
-                _ => return Err(ExecutionError::Custom(format!("Unsupported operator '{:?}'", op)))
+                &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a!=b)).collect()
+                })),
+                &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a>b)).collect()
+                })),
+                &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a>=b)).collect()
+                })),
+                &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a<b)).collect()
+                })),
+                &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a<=b)).collect()
+                })),
+                _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
-        }*/
+        }
         &Expr::Sort { ref expr, .. } => {
             //NOTE sort order is ignored here and is handled during sort execution
             compile_expr(ctx, expr)
@@ -231,7 +258,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             }))
         }
-        _ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
+        //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
     }
 }
 
@@ -331,26 +358,48 @@ impl SimpleRelation for CsvRelation {
 impl SimpleRelation for FilterRelation {
 
     fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
-        Box::new(self.input.scan(ctx).filter(move|t|
-            match t {
-                &Ok(ref batch) => {
-                    let result = (*self.expr)(batch.as_ref());
 
-                    // this is terribly inefficient code that creates a new batch containing the
-                    // filtered rows .. this should probably just create a bitmap for the rows
-                    // to allow through?
+        Box::new(self.input.scan(ctx).map(move |b| {
+            match b {
+                Ok(ref batch) => {
+
+                    // evaluate the filter expression for every row in the batch
+                    let result: Vec<Value> = (*self.expr)(batch.as_ref());
+
+                    let filtered_columns : Vec<Vec<Value>> = (0 .. batch.col_count())
+                        .map(|column_index| {
+                            let column = batch.column(column_index);
+                            //.iter()
+
+                            let filtered_column : Vec<Value> = column.iter().zip(result.iter())
+                                .filter(|&(_,b)| match b {
+                                    &Value::Boolean(true) => true,
+                                    _ => false
+                                })
+                                .map(|(v,_)| (*v).clone())
+                                .collect();
+
+                            filtered_column
+                        })
+                        .collect();
+
+//                    // build list of indexes of rows to include (should be a bitmap perhaps?)
+//                    let rows_to_include = result.iter().enumerate()
+//                        .map(|x| match x {
+//                            Some((i,Value::Boolean(true))) => Some(i),
+//                            _  => None
+//                        })
 
 
-//                    match  {
-//                        Value::Boolean(b) => b,
-//                        _ => panic!("Predicate expression evaluated to non-boolean value")
-//                    }
 
-                    panic!()
-                },
-                _ => true // let errors through the filter so they can be handled later
+
+                    let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
+
+                    Ok(filtered_batch)
+                }
+                _ => panic!()
             }
-        ))
+        }))
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -934,6 +983,32 @@ mod tests {
         let df2 = df.select(vec![func_expr]).unwrap();
 
         ctx.write(df2,"_uk_cities_df.csv").unwrap();
+
+        //TODO: check that generated file has expected contents
+    }
+
+    #[test]
+    fn test_filter() {
+
+        let mut ctx = create_context();
+
+        ctx.define_function(&STPointFunc {});
+
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::String, false),
+            Field::new("lat", DataType::Double, false),
+            Field::new("lng", DataType::Double, false)]);
+
+        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+
+        // filter by lat
+        let df2 = df.filter(Expr::BinaryExpr {
+            left: Box::new(Expr::Column(1)), // lat
+            op: Operator::Gt,
+            right: Box::new(Expr::Literal(Value::Double(52.0)))
+        }).unwrap();
+
+        ctx.write(df2,"_uk_cities_filtered_gt_52.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
