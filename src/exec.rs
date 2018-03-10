@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::clone::Clone;
 use std::cmp::Ordering::*;
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, Error};
@@ -39,6 +40,7 @@ extern crate csv;
 use super::csv::StringRecord;
 
 use super::api::*;
+use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
 use super::sqltorel::*;
@@ -68,6 +70,7 @@ impl From<Error> for ExecutionError {
     }
 }
 
+
 impl From<String> for ExecutionError {
     fn from(e: String) -> Self {
         ExecutionError::Custom(e)
@@ -80,28 +83,141 @@ impl From<ParserError> for ExecutionError {
     }
 }
 
+/// A batch of data organized as columns. The intent is to implement this using Apache Arrow
+/// soon but for now there will be a naive version while I integrate this. Also this is going
+/// to return each value as a Value enumeration which kind of defeats some of the benefits of
+/// arrow since it involves a copy.
+pub trait Batch {
+    fn col_count(&self) -> usize;
+    fn row_count(&self) -> usize;
+    fn column(&self, index: usize) -> &Vec<Value>;
+
+    /// access a row
+    fn row_slice(&self, index: usize) -> Vec<&Value>;
+
+    /// Convert the batch into rows
+    fn to_rows(&self) -> Vec<Vec<&Value>>;
+}
+
+pub struct ColumnBatch {
+    pub columns: Vec<ColumnData>
+}
+
+impl ColumnBatch {
+
+    pub fn from_rows(rows: Vec<Vec<Value>>) -> Self {
+        let column_count = rows[0].len();
+        let columns : Vec<ColumnData> = (0 .. column_count)
+            .map(|i| rows.iter().map(|r| (&r[i]).clone()).collect() )
+            .collect();
+        ColumnBatch { columns }
+    }
+}
+
+impl Batch for ColumnBatch {
+
+    fn col_count(&self) -> usize {
+        self.columns.len()
+    }
+
+    fn row_count(&self) -> usize {
+        self.columns[0].len()
+    }
+
+    fn column(&self, index: usize) -> &Vec<Value> {
+        &self.columns[index]
+    }
+
+    fn row_slice(&self, index: usize) -> Vec<&Value> {
+        self.columns.iter().map(|c| &c[index]).collect()
+    }
+
+    fn to_rows(&self) -> Vec<Vec<&Value>> {
+        (0..self.row_count())
+            .map(|i| self.row_slice(i))
+            .collect()
+    }
+//            let row : Vec<&Value> = ;
+//            let values : Vec<Value> = row.into_iter()
+//                .map(|v| v.clone())
+//                .collect();
+//
+//            rows.push(values);
+//        }    }
+}
+
+
+/*
+let batch_fn : CompiledExpr = | batch : &Batch | {
+        let mut vec : Vec<Value> = vec![];
+        for i in 0 .. batch.row_count() {
+            let row = batch.copy_to_row(i);
+            let value = (expr)(&row);
+            vec.push(value);
+        }
+        Ok(vec)
+    };
+    */
+
+
+pub type ColumnData = Vec<Value>;
+
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Row) -> Value>;
+pub type CompiledExpr = Box<Fn(&Batch) -> Vec<Value>>;
 
 /// Compiles a relational expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
     match expr {
         &Expr::Literal(ref lit) => {
             let literal_value = lit.clone();
-            Ok(Box::new(move |_| literal_value.clone()))
+            Ok(Box::new(move |_| {
+                // literal values are a bit special - we don't repeat them in a vector
+                // because it would be redundant, so we have a single value in a vector instead
+                vec![literal_value.clone()]
+            }))
         }
-        &Expr::Column(index) => Ok(Box::new(move |row| row.get(index).clone())),
+        &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| batch.column(index).clone())),
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
             let l = compile_expr(ctx,left)?;
             let r = compile_expr(ctx,right)?;
             match op {
-                &Operator::Eq => Ok(Box::new(move |row| Value::Boolean(l(row) == r(row)))),
-                &Operator::NotEq => Ok(Box::new(move |row| Value::Boolean(l(row) != r(row)))),
-                &Operator::Lt => Ok(Box::new(move |row| Value::Boolean(l(row) < r(row)))),
-                &Operator::LtEq => Ok(Box::new(move |row| Value::Boolean(l(row) <= r(row)))),
-                &Operator::Gt => Ok(Box::new(move |row| Value::Boolean(l(row) > r(row)))),
-                &Operator::GtEq => Ok(Box::new(move |row| Value::Boolean(l(row) >= r(row)))),
-                _ => return Err(ExecutionError::Custom(format!("Unsupported operator '{:?}'", op)))
+                &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
+                    let left_values : Vec<Value> = l(batch);
+                    let right_values : Vec<Value> = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a==b)).collect()
+                })),
+                &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a!=b)).collect()
+                })),
+                &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a>b)).collect()
+                })),
+                &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a>=b)).collect()
+                })),
+                &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a<b)).collect()
+                })),
+                &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = l(batch);
+                    let right_values = r(batch);
+                    let v = left_values.iter().zip(right_values.iter());
+                    v.map(|(a,b)| Value::Boolean(a<=b)).collect()
+                })),
+                _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
         }
         &Expr::Sort { ref expr, .. } => {
@@ -119,27 +235,32 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             let func = ctx.load_function_impl(name.as_ref())?;
 
-            Ok(Box::new(move |row| {
+            Ok(Box::new(move |batch| {
 
-                let arg_values = compiled_args_ok.iter()
-                    .map(|a| a(row))
+                let arg_values : Vec<ColumnData> = compiled_args_ok.iter()
+                    .map(|expr| expr(batch))
                     .collect();
 
-                match func.execute(arg_values) {
-                    Ok(value) => value,
-                    Err(e) => panic!("Function returned error {:?}", e)
+                // convert into rows to call scalar function until the function trait is
+                // update to accept columns
+
+                let mut result : ColumnData = vec![];
+
+                for i in 0 .. batch.row_count() {
+
+                    // get args for one row
+                    let args: Vec<&Value> = arg_values.iter().map(|c| &c[i]).collect();
+
+                    result.push(func.execute(args).unwrap() );
                 }
+
+                result
+
 
             }))
         }
+        //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
     }
-}
-
-/// Represents a csv file with a known schema
-#[derive(Debug)]
-pub struct CsvRelation {
-    file: File,
-    schema: Schema
 }
 
 pub struct FilterRelation {
@@ -166,69 +287,60 @@ pub struct LimitRelation {
     limit: usize,
 }
 
-impl<'a> CsvRelation {
-
-    pub fn open(file: File, schema: Schema) -> Result<Self,ExecutionError> {
-        Ok(CsvRelation { file, schema })
-    }
-
-    /// Convert StringRecord into our internal row type based on the known schema
-    fn create_row(&self, r: &StringRecord) -> Result<Vec<Value>,ExecutionError> {
-        assert_eq!(self.schema.columns.len(), r.len());
-        let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
-            //TODO: remove unwrap use here
-            DataType::UnsignedLong => Value::Long(s.parse::<i64>().unwrap()),
-            DataType::String => Value::String(s.to_string()),
-            DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
-            _ => panic!("csv unsupported type")
-        }).collect();
-        Ok(values)
-    }
-}
-
 /// trait for all relations (a relation is essentially just an iterator over rows with
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>,ExecutionError>> + 'a>;
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a>;
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
 }
 
-impl SimpleRelation for CsvRelation {
-
-    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>,ExecutionError>> + 'a> {
-
-        let buf_reader = BufReader::with_capacity(8*1024*1024,&self.file);
-        let csv_reader = csv::Reader::from_reader(buf_reader);
-        let record_iter = csv_reader.into_records();
-
-        let row_iter = record_iter.map(move|r| match r {
-            Ok(record) => self.create_row(&record),
-            Err(e) => Err(ExecutionError::CsvError(e))
-        });
-
-        Box::new(row_iter)
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        &self.schema
-    }
-
-}
-
 impl SimpleRelation for FilterRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
-        Box::new(self.input.scan(ctx).filter(move|t|
-            match t {
-                &Ok(ref row) => match (*self.expr)(row) {
-                    Value::Boolean(b) => b,
-                    _ => panic!("Predicate expression evaluated to non-boolean value")
-                },
-                _ => true // let errors through the filter so they can be handled later
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+
+        Box::new(self.input.scan(ctx).map(move |b| {
+            match b {
+                Ok(ref batch) => {
+
+                    // evaluate the filter expression for every row in the batch
+                    let result: Vec<Value> = (*self.expr)(batch.as_ref());
+
+                    let filtered_columns : Vec<Vec<Value>> = (0 .. batch.col_count())
+                        .map(|column_index| {
+                            let column = batch.column(column_index);
+                            //.iter()
+
+                            let filtered_column : Vec<Value> = column.iter().zip(result.iter())
+                                .filter(|&(_,b)| match b {
+                                    &Value::Boolean(true) => true,
+                                    _ => false
+                                })
+                                .map(|(v,_)| (*v).clone())
+                                .collect();
+
+                            filtered_column
+                        })
+                        .collect();
+
+//                    // build list of indexes of rows to include (should be a bitmap perhaps?)
+//                    let rows_to_include = result.iter().enumerate()
+//                        .map(|x| match x {
+//                            Some((i,Value::Boolean(true))) => Some(i),
+//                            _  => None
+//                        })
+
+
+
+
+                    let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
+
+                    Ok(filtered_batch)
+                }
+                _ => panic!()
             }
-        ))
+        }))
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -238,27 +350,42 @@ impl SimpleRelation for FilterRelation {
 
 impl SimpleRelation for SortRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
+    // this needs rewriting completely
 
-        // collect all rows from next relation
-        let it = self.input.scan(ctx);
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 
-        let mut v : Vec<Vec<Value>> = vec![];
-        it.for_each(|row_result| match row_result {
-            Ok(row) => v.push(row),
-            _ => panic!()
+        // collect entire relation into memory (obviously not scalable!)
+        let batches = self.input.scan(ctx);
+
+        // convert into rows for now but this should be converted to columnar
+        let mut rows : Vec<Vec<Value>> = vec![];
+        batches.for_each(|r| match r {
+            Ok(ref batch) => {
+                for i in 0 .. batch.row_count() {
+                    let row : Vec<&Value> = batch.row_slice(i);
+                    let values : Vec<Value> = row.into_iter()
+                        .map(|v| v.clone())
+                        .collect();
+
+                    rows.push(values);
+                }
+            },
+            _ => {}
+                //return Err(ExecutionError::Custom(format!("TBD")))
         });
 
         // now sort them
-        v.sort_by(|a,b| {
+        rows.sort_by(|a,b| {
 
             for i in 0 .. self.sort_expr.len() {
 
                 let evaluate = &self.sort_expr[i];
                 let asc = self.sort_asc[i];
 
-                let a_value = evaluate(a);
-                let b_value = evaluate(b);
+                // ugh, this is ugly - convert rows into column batches to evaluate sort expressions
+
+                let a_value = evaluate(&ColumnBatch::from_rows(vec![a.clone()]));
+                let b_value = evaluate(&ColumnBatch::from_rows(vec![b.clone()]));
 
                 if a_value < b_value {
                     return if asc { Less } else { Greater };
@@ -270,8 +397,12 @@ impl SimpleRelation for SortRelation {
             Equal
         });
 
-        // now return an iterator
-        Box::new(v.into_iter().map(|r|Ok(r)))
+        // now turn back into columnar!
+        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
+        let result_it = vec![Ok(result_batch)].into_iter();
+
+
+        Box::new(result_it)
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -281,18 +412,25 @@ impl SimpleRelation for SortRelation {
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
-        let foo = self.input.scan(ctx).map(move|r| match r {
-            Ok(row) => {
-                let values = self.expr.iter()
-                    .map(|e| (*e)(&row))
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+
+        let projection_iter = self.input.scan(ctx).map(move|r| match r {
+            Ok(ref batch) => {
+
+                //TODO projection causes columns to be copied ... should be able to avoid that
+
+                let projected_columns = self.expr.iter()
+                    .map(|e| (*e)(batch.as_ref()))
                     .collect();
-                Ok(values)
+
+                let projected_batch : Box<Batch> = Box::new(ColumnBatch { columns: projected_columns });
+
+                Ok(projected_batch)
             },
             Err(_) => r
         });
 
-        Box::new(foo)
+        Box::new(projection_iter)
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -301,7 +439,7 @@ impl SimpleRelation for ProjectRelation {
 }
 
 impl SimpleRelation for LimitRelation {
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).take(self.limit))
     }
 
@@ -596,11 +734,13 @@ impl ExecutionContext {
                 let mut count : usize = 0;
                 it.for_each(|t| {
                     match t {
-                        Ok(row) => {
-//                            let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
-                            let csv = row.to_string();
-                            writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
-                            count += 1;
+                        Ok(ref batch) => {
+                            for i in 0 .. batch.row_count() {
+                                let row = batch.row_slice(i);
+                                let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
+                                writer.write(&csv.into_bytes()).unwrap();
+                                count += 1;
+                            }
                         },
                         Err(e) => panic!(format!("Error processing row: {:?}", e)) //TODO: error handling
                     }
@@ -784,6 +924,32 @@ mod tests {
         let df2 = df.select(vec![func_expr]).unwrap();
 
         ctx.write(df2,"_uk_cities_df.csv").unwrap();
+
+        //TODO: check that generated file has expected contents
+    }
+
+    #[test]
+    fn test_filter() {
+
+        let mut ctx = create_context();
+
+        ctx.define_function(&STPointFunc {});
+
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::String, false),
+            Field::new("lat", DataType::Double, false),
+            Field::new("lng", DataType::Double, false)]);
+
+        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+
+        // filter by lat
+        let df2 = df.filter(Expr::BinaryExpr {
+            left: Box::new(Expr::Column(1)), // lat
+            op: Operator::Gt,
+            right: Box::new(Expr::Literal(Value::Double(52.0)))
+        }).unwrap();
+
+        ctx.write(df2,"_uk_cities_filtered_gt_52.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
