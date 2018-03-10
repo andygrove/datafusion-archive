@@ -89,9 +89,6 @@ pub trait Batch {
 
     /// access a row
     fn row_slice(&self, index: usize) -> Vec<&Value>;
-
-    /// Convert the batch into rows
-    fn to_rows(&self) -> Vec<Vec<&Value>>;
 }
 
 pub struct ColumnBatch {
@@ -110,7 +107,6 @@ impl ColumnBatch {
 }
 
 impl Batch for ColumnBatch {
-
     fn col_count(&self) -> usize {
         self.columns.len()
     }
@@ -126,34 +122,7 @@ impl Batch for ColumnBatch {
     fn row_slice(&self, index: usize) -> Vec<&Value> {
         self.columns.iter().map(|c| &c[index]).collect()
     }
-
-    fn to_rows(&self) -> Vec<Vec<&Value>> {
-        (0..self.row_count())
-            .map(|i| self.row_slice(i))
-            .collect()
-    }
-//            let row : Vec<&Value> = ;
-//            let values : Vec<Value> = row.into_iter()
-//                .map(|v| v.clone())
-//                .collect();
-//
-//            rows.push(values);
-//        }    }
 }
-
-
-/*
-let batch_fn : CompiledExpr = | batch : &Batch | {
-        let mut vec : Vec<Value> = vec![];
-        for i in 0 .. batch.row_count() {
-            let row = batch.copy_to_row(i);
-            let value = (expr)(&row);
-            vec.push(value);
-        }
-        Ok(vec)
-    };
-    */
-
 
 pub type ColumnData = Vec<Value>;
 
