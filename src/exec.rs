@@ -15,7 +15,7 @@
 use std::clone::Clone;
 use std::cmp::Ordering::*;
 use std::collections::HashMap;
-use std::io::{BufReader, BufWriter, Error};
+use std::io::{BufWriter, Error};
 use std::io::prelude::*;
 use std::iter::Iterator;
 use std::fs::File;
@@ -34,10 +34,6 @@ use self::hyper::Client;
 use self::tokio_core::reactor::Core;
 use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
-
-extern crate csv;
-
-use super::csv::StringRecord;
 
 use super::api::*;
 use super::datasource::csv::CsvRelation;
@@ -59,7 +55,6 @@ pub enum DFConfig {
 #[derive(Debug)]
 pub enum ExecutionError {
     IoError(Error),
-    CsvError(csv::Error),
     ParserError(ParserError),
     Custom(String)
 }

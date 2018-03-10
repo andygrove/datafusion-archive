@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::{BufReader, BufWriter, Error};
+use std::io::{BufReader};
 use std::fs::File;
 
 use super::super::rel::{Schema, DataType, Value};
@@ -68,7 +68,7 @@ impl SimpleRelation for CsvRelation {
                 let batch: Box<Batch> = Box::new(ColumnBatch { columns });
                 Ok(batch)
             },
-            Err(e) => Err(ExecutionError::CsvError(e))
+            Err(e) => Err(ExecutionError::Custom(format!("Error reading CSV: {:?}", e)))
         });
 
         // real batches
