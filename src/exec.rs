@@ -91,31 +91,29 @@ pub trait Batch {
     fn column(&self, index: usize) -> &Vec<Value>;
 
     /// construct a row by copying all the values
-    fn copy_to_row(&self, index: usize) -> Vec<Value>;
+    fn row_slice(&self, index: usize) -> Vec<&Value>;
 }
 
-
-/// Interim batch impl to make integration easy
-struct SingleRowBatch {
-    row: Vec<Value>
+struct ColumnBatch {
+    columns: Vec<ColumnData>
 }
 
-impl Batch for SingleRowBatch {
+impl Batch for ColumnBatch {
+
     fn col_count(&self) -> usize {
-        self.row.len()
+        self.columns.len()
     }
 
     fn row_count(&self) -> usize {
-        1
+        self.columns[0].len()
     }
 
-    fn column(&self, _index: usize) -> &Vec<Value> {
-        unimplemented!()
+    fn column(&self, index: usize) -> &Vec<Value> {
+        &self.columns[index]
     }
 
-    fn copy_to_row(&self, index: usize) -> Vec<Value> {
-        assert_eq!(0, index);
-        self.row.clone()
+    fn row_slice(&self, index: usize) -> Vec<&Value> {
+        self.columns.iter().map(|c| &c[index]).collect()
     }
 }
 
@@ -131,6 +129,9 @@ let batch_fn : CompiledExpr = | batch : &Batch | {
         Ok(vec)
     };
     */
+
+
+pub type ColumnData = Vec<Value>;
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
 pub type CompiledExpr = Box<Fn(&Batch) -> Vec<Value>>;
@@ -168,6 +169,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             //NOTE sort order is ignored here and is handled during sort execution
             compile_expr(ctx, expr)
         },
+        */
         &Expr::ScalarFunction { ref name, ref args } => {
 
             // evaluate the arguments to the function
@@ -179,20 +181,31 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             let func = ctx.load_function_impl(name.as_ref())?;
 
-            Ok(Box::new(move |row| {
+            Ok(Box::new(move |batch| {
 
-                let arg_values = compiled_args_ok.iter()
-                    .map(|a| a(row))
+                let arg_values : Vec<ColumnData> = compiled_args_ok.iter()
+                    .map(|expr| expr(batch))
                     .collect();
 
-                match func.execute(arg_values) {
-                    Ok(value) => value,
-                    Err(e) => panic!("Function returned error {:?}", e)
+                // convert into rows to call scalar function until the function trait is
+                // update to accept columns
+
+                let mut result : ColumnData = vec![];
+
+                for i in 0 .. batch.row_count() {
+
+                    // get args for one row
+                    let args: Vec<&Value> = arg_values.iter().map(|c| &c[i]).collect();
+
+                    result.push(func.execute(args).unwrap() );
                 }
 
+                result
+
+
             }))
-        }*/
-        _ => unimplemented!()
+        }
+        _ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
     }
 }
 
@@ -264,10 +277,16 @@ impl SimpleRelation for CsvRelation {
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
 
-        //TODO: interim code to map each row to a single row batch ... fix this later so we have
         let batch_iter = record_iter.map(move|r| match r {
             Ok(record) => {
-                let batch: Box<Batch> = Box::new(SingleRowBatch { row: self.create_row(&record).unwrap() });
+
+                //TODO: interim code to map each row to a single row batch ... fix this later so we have
+                // real batches
+                let columns : Vec<ColumnData> = self.create_row(&record).unwrap()
+                    .iter().map(|v| vec![v.clone()])
+                    .collect();
+
+                let batch: Box<Batch> = Box::new(ColumnBatch { columns });
                 Ok(batch)
             },
             Err(e) => Err(ExecutionError::CsvError(e))
@@ -367,18 +386,24 @@ impl SimpleRelation for SortRelation {
 impl SimpleRelation for ProjectRelation {
 
     fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
-//        let foo = self.input.scan(ctx).map(move|r| match r {
-//            Ok(row) => {
-//                let values = self.expr.iter()
-//                    .map(|e| (*e)(&row))
-//                    .collect();
-//                Ok(values)
-//            },
-//            Err(_) => r
-//        });
-//
-//        Box::new(foo)
-        panic!()
+
+        let projection_iter = self.input.scan(ctx).map(move|r| match r {
+            Ok(ref batch) => {
+
+                //TODO projection causes columns to be copied ... should be able to avoid that
+
+                let projected_columns = self.expr.iter()
+                    .map(|e| (*e)(batch.as_ref()))
+                    .collect();
+
+                let projected_batch : Box<Batch> = Box::new(ColumnBatch { columns: projected_columns });
+
+                Ok(projected_batch)
+            },
+            Err(_) => r
+        });
+
+        Box::new(projection_iter)
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -682,12 +707,13 @@ impl ExecutionContext {
                 let mut count : usize = 0;
                 it.for_each(|t| {
                     match t {
-                        Ok(row) => {
-//                            let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
-//                            let csv = row.to_string();
-//                            writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
-//                            count += 1;
-                            panic!()
+                        Ok(ref batch) => {
+                            for i in 0 .. batch.row_count() {
+                                let row = batch.row_slice(i);
+                                let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
+                                writer.write(&csv.into_bytes()).unwrap();
+                                count += 1;
+                            }
                         },
                         Err(e) => panic!(format!("Error processing row: {:?}", e)) //TODO: error handling
                     }
