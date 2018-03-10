@@ -15,6 +15,7 @@
 pub mod api;
 pub mod cluster;
 pub mod dataframe;
+pub mod datasource;
 pub mod exec;
 pub mod functions;
 pub mod rel;

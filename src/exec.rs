@@ -40,6 +40,7 @@ extern crate csv;
 use super::csv::StringRecord;
 
 use super::api::*;
+use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
 use super::sqltorel::*;
@@ -98,8 +99,8 @@ pub trait Batch {
     fn to_rows(&self) -> Vec<Vec<&Value>>;
 }
 
-struct ColumnBatch {
-    columns: Vec<ColumnData>
+pub struct ColumnBatch {
+    pub columns: Vec<ColumnData>
 }
 
 impl ColumnBatch {
@@ -262,13 +263,6 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
     }
 }
 
-/// Represents a csv file with a known schema
-#[derive(Debug)]
-pub struct CsvRelation {
-    file: File,
-    schema: Schema
-}
-
 pub struct FilterRelation {
     schema: Schema,
     input: Box<SimpleRelation>,
@@ -293,26 +287,6 @@ pub struct LimitRelation {
     limit: usize,
 }
 
-impl<'a> CsvRelation {
-
-    pub fn open(file: File, schema: Schema) -> Result<Self,ExecutionError> {
-        Ok(CsvRelation { file, schema })
-    }
-
-    /// Convert StringRecord into our internal row type based on the known schema
-    fn create_row(&self, r: &StringRecord) -> Result<Vec<Value>,ExecutionError> {
-        assert_eq!(self.schema.columns.len(), r.len());
-        let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
-            //TODO: remove unwrap use here
-            DataType::UnsignedLong => Value::Long(s.parse::<i64>().unwrap()),
-            DataType::String => Value::String(s.to_string()),
-            DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
-            _ => panic!("csv unsupported type")
-        }).collect();
-        Ok(values)
-    }
-}
-
 /// trait for all relations (a relation is essentially just an iterator over rows with
 /// a known schema)
 pub trait SimpleRelation {
@@ -320,39 +294,6 @@ pub trait SimpleRelation {
     fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a>;
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
-}
-
-impl SimpleRelation for CsvRelation {
-
-    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a> {
-
-        let buf_reader = BufReader::with_capacity(8*1024*1024,&self.file);
-        let csv_reader = csv::Reader::from_reader(buf_reader);
-        let record_iter = csv_reader.into_records();
-
-        let batch_iter = record_iter.map(move|r| match r {
-            Ok(record) => {
-
-                //TODO: interim code to map each row to a single row batch ... fix this later so we have
-                // real batches
-                let columns : Vec<ColumnData> = self.create_row(&record).unwrap()
-                    .iter().map(|v| vec![v.clone()])
-                    .collect();
-
-                let batch: Box<Batch> = Box::new(ColumnBatch { columns });
-                Ok(batch)
-            },
-            Err(e) => Err(ExecutionError::CsvError(e))
-        });
-
-        // real batches
-        Box::new(batch_iter)
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        &self.schema
-    }
-
 }
 
 impl SimpleRelation for FilterRelation {
