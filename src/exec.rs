@@ -90,12 +90,26 @@ pub trait Batch {
     fn row_count(&self) -> usize;
     fn column(&self, index: usize) -> &Vec<Value>;
 
-    /// construct a row by copying all the values
+    /// access a row
     fn row_slice(&self, index: usize) -> Vec<&Value>;
+
+    /// Convert the batch into rows
+    fn to_rows(&self) -> Vec<Vec<&Value>>;
 }
 
 struct ColumnBatch {
     columns: Vec<ColumnData>
+}
+
+impl ColumnBatch {
+
+    pub fn from_rows(rows: Vec<Vec<Value>>) -> Self {
+        let column_count = rows[0].len();
+        let columns : Vec<ColumnData> = (0 .. column_count)
+            .map(|i| rows.iter().map(|r| (&r[i]).clone()).collect() )
+            .collect();
+        ColumnBatch { columns }
+    }
 }
 
 impl Batch for ColumnBatch {
@@ -115,6 +129,19 @@ impl Batch for ColumnBatch {
     fn row_slice(&self, index: usize) -> Vec<&Value> {
         self.columns.iter().map(|c| &c[index]).collect()
     }
+
+    fn to_rows(&self) -> Vec<Vec<&Value>> {
+        (0..self.row_count())
+            .map(|i| self.row_slice(i))
+            .collect()
+    }
+//            let row : Vec<&Value> = ;
+//            let values : Vec<Value> = row.into_iter()
+//                .map(|v| v.clone())
+//                .collect();
+//
+//            rows.push(values);
+//        }    }
 }
 
 
@@ -164,12 +191,11 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::GtEq => Ok(Box::new(move |row| Value::Boolean(l(row) >= r(row)))),
                 _ => return Err(ExecutionError::Custom(format!("Unsupported operator '{:?}'", op)))
             }
-        }
+        }*/
         &Expr::Sort { ref expr, .. } => {
             //NOTE sort order is ignored here and is handled during sort execution
             compile_expr(ctx, expr)
         },
-        */
         &Expr::ScalarFunction { ref name, ref args } => {
 
             // evaluate the arguments to the function
@@ -334,32 +360,42 @@ impl SimpleRelation for FilterRelation {
 
 impl SimpleRelation for SortRelation {
 
+    // this needs rewriting completely
+
     fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 
-        // collect all rows from next relation
-        let it = self.input.scan(ctx);
+        // collect entire relation into memory (obviously not scalable!)
+        let batches = self.input.scan(ctx);
 
-        let mut v : Vec<Vec<Value>> = vec![];
-        it.for_each(|r| match r {
-            Ok(batch) => {
-//                for i in 0 .. batch.row
-//                v.push(row)
-                panic!()
+        // convert into rows for now but this should be converted to columnar
+        let mut rows : Vec<Vec<Value>> = vec![];
+        batches.for_each(|r| match r {
+            Ok(ref batch) => {
+                for i in 0 .. batch.row_count() {
+                    let row : Vec<&Value> = batch.row_slice(i);
+                    let values : Vec<Value> = row.into_iter()
+                        .map(|v| v.clone())
+                        .collect();
+
+                    rows.push(values);
+                }
             },
-            _ => panic!()
+            _ => {}
+                //return Err(ExecutionError::Custom(format!("TBD")))
         });
 
-        /*
         // now sort them
-        v.sort_by(|a,b| {
+        rows.sort_by(|a,b| {
 
             for i in 0 .. self.sort_expr.len() {
 
                 let evaluate = &self.sort_expr[i];
                 let asc = self.sort_asc[i];
 
-                let a_value = evaluate(a);
-                let b_value = evaluate(b);
+                // ugh, this is ugly - convert rows into column batches to evaluate sort expressions
+
+                let a_value = evaluate(&ColumnBatch::from_rows(vec![a.clone()]));
+                let b_value = evaluate(&ColumnBatch::from_rows(vec![b.clone()]));
 
                 if a_value < b_value {
                     return if asc { Less } else { Greater };
@@ -370,12 +406,13 @@ impl SimpleRelation for SortRelation {
 
             Equal
         });
-        */
 
-        panic!();
+        // now turn back into columnar!
+        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
+        let result_it = vec![Ok(result_batch)].into_iter();
 
-        // now return an iterator
-        //Box::new(v.into_iter().map(|r|Ok(r)))
+
+        Box::new(result_it)
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
