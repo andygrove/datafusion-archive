@@ -224,14 +224,15 @@ impl Service for Worker {
                                                                     .map(|v| v.to_string())
                                                                     .collect();
                                                                 result_set += &s.join(",");
+                                                                result_set += "\n";
 
                                                             }
                                                         },
                                                         Err(e) => {
-                                                            result_set += &format!("ERROR: {:?}", e)
+                                                            result_set += &format!("ERROR: {:?}", e);
+                                                            result_set += "\n";
                                                         }
                                                     }
-                                                    result_set += "\n";
                                                 });
 
                                                 Response::new()
