@@ -68,6 +68,7 @@ impl From<Error> for ExecutionError {
     }
 }
 
+
 impl From<String> for ExecutionError {
     fn from(e: String) -> Self {
         ExecutionError::Custom(e)
@@ -80,22 +81,81 @@ impl From<ParserError> for ExecutionError {
     }
 }
 
+/// A batch of data organized as columns. The intent is to implement this using Apache Arrow
+/// soon but for now there will be a naive version while I integrate this. Also this is going
+/// to return each value as a Value enumeration which kind of defeats some of the benefits of
+/// arrow since it involves a copy.
+pub trait Batch {
+    fn col_count(&self) -> usize;
+    fn row_count(&self) -> usize;
+    fn column(&self, index: usize) -> &Vec<Value>;
+
+    /// construct a row by copying all the values
+    fn copy_to_row(&self, index: usize) -> Vec<Value>;
+}
+
+
+/// Interim batch impl to make integration easy
+struct SingleRowBatch {
+    row: Vec<Value>
+}
+
+impl Batch for SingleRowBatch {
+    fn col_count(&self) -> usize {
+        self.row.len()
+    }
+
+    fn row_count(&self) -> usize {
+        1
+    }
+
+    fn column(&self, _index: usize) -> &Vec<Value> {
+        unimplemented!()
+    }
+
+    fn copy_to_row(&self, index: usize) -> Vec<Value> {
+        assert_eq!(0, index);
+        self.row.clone()
+    }
+}
+
+
+/*
+let batch_fn : CompiledExpr = | batch : &Batch | {
+        let mut vec : Vec<Value> = vec![];
+        for i in 0 .. batch.row_count() {
+            let row = batch.copy_to_row(i);
+            let value = (expr)(&row);
+            vec.push(value);
+        }
+        Ok(vec)
+    };
+    */
+
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Row) -> Value>;
+pub type CompiledExpr = Box<Fn(&Batch) -> Vec<Value>>;
 
 /// Compiles a relational expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
     match expr {
         &Expr::Literal(ref lit) => {
             let literal_value = lit.clone();
-            Ok(Box::new(move |_| literal_value.clone()))
+            Ok(Box::new(move |_| {
+                // literal values are a bit special - we don't repeat them in a vector
+                // because it would be redundant, so we have a single value in a vector instead
+                vec![literal_value.clone()]
+            }))
         }
-        &Expr::Column(index) => Ok(Box::new(move |row| row.get(index).clone())),
+        &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| batch.column(index).clone())),
+        /*
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
             let l = compile_expr(ctx,left)?;
             let r = compile_expr(ctx,right)?;
             match op {
-                &Operator::Eq => Ok(Box::new(move |row| Value::Boolean(l(row) == r(row)))),
+                &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
+                     // if knew it w
+                    //l(batch).iter().zip(r.iter()).all(|(a,b)| a == b)
+                })),
                 &Operator::NotEq => Ok(Box::new(move |row| Value::Boolean(l(row) != r(row)))),
                 &Operator::Lt => Ok(Box::new(move |row| Value::Boolean(l(row) < r(row)))),
                 &Operator::LtEq => Ok(Box::new(move |row| Value::Boolean(l(row) <= r(row)))),
@@ -131,7 +191,8 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 }
 
             }))
-        }
+        }*/
+        _ => unimplemented!()
     }
 }
 
@@ -190,25 +251,30 @@ impl<'a> CsvRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>,ExecutionError>> + 'a>;
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a>;
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
 }
 
 impl SimpleRelation for CsvRelation {
 
-    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>,ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a> {
 
         let buf_reader = BufReader::with_capacity(8*1024*1024,&self.file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
 
-        let row_iter = record_iter.map(move|r| match r {
-            Ok(record) => self.create_row(&record),
+        //TODO: interim code to map each row to a single row batch ... fix this later so we have
+        let batch_iter = record_iter.map(move|r| match r {
+            Ok(record) => {
+                let batch: Box<Batch> = Box::new(SingleRowBatch { row: self.create_row(&record).unwrap() });
+                Ok(batch)
+            },
             Err(e) => Err(ExecutionError::CsvError(e))
         });
 
-        Box::new(row_iter)
+        // real batches
+        Box::new(batch_iter)
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -219,12 +285,23 @@ impl SimpleRelation for CsvRelation {
 
 impl SimpleRelation for FilterRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).filter(move|t|
             match t {
-                &Ok(ref row) => match (*self.expr)(row) {
-                    Value::Boolean(b) => b,
-                    _ => panic!("Predicate expression evaluated to non-boolean value")
+                &Ok(ref batch) => {
+                    let result = (*self.expr)(batch.as_ref());
+
+                    // this is terribly inefficient code that creates a new batch containing the
+                    // filtered rows .. this should probably just create a bitmap for the rows
+                    // to allow through?
+
+
+//                    match  {
+//                        Value::Boolean(b) => b,
+//                        _ => panic!("Predicate expression evaluated to non-boolean value")
+//                    }
+
+                    panic!()
                 },
                 _ => true // let errors through the filter so they can be handled later
             }
@@ -238,17 +315,22 @@ impl SimpleRelation for FilterRelation {
 
 impl SimpleRelation for SortRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 
         // collect all rows from next relation
         let it = self.input.scan(ctx);
 
         let mut v : Vec<Vec<Value>> = vec![];
-        it.for_each(|row_result| match row_result {
-            Ok(row) => v.push(row),
+        it.for_each(|r| match r {
+            Ok(batch) => {
+//                for i in 0 .. batch.row
+//                v.push(row)
+                panic!()
+            },
             _ => panic!()
         });
 
+        /*
         // now sort them
         v.sort_by(|a,b| {
 
@@ -269,9 +351,12 @@ impl SimpleRelation for SortRelation {
 
             Equal
         });
+        */
+
+        panic!();
 
         // now return an iterator
-        Box::new(v.into_iter().map(|r|Ok(r)))
+        //Box::new(v.into_iter().map(|r|Ok(r)))
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -281,18 +366,19 @@ impl SimpleRelation for SortRelation {
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
-        let foo = self.input.scan(ctx).map(move|r| match r {
-            Ok(row) => {
-                let values = self.expr.iter()
-                    .map(|e| (*e)(&row))
-                    .collect();
-                Ok(values)
-            },
-            Err(_) => r
-        });
-
-        Box::new(foo)
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+//        let foo = self.input.scan(ctx).map(move|r| match r {
+//            Ok(row) => {
+//                let values = self.expr.iter()
+//                    .map(|e| (*e)(&row))
+//                    .collect();
+//                Ok(values)
+//            },
+//            Err(_) => r
+//        });
+//
+//        Box::new(foo)
+        panic!()
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -301,7 +387,7 @@ impl SimpleRelation for ProjectRelation {
 }
 
 impl SimpleRelation for LimitRelation {
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Vec<Value>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).take(self.limit))
     }
 
@@ -598,9 +684,10 @@ impl ExecutionContext {
                     match t {
                         Ok(row) => {
 //                            let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
-                            let csv = row.to_string();
-                            writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
-                            count += 1;
+//                            let csv = row.to_string();
+//                            writer.write(&csv.into_bytes()).unwrap(); //TODO: remove unwrap
+//                            count += 1;
+                            panic!()
                         },
                         Err(e) => panic!(format!("Error processing row: {:?}", e)) //TODO: error handling
                     }

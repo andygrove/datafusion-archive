@@ -220,7 +220,8 @@ impl Service for Worker {
                                                 it.for_each(|t| {
                                                     match t {
                                                         Ok(row) => {
-                                                            result_set += &row.to_string();
+                                                            //result_set += &row.to_string();
+                                                            panic!()
                                                         },
                                                         Err(e) => {
                                                             result_set += &format!("ERROR: {:?}", e)
