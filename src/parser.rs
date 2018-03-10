@@ -294,19 +294,16 @@ impl Parser {
 
     fn to_sql_operator(&self, tok: &Token) -> Result<SQLOperator, ParserError> {
         match tok {
-            &Token::Eq => Ok(SQLOperator::EQ),
-            &Token::Lt => Ok(SQLOperator::LT),
-            &Token::LtEq => Ok(SQLOperator::LTEQ),
-            &Token::Gt => Ok(SQLOperator::GT),
-            &Token::GtEq => Ok(SQLOperator::GTEQ),
-            &Token::Plus => Ok(SQLOperator::ADD),
-            &Token::Minus => Ok(SQLOperator::SUB),
-            &Token::Mult => Ok(SQLOperator::MULT),
-            &Token::Div => Ok(SQLOperator::DIV),
-            &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::AND),
-            &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::OR),
-            //TODO: the rest
-            _ => Err(ParserError::ParserError(format!("Unsupported operator {:?}", tok)))
+            &Token::Eq => Ok(SQLOperator::Eq),
+            &Token::Lt => Ok(SQLOperator::Lt),
+            &Token::LtEq => Ok(SQLOperator::LtEq),
+            &Token::Gt => Ok(SQLOperator::Gt),
+            &Token::GtEq => Ok(SQLOperator::GtEq),
+            &Token::Plus => Ok(SQLOperator::Plus),
+            &Token::Minus => Ok(SQLOperator::Minus),
+            &Token::Mult => Ok(SQLOperator::Multiply),
+            &Token::Div => Ok(SQLOperator::Divide),
+            _ => Err(ParserError::ParserError(format!("Unsupported SQL operator {:?}", tok)))
         }
     }
 
@@ -706,10 +703,10 @@ mod tests {
         println!("AST = {:?}", ast);
         assert_eq!(SQLBinaryExpr {
             left: Box::new(SQLIdentifier("a".to_string())),
-            op: ADD,
+            op: Plus,
             right: Box::new(SQLBinaryExpr {
                 left: Box::new(SQLIdentifier("b".to_string())),
-                op: MULT,
+                op: Multiply,
                 right: Box::new(SQLIdentifier("c".to_string()))
             })}, ast);
     }
@@ -727,10 +724,10 @@ mod tests {
         assert_eq!(SQLBinaryExpr {
             left: Box::new(SQLBinaryExpr {
                 left: Box::new(SQLIdentifier("a".to_string())),
-                op: MULT,
+                op: Multiply,
                 right: Box::new(SQLIdentifier("b".to_string()))
             }),
-            op: ADD,
+            op: Plus,
             right: Box::new(SQLIdentifier("c".to_string()))
         }, ast);
     }

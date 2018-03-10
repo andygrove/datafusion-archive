@@ -161,12 +161,17 @@ impl SqlToRel {
             &ASTNode::SQLBinaryExpr { ref left, ref op, ref right } => {
                 //TODO: we have this implemented somewhere else already
                 let operator = match op {
-                    &SQLOperator::GT => Operator::Gt,
-                    &SQLOperator::GTEQ => Operator::GtEq,
-                    &SQLOperator::LT => Operator::Lt,
-                    &SQLOperator::LTEQ => Operator::LtEq,
-                    &SQLOperator::EQ => Operator::Eq,
-                    _ => unimplemented!()
+                    &SQLOperator::Gt => Operator::Gt,
+                    &SQLOperator::GtEq => Operator::GtEq,
+                    &SQLOperator::Lt => Operator::Lt,
+                    &SQLOperator::LtEq => Operator::LtEq,
+                    &SQLOperator::Eq => Operator::Eq,
+                    &SQLOperator::NotEq => Operator::NotEq,
+                    &SQLOperator::Plus => Operator::Plus,
+                    &SQLOperator::Minus => Operator::Minus,
+                    &SQLOperator::Multiply => Operator::Multiply,
+                    &SQLOperator::Divide => Operator::Divide,
+                    &SQLOperator::Modulus => Operator::Modulus
                 };
                 Ok(Expr::BinaryExpr {
                     left: Box::new(self.sql_to_rex(&left, &schema)?),

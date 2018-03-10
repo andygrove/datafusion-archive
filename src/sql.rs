@@ -54,17 +54,15 @@ pub enum SQLType {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SQLOperator {
-    ADD,
-    SUB,
-    MULT,
-    DIV,
-    MOD,
-    GT,
-    LT,
-    GTEQ,
-    LTEQ,
-    EQ,
-    NEQ,
-    OR,
-    AND
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulus,
+    Gt,
+    Lt,
+    GtEq,
+    LtEq,
+    Eq,
+    NotEq
 }

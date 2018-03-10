@@ -101,6 +101,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::LtEq => Ok(Box::new(move |row| Value::Boolean(l(row) <= r(row)))),
                 &Operator::Gt => Ok(Box::new(move |row| Value::Boolean(l(row) > r(row)))),
                 &Operator::GtEq => Ok(Box::new(move |row| Value::Boolean(l(row) >= r(row)))),
+                _ => return Err(ExecutionError::Custom(format!("Unsupported operator '{:?}'", op)))
             }
         }
         &Expr::Sort { ref expr, .. } => {

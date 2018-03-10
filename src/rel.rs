@@ -182,6 +182,11 @@ pub enum Operator {
     LtEq,
     Gt,
     GtEq,
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulus
 }
 
 /// Relation Expression
