@@ -159,7 +159,17 @@ mod tests {
 
         let batch : Box<Batch> = it.next().unwrap().unwrap();
 
+        assert_eq!(3, batch.col_count());
         assert_eq!(36, batch.row_count());
+
+        let row = batch.row_slice(0);
+        assert_eq!(vec![
+            Value::String("Stoke-on-Trent, Staffordshire, the UK".to_string()),
+            Value::Double(53.002666),
+            Value::Double(-2.179404)], row);
+
+        let names = batch.column(0);
+        println!("names: {:?}", names);
 
     }
 }

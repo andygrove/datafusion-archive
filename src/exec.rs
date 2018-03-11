@@ -118,25 +118,18 @@ impl Batch for ColumnBatch {
     }
 
     fn row_slice(&self, index: usize) -> Vec<Value> {
-        self.columns.iter().map(|c| match c {
-            &ColumnData::Boolean(ref v) => Value::Boolean(v[index]),
-            &ColumnData::Float(ref v) => Value::Float(v[index]),
-            &ColumnData::Double(ref v) => Value::Double(v[index]),
-            &ColumnData::Long(ref v) => Value::Long(v[index]),
-            &ColumnData::UnsignedLong(ref v) => Value::UnsignedLong(v[index]),
-            &ColumnData::String(ref v) => Value::String(v[index].clone()),
-            //&ColumnData::ComplexValue(ref v) => Value::ComplexValue(v[index].clone()),
-            _ => unimplemented!()
-        }).collect()
+        println!("row_slice() index = {}", index);
+        self.columns.iter().map(|c| c.get_value(index)).collect()
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub enum ColumnData {
     BroadcastVariable(Value),
     Boolean(Vec<bool>),
     Float(Vec<f32>),
     Double(Vec<f64>),
+    Int(Vec<i32>),
     UnsignedInt(Vec<u32>),
     Long(Vec<i64>),
     UnsignedLong(Vec<u64>),
@@ -150,10 +143,14 @@ impl From<Vec<Value>> for ColumnData {
             &Value::Boolean(_) => ColumnData::Boolean(vec.iter().map(|v| match v { &Value::Boolean(v) => v, _ => panic!() }).collect()),
             &Value::Float(_) => ColumnData::Float(vec.iter().map(|v| match v { &Value::Float(v) => v, _ => panic!() }).collect()),
             &Value::Double(_) => ColumnData::Double(vec.iter().map(|v| match v { &Value::Double(v) => v, _ => panic!() }).collect()),
+            &Value::Int(_) => ColumnData::Int(vec.iter().map(|v| match v { &Value::Int(v) => v, _ => panic!() }).collect()),
+            &Value::UnsignedInt(_) => ColumnData::UnsignedInt(vec.iter().map(|v| match v { &Value::UnsignedInt(v) => v, _ => panic!() }).collect()),
             &Value::Long(_) => ColumnData::Long(vec.iter().map(|v| match v { &Value::Long(v) => v, _ => panic!() }).collect()),
             &Value::UnsignedLong(_) => ColumnData::UnsignedLong(vec.iter().map(|v| match v { &Value::UnsignedLong(v) => v, _ => panic!() }).collect()),
             &Value::String(_) => ColumnData::String(vec.iter().map(|v| match v { &Value::String(ref v) => v.clone(), _ => panic!() }).collect()),
-            &Value::ComplexValue(_) => ColumnData::ComplexValue(vec.iter().map(|v| match v { &Value::ComplexValue(ref v) => ColumnData::from(v.clone()), _ => panic!() }).collect()),
+            &Value::ComplexValue(_) => {
+                ColumnData::ComplexValue(vec.iter().map(|v| match v { &Value::ComplexValue(ref v) => ColumnData::from(v.clone()), _ => panic!() }).collect())
+            },
         }
     }
 }
@@ -166,12 +163,37 @@ impl ColumnData {
             &ColumnData::Boolean(ref v) => v.len(),
             &ColumnData::Float(ref v) => v.len(),
             &ColumnData::Double(ref v) => v.len(),
+            &ColumnData::Int(ref v) => v.len(),
             &ColumnData::UnsignedInt(ref v) => v.len(),
             &ColumnData::Long(ref v) => v.len(),
             &ColumnData::UnsignedLong(ref v) => v.len(),
             &ColumnData::String(ref v) => v.len(),
             &ColumnData::ComplexValue(ref v) => v.len(),
         }
+    }
+
+    pub fn get_value(&self, index: usize) -> Value {
+        println!("get_value() index={}", index);
+        let v = match self {
+            &ColumnData::BroadcastVariable(ref v) => v.clone(),
+            &ColumnData::Boolean(ref v) => Value::Boolean(v[index]),
+            &ColumnData::Float(ref v) => Value::Float(v[index]),
+            &ColumnData::Double(ref v) => Value::Double(v[index]),
+            &ColumnData::Int(ref v) => Value::Int(v[index]),
+            &ColumnData::UnsignedInt(ref v) => Value::UnsignedInt(v[index]),
+            &ColumnData::Long(ref v) => Value::Long(v[index]),
+            &ColumnData::UnsignedLong(ref v) => Value::UnsignedLong(v[index]),
+            &ColumnData::String(ref v) => Value::String(v[index].clone()),
+            &ColumnData::ComplexValue(ref v) => {
+                // each field has its own ColumnData e.g. lat, lon so we want to get a value from each (but it's recursive)
+                println!("complex value has {} fields", v.len());
+                let fields = v.iter().map(|field| field.get_value(index)).collect();
+                Value::ComplexValue(fields)
+            }
+        };
+        println!("get_value() index={} returned {:?}", index, v);
+
+        v
     }
 
     pub fn filter(&self, bools: ColumnData) -> ColumnData {

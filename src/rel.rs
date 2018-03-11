@@ -117,6 +117,8 @@ pub enum Value {
     Boolean(bool),
     Float(f32),
     Double(f64),
+    Int(i32),
+    UnsignedInt(u32),
     Long(i64),
     UnsignedLong(u64),
     String(String),
