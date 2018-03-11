@@ -125,7 +125,6 @@ impl Batch for ColumnBatch {
 
 #[derive(Debug,Clone)]
 pub enum ColumnData {
-    Empty,
     BroadcastVariable(Value),
     Boolean(Vec<bool>),
     Float(Vec<f32>),
@@ -140,9 +139,6 @@ pub enum ColumnData {
 
 impl From<Vec<Value>> for ColumnData {
     fn from(vec: Vec<Value>) -> Self {
-        if vec.is_empty() {
-            return ColumnData::Empty;
-        }
         match &vec[0] {
             &Value::Boolean(_) => ColumnData::Boolean(vec.iter().map(|v| match v { &Value::Boolean(v) => v, _ => panic!() }).collect()),
             &Value::Float(_) => ColumnData::Float(vec.iter().map(|v| match v { &Value::Float(v) => v, _ => panic!() }).collect()),
@@ -181,7 +177,6 @@ impl ColumnData {
 
     pub fn len(&self) -> usize {
         match self {
-            &ColumnData::Empty => 0,
             &ColumnData::BroadcastVariable(_) => 1,
             &ColumnData::Boolean(ref v) => v.len(),
             &ColumnData::Float(ref v) => v.len(),
@@ -198,7 +193,6 @@ impl ColumnData {
     pub fn get_value(&self, index: usize) -> Value {
         println!("get_value() index={}", index);
         let v = match self {
-            &ColumnData::Empty => panic!(),
             &ColumnData::BroadcastVariable(ref v) => v.clone(),
             &ColumnData::Boolean(ref v) => Value::Boolean(v[index]),
             &ColumnData::Float(ref v) => Value::Float(v[index]),
