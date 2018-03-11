@@ -79,32 +79,30 @@ impl From<ParserError> for ExecutionError {
 }
 
 /// A batch of data organized as columns. The intent is to implement this using Apache Arrow
-/// soon but for now there will be a naive version while I integrate this. Also this is going
-/// to return each value as a Value enumeration which kind of defeats some of the benefits of
-/// arrow since it involves a copy.
+/// soon but for now there will be a naive version while I integrate this.
 pub trait Batch {
     fn col_count(&self) -> usize;
     fn row_count(&self) -> usize;
-    fn column(&self, index: usize) -> &Vec<Value>;
+    fn column(&self, index: usize) -> &ColumnData;
 
     /// access a row
-    fn row_slice(&self, index: usize) -> Vec<&Value>;
+    fn row_slice(&self, index: usize) -> Vec<Value>;
 }
 
 pub struct ColumnBatch {
     pub columns: Vec<ColumnData>
 }
 
-impl ColumnBatch {
-
-    pub fn from_rows(rows: Vec<Vec<Value>>) -> Self {
-        let column_count = rows[0].len();
-        let columns : Vec<ColumnData> = (0 .. column_count)
-            .map(|i| rows.iter().map(|r| (&r[i]).clone()).collect() )
-            .collect();
-        ColumnBatch { columns }
-    }
-}
+//impl ColumnBatch {
+//
+//    pub fn from_rows(rows: Vec<Vec<Value>>) -> Self {
+//        let column_count = rows[0].len();
+//        let columns : Vec<ColumnData> = (0 .. column_count)
+//            .map(|i| rows.iter().map(|r| (&r[i]).clone()).collect() )
+//            .collect();
+//        ColumnBatch { columns }
+//    }
+//}
 
 impl Batch for ColumnBatch {
     fn col_count(&self) -> usize {
@@ -115,19 +113,64 @@ impl Batch for ColumnBatch {
         self.columns[0].len()
     }
 
-    fn column(&self, index: usize) -> &Vec<Value> {
+    fn column(&self, index: usize) -> &ColumnData {
         &self.columns[index]
     }
 
-    fn row_slice(&self, index: usize) -> Vec<&Value> {
-        self.columns.iter().map(|c| &c[index]).collect()
+    fn row_slice(&self, index: usize) -> Vec<Value> {
+        self.columns.iter().map(|c| match c {
+            &ColumnData::Double(ref v) => Value::Double(v[index].clone()),
+            _ => unimplemented!()
+        }).collect()
     }
 }
 
-pub type ColumnData = Vec<Value>;
+#[derive(Clone)]
+pub enum ColumnData {
+    BroadcastVariable(Value),
+    Boolean(Vec<bool>),
+    Float(Vec<f32>),
+    Double(Vec<f64>),
+    UnsignedInt(Vec<u32>),
+    UnsignedLong(Vec<u64>),
+    String(Vec<String>),
+    ComplexValue(Vec<ColumnData>)
+}
+
+impl ColumnData {
+
+    pub fn len(&self) -> usize {
+        match self {
+            &ColumnData::BroadcastVariable(_) => 1,
+            &ColumnData::Boolean(ref v) => v.len(),
+            &ColumnData::Float(ref v) => v.len(),
+            &ColumnData::Double(ref v) => v.len(),
+            &ColumnData::UnsignedInt(ref v) => v.len(),
+            &ColumnData::UnsignedLong(ref v) => v.len(),
+            &ColumnData::String(ref v) => v.len(),
+            &ColumnData::ComplexValue(ref v) => v.len(),
+        }
+    }
+
+    pub fn filter(&self, bools: ColumnData) -> ColumnData {
+        match bools {
+            ColumnData::Boolean(b) => match self {
+                &ColumnData::Double(ref v) => ColumnData::Double(
+                    v.iter().zip(b.iter())
+                        .filter(|&(_,f)| *f)
+                        .map(|(v,_)| *v)
+                        .collect()
+                ),
+                _ => unimplemented!()
+            },
+            _ => panic!()
+        }
+    }
+
+}
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Batch) -> Vec<Value>>;
+pub type CompiledExpr = Box<Fn(&Batch) -> ColumnData>;
 
 /// Compiles a relational expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
@@ -137,50 +180,60 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                vec![literal_value.clone()]
+                ColumnData::BroadcastVariable(literal_value.clone())
             }))
         }
-        &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| batch.column(index).clone())),
+        &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
+            let c: &ColumnData = batch.column(index);
+            (*c).clone()
+        })),
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
-            let l = compile_expr(ctx,left)?;
-            let r = compile_expr(ctx,right)?;
+            let left_expr = compile_expr(ctx,left)?;
+            let right_expr = compile_expr(ctx,right)?;
             match op {
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values : Vec<Value> = l(batch);
-                    let right_values : Vec<Value> = r(batch);
-                    let v = left_values.iter().zip(right_values.iter());
-                    v.map(|(a,b)| Value::Boolean(a==b)).collect()
+                    let left_values : ColumnData = left_expr(batch);
+                    let right_values : ColumnData = right_expr(batch);
+                    match (left_values, right_values) {
+                        (ColumnData::Double(l), ColumnData::Double(r)) => {
+                            ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a==b)
+                            .collect())
+
+                        },
+                        _ => unimplemented!()
+
+                    }
                 })),
-                &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = l(batch);
-                    let right_values = r(batch);
-                    let v = left_values.iter().zip(right_values.iter());
-                    v.map(|(a,b)| Value::Boolean(a!=b)).collect()
-                })),
-                &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = l(batch);
-                    let right_values = r(batch);
-                    let v = left_values.iter().zip(right_values.iter());
-                    v.map(|(a,b)| Value::Boolean(a>b)).collect()
-                })),
-                &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = l(batch);
-                    let right_values = r(batch);
-                    let v = left_values.iter().zip(right_values.iter());
-                    v.map(|(a,b)| Value::Boolean(a>=b)).collect()
-                })),
-                &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = l(batch);
-                    let right_values = r(batch);
-                    let v = left_values.iter().zip(right_values.iter());
-                    v.map(|(a,b)| Value::Boolean(a<b)).collect()
-                })),
-                &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = l(batch);
-                    let right_values = r(batch);
-                    let v = left_values.iter().zip(right_values.iter());
-                    v.map(|(a,b)| Value::Boolean(a<=b)).collect()
-                })),
+//                &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
+//                    let left_values = left_expr(batch);
+//                    let right_values = right_expr(batch);
+//                    let v = left_values.iter().zip(right_values.iter());
+//                    v.map(|(a,b)| Value::Boolean(a!=b)).collect()
+//                })),
+//                &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
+//                    let left_values = left_expr(batch);
+//                    let right_values = right_expr(batch);
+//                    let v = left_values.iter().zip(right_values.iter());
+//                    v.map(|(a,b)| Value::Boolean(a>b)).collect()
+//                })),
+//                &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
+//                    let left_values = left_expr(batch);
+//                    let right_values = right_expr(batch);
+//                    let v = left_values.iter().zip(right_values.iter());
+//                    v.map(|(a,b)| Value::Boolean(a>=b)).collect()
+//                })),
+//                &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
+//                    let left_values = left_expr(batch);
+//                    let right_values = right_expr(batch);
+//                    let v = left_values.iter().zip(right_values.iter());
+//                    v.map(|(a,b)| Value::Boolean(a<b)).collect()
+//                })),
+//                &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
+//                    let left_values = left_expr(batch);
+//                    let right_values = right_expr(batch);
+//                    let v = left_values.iter().zip(right_values.iter());
+//                    v.map(|(a,b)| Value::Boolean(a<=b)).collect()
+//                })),
                 _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
         }
@@ -208,17 +261,19 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 // convert into rows to call scalar function until the function trait is
                 // update to accept columns
 
-                let mut result : ColumnData = vec![];
+//                let mut result : ColumnData = vec![];
+//
+//                for i in 0 .. batch.row_count() {
+//
+//                    // get args for one row
+//                    let args: Vec<&Value> = arg_values.iter().map(|c| &c[i]).collect();
+//
+//                    result.push(func.execute(args).unwrap() );
+//                }
+//
+//                result
 
-                for i in 0 .. batch.row_count() {
-
-                    // get args for one row
-                    let args: Vec<&Value> = arg_values.iter().map(|c| &c[i]).collect();
-
-                    result.push(func.execute(args).unwrap() );
-                }
-
-                result
+                unimplemented!()
 
 
             }))
@@ -268,39 +323,18 @@ impl SimpleRelation for FilterRelation {
             match b {
                 Ok(ref batch) => {
 
-                    // evaluate the filter expression for every row in the batch
-                    let result: Vec<Value> = (*self.expr)(batch.as_ref());
+//                    // evaluate the filter expression for every row in the batch
+//                    let filter_eval: ColumnData = (*self.expr)(batch.as_ref());
+//
+//                    let filtered_columns : Vec<ColumnData> = (0 .. batch.col_count())
+//                        .map(move|column_index| { batch.column(column_index).filter(filter_eval) })
+//                        .collect();
+//
+//                    let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
+//
+//                    Ok(filtered_batch)
 
-                    let filtered_columns : Vec<Vec<Value>> = (0 .. batch.col_count())
-                        .map(|column_index| {
-                            let column = batch.column(column_index);
-                            //.iter()
-
-                            let filtered_column : Vec<Value> = column.iter().zip(result.iter())
-                                .filter(|&(_,b)| match b {
-                                    &Value::Boolean(true) => true,
-                                    _ => false
-                                })
-                                .map(|(v,_)| (*v).clone())
-                                .collect();
-
-                            filtered_column
-                        })
-                        .collect();
-
-//                    // build list of indexes of rows to include (should be a bitmap perhaps?)
-//                    let rows_to_include = result.iter().enumerate()
-//                        .map(|x| match x {
-//                            Some((i,Value::Boolean(true))) => Some(i),
-//                            _  => None
-//                        })
-
-
-
-
-                    let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
-
-                    Ok(filtered_batch)
+                    unimplemented!()
                 }
                 _ => panic!()
             }
@@ -316,57 +350,59 @@ impl SimpleRelation for SortRelation {
 
     // this needs rewriting completely
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 
-        // collect entire relation into memory (obviously not scalable!)
-        let batches = self.input.scan(ctx);
+//        // collect entire relation into memory (obviously not scalable!)
+//        let batches = self.input.scan(ctx);
+//
+//        // convert into rows for now but this should be converted to columnar
+//        let mut rows : Vec<Vec<Value>> = vec![];
+//        batches.for_each(|r| match r {
+//            Ok(ref batch) => {
+//                for i in 0 .. batch.row_count() {
+//                    let row : Vec<&Value> = batch.row_slice(i);
+//                    let values : Vec<Value> = row.into_iter()
+//                        .map(|v| v.clone())
+//                        .collect();
+//
+//                    rows.push(values);
+//                }
+//            },
+//            _ => {}
+//                //return Err(ExecutionError::Custom(format!("TBD")))
+//        });
+//
+//        // now sort them
+//        rows.sort_by(|a,b| {
+//
+//            for i in 0 .. self.sort_expr.len() {
+//
+//                let evaluate = &self.sort_expr[i];
+//                let asc = self.sort_asc[i];
+//
+//                // ugh, this is ugly - convert rows into column batches to evaluate sort expressions
+//
+//                let a_value = evaluate(&ColumnBatch::from_rows(vec![a.clone()]));
+//                let b_value = evaluate(&ColumnBatch::from_rows(vec![b.clone()]));
+//
+//                if a_value < b_value {
+//                    return if asc { Less } else { Greater };
+//                } else if a_value > b_value {
+//                    return if asc { Greater } else { Less };
+//                }
+//            }
+//
+//            Equal
+//        });
+//
+//        // now turn back into columnar!
+//        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
+//        let result_it = vec![Ok(result_batch)].into_iter();
+//
+//
+//        Box::new(result_it)
 
-        // convert into rows for now but this should be converted to columnar
-        let mut rows : Vec<Vec<Value>> = vec![];
-        batches.for_each(|r| match r {
-            Ok(ref batch) => {
-                for i in 0 .. batch.row_count() {
-                    let row : Vec<&Value> = batch.row_slice(i);
-                    let values : Vec<Value> = row.into_iter()
-                        .map(|v| v.clone())
-                        .collect();
-
-                    rows.push(values);
-                }
-            },
-            _ => {}
-                //return Err(ExecutionError::Custom(format!("TBD")))
-        });
-
-        // now sort them
-        rows.sort_by(|a,b| {
-
-            for i in 0 .. self.sort_expr.len() {
-
-                let evaluate = &self.sort_expr[i];
-                let asc = self.sort_asc[i];
-
-                // ugh, this is ugly - convert rows into column batches to evaluate sort expressions
-
-                let a_value = evaluate(&ColumnBatch::from_rows(vec![a.clone()]));
-                let b_value = evaluate(&ColumnBatch::from_rows(vec![b.clone()]));
-
-                if a_value < b_value {
-                    return if asc { Less } else { Greater };
-                } else if a_value > b_value {
-                    return if asc { Greater } else { Less };
-                }
-            }
-
-            Equal
-        });
-
-        // now turn back into columnar!
-        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
-        let result_it = vec![Ok(result_batch)].into_iter();
-
-
-        Box::new(result_it)
+        unimplemented!()
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {

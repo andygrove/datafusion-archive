@@ -18,8 +18,10 @@ use std::cmp::{Ordering, PartialOrd};
 /// will be added later, including complex types
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum DataType {
+    UnsignedInt,
     UnsignedLong,
     String,
+    Float,
     Double,
     ComplexType(Vec<Field>)
 }
