@@ -212,7 +212,7 @@ impl Service for Worker {
                                 match plan {
                                     PhysicalPlan::Interactive { plan } => {
                                         match ctx.create_execution_plan(data_dir.clone(), &plan) {
-                                            Ok(exec) => {
+                                            Ok(mut exec) => {
                                                 let it = exec.scan(&ctx);
                                                 let mut result_set = "".to_string();
 

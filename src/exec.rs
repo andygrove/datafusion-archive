@@ -119,7 +119,13 @@ impl Batch for ColumnBatch {
 
     fn row_slice(&self, index: usize) -> Vec<Value> {
         self.columns.iter().map(|c| match c {
-            &ColumnData::Double(ref v) => Value::Double(v[index].clone()),
+            &ColumnData::Boolean(ref v) => Value::Boolean(v[index]),
+            &ColumnData::Float(ref v) => Value::Float(v[index]),
+            &ColumnData::Double(ref v) => Value::Double(v[index]),
+            &ColumnData::Long(ref v) => Value::Long(v[index]),
+            &ColumnData::UnsignedLong(ref v) => Value::UnsignedLong(v[index]),
+            &ColumnData::String(ref v) => Value::String(v[index].clone()),
+            //&ColumnData::ComplexValue(ref v) => Value::ComplexValue(v[index].clone()),
             _ => unimplemented!()
         }).collect()
     }
@@ -132,9 +138,24 @@ pub enum ColumnData {
     Float(Vec<f32>),
     Double(Vec<f64>),
     UnsignedInt(Vec<u32>),
+    Long(Vec<i64>),
     UnsignedLong(Vec<u64>),
     String(Vec<String>),
     ComplexValue(Vec<ColumnData>)
+}
+
+impl From<Vec<Value>> for ColumnData {
+    fn from(vec: Vec<Value>) -> Self {
+        match &vec[0] {
+            &Value::Boolean(_) => ColumnData::Boolean(vec.iter().map(|v| match v { &Value::Boolean(v) => v, _ => panic!() }).collect()),
+            &Value::Float(_) => ColumnData::Float(vec.iter().map(|v| match v { &Value::Float(v) => v, _ => panic!() }).collect()),
+            &Value::Double(_) => ColumnData::Double(vec.iter().map(|v| match v { &Value::Double(v) => v, _ => panic!() }).collect()),
+            &Value::Long(_) => ColumnData::Long(vec.iter().map(|v| match v { &Value::Long(v) => v, _ => panic!() }).collect()),
+            &Value::UnsignedLong(_) => ColumnData::UnsignedLong(vec.iter().map(|v| match v { &Value::UnsignedLong(v) => v, _ => panic!() }).collect()),
+            &Value::String(_) => ColumnData::String(vec.iter().map(|v| match v { &Value::String(ref v) => v.clone(), _ => panic!() }).collect()),
+            &Value::ComplexValue(_) => ColumnData::ComplexValue(vec.iter().map(|v| match v { &Value::ComplexValue(ref v) => ColumnData::from(v.clone()), _ => panic!() }).collect()),
+        }
+    }
 }
 
 impl ColumnData {
@@ -146,6 +167,7 @@ impl ColumnData {
             &ColumnData::Float(ref v) => v.len(),
             &ColumnData::Double(ref v) => v.len(),
             &ColumnData::UnsignedInt(ref v) => v.len(),
+            &ColumnData::Long(ref v) => v.len(),
             &ColumnData::UnsignedLong(ref v) => v.len(),
             &ColumnData::String(ref v) => v.len(),
             &ColumnData::ComplexValue(ref v) => v.len(),
@@ -198,7 +220,30 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                         (ColumnData::Double(l), ColumnData::Double(r)) => {
                             ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a==b)
                             .collect())
+                        },
+                        _ => unimplemented!()
 
+                    }
+                })),
+                &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
+                    let left_values : ColumnData = left_expr(batch);
+                    let right_values : ColumnData = right_expr(batch);
+                    match (left_values, right_values) {
+                        (ColumnData::Double(l), ColumnData::Double(r)) => {
+                            ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a<b)
+                                .collect())
+                        },
+                        _ => unimplemented!()
+
+                    }
+                })),
+                &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
+                    let left_values : ColumnData = left_expr(batch);
+                    let right_values : ColumnData = right_expr(batch);
+                    match (left_values, right_values) {
+                        (ColumnData::Double(l), ColumnData::Double(r)) => {
+                            ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a>b)
+                                .collect())
                         },
                         _ => unimplemented!()
 
@@ -261,26 +306,30 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 // convert into rows to call scalar function until the function trait is
                 // update to accept columns
 
-//                let mut result : ColumnData = vec![];
+                let mut result : Vec<Value> = Vec::with_capacity(batch.row_count());
 //
-//                for i in 0 .. batch.row_count() {
-//
-//                    // get args for one row
-//                    let args: Vec<&Value> = arg_values.iter().map(|c| &c[i]).collect();
-//
-//                    result.push(func.execute(args).unwrap() );
-//                }
-//
-//                result
+                for i in 0 .. batch.row_count() {
 
-                unimplemented!()
+                    // get args for one row
+                    let args: Vec<Value> = arg_values.iter().map(|c| match c {
+                        &ColumnData::Double(ref v) => Value::Double(v[i]),
+                        &ColumnData::UnsignedLong(ref v) => Value::UnsignedLong(v[i]),
+                        &ColumnData::String(ref v) => Value::String(v[i].clone()),
+                        _ => unimplemented!()
+                    })
+                    .collect();
 
+                    result.push(func.execute(args).unwrap());
+                }
+
+               ColumnData::from(result)
 
             }))
         }
         //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
     }
 }
+
 
 pub struct FilterRelation {
     schema: Schema,
@@ -310,14 +359,14 @@ pub struct LimitRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a>;
+    fn scan<'a>(&'a mut self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a>;
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
 }
 
 impl SimpleRelation for FilterRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 
         Box::new(self.input.scan(ctx).map(move |b| {
             match b {
@@ -350,7 +399,7 @@ impl SimpleRelation for SortRelation {
 
     // this needs rewriting completely
 
-    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 
 //        // collect entire relation into memory (obviously not scalable!)
 //        let batches = self.input.scan(ctx);
@@ -412,18 +461,20 @@ impl SimpleRelation for SortRelation {
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+
+        let project_expr = &self.expr;
 
         let projection_iter = self.input.scan(ctx).map(move|r| match r {
             Ok(ref batch) => {
 
                 //TODO projection causes columns to be copied ... should be able to avoid that
 
-                let projected_columns = self.expr.iter()
+                let projected_columns : Vec<ColumnData> = project_expr.iter()
                     .map(|e| (*e)(batch.as_ref()))
                     .collect();
 
-                let projected_batch : Box<Batch> = Box::new(ColumnBatch { columns: projected_columns });
+                let projected_batch : Box<Batch> = Box::new(ColumnBatch { columns: projected_columns.clone() });
 
                 Ok(projected_batch)
             },
@@ -439,7 +490,7 @@ impl SimpleRelation for ProjectRelation {
 }
 
 impl SimpleRelation for LimitRelation {
-    fn scan<'a>(&'a self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
         Box::new(self.input.scan(ctx).take(self.limit))
     }
 
@@ -727,7 +778,7 @@ impl ExecutionContext {
 
                 let mut writer = BufWriter::with_capacity(8*1024*1024,file);
 
-                let execution_plan = self.create_execution_plan(data_dir, plan)?;
+                let mut execution_plan = self.create_execution_plan(data_dir, plan)?;
 
                 // implement execution here for now but should be a common method for processing a plan
                 let it = execution_plan.scan(self);

@@ -19,61 +19,31 @@ use super::super::rel::{Schema, DataType, Value};
 use super::super::exec::*;
 
 extern crate csv;
-use super::super::csv::StringRecord;
+use super::super::csv::{StringRecord, StringRecordsIter};
 
 /// Represents a csv file with a known schema
-#[derive(Debug)]
 pub struct CsvRelation {
-    file: File,
-    schema: Schema
+    schema: Schema,
+    iter: Box<Iterator<Item=Result<StringRecord, csv::Error>>>
 }
 
-impl<'a> CsvRelation {
+impl CsvRelation {
 
     pub fn open(file: File, schema: Schema) -> Result<Self,ExecutionError> {
-        Ok(CsvRelation { file, schema })
+        let buf_reader = BufReader::with_capacity(8*1024*1024,file);
+        let csv_reader = csv::Reader::from_reader(buf_reader);
+        let record_iter = csv_reader.into_records();
+        let iter : Box<Iterator<Item=Result<StringRecord, csv::Error>>> = Box::new(record_iter);
+        Ok(CsvRelation { schema, iter})
     }
 
-    /// Convert StringRecord into our internal row type based on the known schema
-    fn create_row(&self, r: &StringRecord) -> Result<Vec<Value>,ExecutionError> {
-        assert_eq!(self.schema.columns.len(), r.len());
-        let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
-            //TODO: remove unwrap use here
-            DataType::UnsignedLong => Value::Long(s.parse::<i64>().unwrap()),
-            DataType::String => Value::String(s.to_string()),
-            DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
-            _ => panic!("csv unsupported type")
-        }).collect();
-        Ok(values)
-    }
 }
 
 impl SimpleRelation for CsvRelation {
 
-    fn scan<'a>(&'a self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a> {
-
-        let buf_reader = BufReader::with_capacity(8*1024*1024,&self.file);
-        let csv_reader = csv::Reader::from_reader(buf_reader);
-        let record_iter = csv_reader.into_records();
-
-        let batch_iter = record_iter.map(move|r| match r {
-            Ok(record) => {
-
-                unimplemented!()
-//                //TODO: interim code to map each row to a single row batch ... fix this later so we have
-//                // real batches
-//                let columns : Vec<ColumnData> = self.create_row(&record).unwrap()
-//                    .iter().map(|v| vec![v.clone()])
-//                    .collect();
-//
-//                let batch: Box<Batch> = Box::new(ColumnBatch { columns });
-//                Ok(batch)
-            },
-            Err(e) => Err(ExecutionError::Custom(format!("Error reading CSV: {:?}", e)))
-        });
-
-        // real batches
-        Box::new(batch_iter)
+    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>,ExecutionError>> + 'a> {
+        let batch_iter: Box<Iterator<Item=Result<Box<Batch>,ExecutionError>>> = Box::new(CsvIterator { schema: &self.schema, iter: &mut self.iter });
+        batch_iter
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -112,36 +82,49 @@ impl<'a> Iterator for CsvIterator<'a> {
 
         let max_size = 1000;
 
-        let mut columns : Vec<ColumnData> = vec![];
-        self.schema.columns.iter().for_each(|col| {
-            match col.data_type {
-                DataType::Float => columns.push(ColumnData::Float(Vec::with_capacity(max_size))),
-                DataType::Double => columns.push(ColumnData::Double(Vec::with_capacity(max_size))),
-                _ => unimplemented!()
-            }
-        });
+        //TODO: this seems inefficient .. loading as rows then converting to columns
 
+        let mut rows : Vec<Vec<Value>> = vec![];
         for _ in 0 .. max_size {
             match self.iter.next() {
-                Some(r) => {
+                Some(r) => rows.push(self.parse_record(&r.unwrap())),
+                None => break
+            }
+        }
 
-                    // parse the values
-//                    let values = self.parse_record(&r.unwrap());
-//
-//                    for i in 0 .. values.len() {
-//                        match (columns[i], values[i]) {
-//                            (ColumnData::Double(vec), Value::Double(val)) => vec[i] = val,
-//                            _ => unimplemented!()
-//                        }
-//
-//                    }
+        let mut columns : Vec<ColumnData> = Vec::with_capacity(self.schema.columns.len());
 
-                    unimplemented!()
-
+        for i in 0 .. self.schema.columns.len() {
+            match self.schema.columns[i].data_type {
+                DataType::Float => {
+                    columns.push(ColumnData::Float(
+                        rows.iter().map(|row| match &row[i] {
+                            &Value::Float(v) => v,
+                            _ => panic!()
+                        }).collect()))
                 },
-                None => if columns[0].len() == 0 {
-                    return None
-                }
+                DataType::Double => {
+                    columns.push(ColumnData::Double(
+                        rows.iter().map(|row| match &row[i] {
+                            &Value::Double(v) => v,
+                            _ => panic!()
+                        }).collect()))
+                },
+                DataType::UnsignedLong => {
+                    columns.push(ColumnData::UnsignedLong(
+                        rows.iter().map(|row| match &row[i] {
+                            &Value::UnsignedLong(v) => v,
+                            _ => panic!()
+                        }).collect()))
+                },
+                DataType::String => {
+                    columns.push(ColumnData::String(
+                        rows.iter().map(|row| match &row[i] {
+                            &Value::String(ref v) => v.clone(),
+                            _ => panic!()
+                        }).collect()))
+                },
+                _ => unimplemented!()
             }
         }
 
@@ -170,11 +153,13 @@ mod tests {
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
 
-        let foo : Box<Iterator<Item=Result<StringRecord, csv::Error>>> = Box::new(record_iter);
+        let mut foo : Box<Iterator<Item=Result<StringRecord, csv::Error>>> = Box::new(record_iter);
 
         let mut it = CsvIterator { schema: &schema, iter: &mut foo };
 
-        let batch = it.next().unwrap();
+        let batch : Box<Batch> = it.next().unwrap().unwrap();
+
+        assert_eq!(36, batch.row_count());
 
     }
 }

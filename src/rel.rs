@@ -115,6 +115,7 @@ impl Row for Vec<Value> {
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub enum Value {
     Boolean(bool),
+    Float(f32),
     Double(f64),
     Long(i64),
     UnsignedLong(u64),
@@ -122,8 +123,6 @@ pub enum Value {
     /// Complex value which is a list of values (which in turn can be complex
     /// values to support nested types)
     ComplexValue(Vec<Value>),
-    /// values for user-defined types are stored as binary
-    UserDefined(Vec<u8>)
 }
 
 impl PartialOrd for Value {
