@@ -80,6 +80,8 @@ impl<'a> Iterator for CsvIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
 
+        println!("CsvIterator::next()");
+
         let max_size = 1000;
 
         //TODO: this seems inefficient .. loading as rows then converting to columns
@@ -90,6 +92,10 @@ impl<'a> Iterator for CsvIterator<'a> {
                 Some(r) => rows.push(self.parse_record(&r.unwrap())),
                 None => break
             }
+        }
+
+        if rows.is_empty() {
+            return None
         }
 
         let mut columns : Vec<ColumnData> = Vec::with_capacity(self.schema.columns.len());
@@ -160,7 +166,7 @@ mod tests {
         let batch : Box<Batch> = it.next().unwrap().unwrap();
 
         assert_eq!(3, batch.col_count());
-        assert_eq!(36, batch.row_count());
+        assert_eq!(37, batch.row_count());
 
         let row = batch.row_slice(0);
         assert_eq!(vec![

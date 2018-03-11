@@ -125,6 +125,7 @@ impl Batch for ColumnBatch {
 
 #[derive(Debug,Clone)]
 pub enum ColumnData {
+    Empty,
     BroadcastVariable(Value),
     Boolean(Vec<bool>),
     Float(Vec<f32>),
@@ -139,6 +140,9 @@ pub enum ColumnData {
 
 impl From<Vec<Value>> for ColumnData {
     fn from(vec: Vec<Value>) -> Self {
+        if vec.is_empty() {
+            return ColumnData::Empty;
+        }
         match &vec[0] {
             &Value::Boolean(_) => ColumnData::Boolean(vec.iter().map(|v| match v { &Value::Boolean(v) => v, _ => panic!() }).collect()),
             &Value::Float(_) => ColumnData::Float(vec.iter().map(|v| match v { &Value::Float(v) => v, _ => panic!() }).collect()),
@@ -148,8 +152,26 @@ impl From<Vec<Value>> for ColumnData {
             &Value::Long(_) => ColumnData::Long(vec.iter().map(|v| match v { &Value::Long(v) => v, _ => panic!() }).collect()),
             &Value::UnsignedLong(_) => ColumnData::UnsignedLong(vec.iter().map(|v| match v { &Value::UnsignedLong(v) => v, _ => panic!() }).collect()),
             &Value::String(_) => ColumnData::String(vec.iter().map(|v| match v { &Value::String(ref v) => v.clone(), _ => panic!() }).collect()),
-            &Value::ComplexValue(_) => {
-                ColumnData::ComplexValue(vec.iter().map(|v| match v { &Value::ComplexValue(ref v) => ColumnData::from(v.clone()), _ => panic!() }).collect())
+            &Value::ComplexValue(ref first) => {
+                //ComplexValue(Vec<Value>) where each value is one field
+
+                let field_count = first.len(); // assumes all fields are always present i.e. no skipping nulls.. probably need type info here too?
+
+                // map each field to a ColumnData
+                let columns : Vec<ColumnData> = (0 .. field_count)
+                    .map(|field_index| {
+                        let column_values : Vec<Value> = vec.iter().map(|field_value| match field_value {
+                            &Value::ComplexValue(ref v) => (&v[field_index]).clone(),
+                            &Value::Double(v) => Value::Double(v),
+                            _ => {
+                                println!("Panic on field value {:?}", field_value);
+                                panic!()
+                            }
+                        }).collect();
+                        ColumnData::from(column_values)
+                    }).collect();
+
+                ColumnData::ComplexValue(columns)
             },
         }
     }
@@ -159,6 +181,7 @@ impl ColumnData {
 
     pub fn len(&self) -> usize {
         match self {
+            &ColumnData::Empty => 0,
             &ColumnData::BroadcastVariable(_) => 1,
             &ColumnData::Boolean(ref v) => v.len(),
             &ColumnData::Float(ref v) => v.len(),
@@ -168,25 +191,30 @@ impl ColumnData {
             &ColumnData::Long(ref v) => v.len(),
             &ColumnData::UnsignedLong(ref v) => v.len(),
             &ColumnData::String(ref v) => v.len(),
-            &ColumnData::ComplexValue(ref v) => v.len(),
+            &ColumnData::ComplexValue(ref v) => v[0].len(),
         }
     }
 
     pub fn get_value(&self, index: usize) -> Value {
         println!("get_value() index={}", index);
         let v = match self {
+            &ColumnData::Empty => panic!(),
             &ColumnData::BroadcastVariable(ref v) => v.clone(),
             &ColumnData::Boolean(ref v) => Value::Boolean(v[index]),
             &ColumnData::Float(ref v) => Value::Float(v[index]),
-            &ColumnData::Double(ref v) => Value::Double(v[index]),
+            &ColumnData::Double(ref v) => {
+                println!("get_value() double column has {} values", v.len());
+                Value::Double(v[index])
+            },
             &ColumnData::Int(ref v) => Value::Int(v[index]),
             &ColumnData::UnsignedInt(ref v) => Value::UnsignedInt(v[index]),
             &ColumnData::Long(ref v) => Value::Long(v[index]),
             &ColumnData::UnsignedLong(ref v) => Value::UnsignedLong(v[index]),
             &ColumnData::String(ref v) => Value::String(v[index].clone()),
             &ColumnData::ComplexValue(ref v) => {
+                // v is Vec<ColumnData>
                 // each field has its own ColumnData e.g. lat, lon so we want to get a value from each (but it's recursive)
-                println!("complex value has {} fields", v.len());
+                println!("get_value() complex value has {} fields", v.len());
                 let fields = v.iter().map(|field| field.get_value(index)).collect();
                 Value::ComplexValue(fields)
             }
@@ -310,6 +338,8 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
         },
         &Expr::ScalarFunction { ref name, ref args } => {
 
+            println!("Executing function {}", name);
+
             // evaluate the arguments to the function
             let compiled_args : Result<Vec<CompiledExpr>, ExecutionError> = args.iter()
                 .map(|e| compile_expr(ctx,e))
@@ -333,19 +363,25 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 for i in 0 .. batch.row_count() {
 
                     // get args for one row
-                    let args: Vec<Value> = arg_values.iter().map(|c| match c {
-                        &ColumnData::Double(ref v) => Value::Double(v[i]),
-                        &ColumnData::UnsignedLong(ref v) => Value::UnsignedLong(v[i]),
-                        &ColumnData::String(ref v) => Value::String(v[i].clone()),
-                        _ => unimplemented!()
-                    })
-                    .collect();
+                    let args: Vec<Value> = arg_values.iter()
+                        .map(|c|c.get_value(i))
+                        .collect();
 
-                    result.push(func.execute(args).unwrap());
+                    let value = func.execute(args).unwrap();
+
+                    println!("function returned {:?}", value);
+
+                    result.push(value);
                 }
 
-               ColumnData::from(result)
-
+               let x = ColumnData::from(result);
+//                match x {
+//                    ColumnData::Empty => panic!(), //format!("failed to convert results to column: {:?}", result)),
+//                    _ => {}
+//
+//                }
+               println!("as column: {:?}", x);
+               x
             }))
         }
         //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
@@ -808,10 +844,12 @@ impl ExecutionContext {
                 it.for_each(|t| {
                     match t {
                         Ok(ref batch) => {
+                            println!("Processing batch of {} rows", batch.row_count());
                             for i in 0 .. batch.row_count() {
                                 let row = batch.row_slice(i);
                                 let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
                                 writer.write(&csv.into_bytes()).unwrap();
+                                writer.write(b"\n").unwrap();
                                 count += 1;
                             }
                         },
