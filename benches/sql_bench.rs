@@ -12,7 +12,7 @@ extern crate serde_json;
 fn sql() {
 
     // create execution context
-    let mut ctx = ExecutionContext::local();
+    let mut ctx = ExecutionContext::local("test/data".to_string());
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![
@@ -29,7 +29,7 @@ fn sql() {
     let df1 = ctx.sql(&sql).unwrap();
 
     // write the results to a file
-    df1.write("_southern_cities.csv").unwrap();
+    ctx.write(df1, "_southern_cities.csv").unwrap();
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
