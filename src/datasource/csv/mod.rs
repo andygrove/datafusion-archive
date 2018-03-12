@@ -156,7 +156,9 @@ mod tests {
         let file = File::open("test/data/uk_cities.csv").unwrap();
 
         let buf_reader = BufReader::with_capacity(8*1024*1024,file);
-        let csv_reader = csv::Reader::from_reader(buf_reader);
+        let csv_reader = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
 
         let mut foo : Box<Iterator<Item=Result<StringRecord, csv::Error>>> = Box::new(record_iter);
@@ -170,9 +172,9 @@ mod tests {
 
         let row = batch.row_slice(0);
         assert_eq!(vec![
-            Value::String("Stoke-on-Trent, Staffordshire, the UK".to_string()),
-            Value::Double(53.002666),
-            Value::Double(-2.179404)], row);
+            Value::String("Elgin, Scotland, the UK".to_string()),
+            Value::Double(57.653484),
+            Value::Double(-3.335724)], row);
 
         let names = batch.column(0);
         println!("names: {:?}", names);
