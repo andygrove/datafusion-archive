@@ -115,7 +115,7 @@ impl SqlToRel {
                 let limit_plan = match limit {
                     &Some(ref limit_ast_node) => {
                         let limit_count = match **limit_ast_node {
-                            ASTNode::SQLLiteralInt(n) => n,
+                            ASTNode::SQLLiteralLong(n) => n,
                             _ => return Err(String::from("LIMIT parameter is not a number")),
                         };
                         LogicalPlan::Limit {
@@ -148,8 +148,8 @@ impl SqlToRel {
     pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
 
-            &ASTNode::SQLLiteralInt(n) =>
-                Ok(Expr::Literal(Value::Long(n as i64))),
+            &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(Value::Long(n))),
+            &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(Value::Double(n))),
 
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.columns.iter().position(|c| c.name.eq(id) ) {

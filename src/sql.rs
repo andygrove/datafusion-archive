@@ -18,7 +18,8 @@ pub enum ASTNode {
     SQLBinaryExpr { left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode> },
     SQLNested(Box<ASTNode>),
     SQLUnary { operator: SQLOperator, rex: Box<ASTNode> },
-    SQLLiteralInt(i64),
+    SQLLiteralLong(i64),
+    SQLLiteralDouble(f64),
     SQLFunction { id: String, args: Vec<ASTNode> },
     SQLOrderBy { expr: Box<ASTNode>, asc: bool },
     SQLSelect{
