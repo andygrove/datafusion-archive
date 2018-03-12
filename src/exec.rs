@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::clone::Clone;
-use std::cmp::Ordering::*;
 use std::collections::HashMap;
 use std::io::{BufWriter, Error};
 use std::io::prelude::*;
@@ -118,7 +117,7 @@ impl Batch for ColumnBatch {
     }
 
     fn row_slice(&self, index: usize) -> Vec<Value> {
-        println!("row_slice() index = {}", index);
+        //println!("row_slice() index = {}", index);
         self.columns.iter().map(|c| c.get_value(index)).collect()
     }
 }
@@ -191,13 +190,13 @@ impl ColumnData {
     }
 
     pub fn get_value(&self, index: usize) -> Value {
-        println!("get_value() index={}", index);
+//        println!("get_value() index={}", index);
         let v = match self {
             &ColumnData::BroadcastVariable(ref v) => v.clone(),
             &ColumnData::Boolean(ref v) => Value::Boolean(v[index]),
             &ColumnData::Float(ref v) => Value::Float(v[index]),
             &ColumnData::Double(ref v) => {
-                println!("get_value() double column has {} values", v.len());
+  //              println!("get_value() double column has {} values", v.len());
                 Value::Double(v[index])
             },
             &ColumnData::Int(ref v) => Value::Int(v[index]),
@@ -208,25 +207,25 @@ impl ColumnData {
             &ColumnData::ComplexValue(ref v) => {
                 // v is Vec<ColumnData>
                 // each field has its own ColumnData e.g. lat, lon so we want to get a value from each (but it's recursive)
-                println!("get_value() complex value has {} fields", v.len());
+    //            println!("get_value() complex value has {} fields", v.len());
                 let fields = v.iter().map(|field| field.get_value(index)).collect();
                 Value::ComplexValue(fields)
             }
         };
-        println!("get_value() index={} returned {:?}", index, v);
+      //  println!("get_value() index={} returned {:?}", index, v);
 
         v
     }
 
-    pub fn filter(&self, bools: ColumnData) -> ColumnData {
+    pub fn filter(&self, bools: &ColumnData) -> ColumnData {
         match bools {
-            ColumnData::Boolean(b) => match self {
-                &ColumnData::Double(ref v) => ColumnData::Double(
-                    v.iter().zip(b.iter())
-                        .filter(|&(_,f)| *f)
-                        .map(|(v,_)| *v)
-                        .collect()
-                ),
+            &ColumnData::Boolean(ref b) => match self {
+                &ColumnData::Boolean(ref v) => ColumnData::Boolean(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
+                &ColumnData::Float(ref v) => ColumnData::Float(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
+                &ColumnData::Double(ref v) => ColumnData::Double(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
+                &ColumnData::Long(ref v) => ColumnData::Long(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
+                &ColumnData::UnsignedLong(ref v) => ColumnData::UnsignedLong(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
+                &ColumnData::String(ref v) => ColumnData::String(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| v.clone()).collect()),
                 _ => unimplemented!()
             },
             _ => panic!()
@@ -260,37 +259,48 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
                     let left_values : ColumnData = left_expr(batch);
                     let right_values : ColumnData = right_expr(batch);
-                    match (left_values, right_values) {
-                        (ColumnData::Double(l), ColumnData::Double(r)) => {
-                            ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a==b)
-                            .collect())
-                        },
+                    match left_values {
+                        ColumnData::Double(l) => match right_values {
+                            ColumnData::BroadcastVariable(Value::Double(r)) => ColumnData::Boolean(l.iter().map(|v|*v==r).collect()),
+                            ColumnData::Double(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a==b).collect()),
+                            _ => unimplemented!()
+                        }
                         _ => unimplemented!()
-
                     }
                 })),
                 &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
                     let left_values : ColumnData = left_expr(batch);
                     let right_values : ColumnData = right_expr(batch);
-                    match (left_values, right_values) {
-                        (ColumnData::Double(l), ColumnData::Double(r)) => {
-                            ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a<b)
-                                .collect())
-                        },
-                        _ => unimplemented!()
+                    match left_values {
+                        ColumnData::Double(l) => match right_values {
+                            ColumnData::BroadcastVariable(Value::Float(r)) => ColumnData::Boolean(l.iter().map(|v|*v<(r as f64)).collect()),
+                            ColumnData::BroadcastVariable(Value::Double(r)) => ColumnData::Boolean(l.iter().map(|v|*v<r).collect()),
+                            ColumnData::BroadcastVariable(Value::Int(r)) => ColumnData::Boolean(l.iter().map(|v|*v<(r as f64)).collect()),
+                            ColumnData::BroadcastVariable(Value::UnsignedInt(r)) => ColumnData::Boolean(l.iter().map(|v|*v<(r as f64)).collect()),
+                            ColumnData::BroadcastVariable(Value::Long(r)) => ColumnData::Boolean(l.iter().map(|v|*v<(r as f64)).collect()),
+                            ColumnData::BroadcastVariable(Value::UnsignedLong(r)) => ColumnData::Boolean(l.iter().map(|v|*v<(r as f64)).collect()),
 
+                            ColumnData::Float(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| *a< (*b as f64)).collect()),
+                            ColumnData::Double(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a<b).collect()),
+                            ColumnData::Int(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| *a< (*b as f64)).collect()),
+                            ColumnData::UnsignedInt(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| *a< (*b as f64)).collect()),
+                            ColumnData::Long(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| *a< (*b as f64)).collect()),
+                            ColumnData::UnsignedLong(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| *a< (*b as f64)).collect()),
+                            _ => unimplemented!()
+                        }
+                        _ => unimplemented!()
                     }
                 })),
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
                     let left_values : ColumnData = left_expr(batch);
                     let right_values : ColumnData = right_expr(batch);
-                    match (left_values, right_values) {
-                        (ColumnData::Double(l), ColumnData::Double(r)) => {
-                            ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a>b)
-                                .collect())
-                        },
+                    match left_values {
+                        ColumnData::Double(l) => match right_values {
+                            ColumnData::BroadcastVariable(Value::Double(r)) => ColumnData::Boolean(l.iter().map(|v|*v>r).collect()),
+                            ColumnData::Double(r) => ColumnData::Boolean(l.iter().zip(r.iter()).map(|(a,b)| a>b).collect()),
+                            _ => unimplemented!()
+                        }
                         _ => unimplemented!()
-
                     }
                 })),
 //                &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
@@ -332,7 +342,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
         },
         &Expr::ScalarFunction { ref name, ref args } => {
 
-            println!("Executing function {}", name);
+            //println!("Executing function {}", name);
 
             // evaluate the arguments to the function
             let compiled_args : Result<Vec<CompiledExpr>, ExecutionError> = args.iter()
@@ -363,7 +373,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
                     let value = func.execute(args).unwrap();
 
-                    println!("function returned {:?}", value);
+                    //println!("function returned {:?}", value);
 
                     result.push(value);
                 }
@@ -374,7 +384,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 //                    _ => {}
 //
 //                }
-               println!("as column: {:?}", x);
+               //println!("as column: {:?}", x);
                x
             }))
         }
@@ -394,12 +404,12 @@ pub struct ProjectRelation {
     expr: Vec<CompiledExpr>
 }
 
-pub struct SortRelation {
-    schema: Schema,
-    input: Box<SimpleRelation>,
-    sort_expr: Vec<CompiledExpr>,
-    sort_asc: Vec<bool>
-}
+//pub struct SortRelation {
+//    schema: Schema,
+//    input: Box<SimpleRelation>,
+//    sort_expr: Vec<CompiledExpr>,
+//    sort_asc: Vec<bool>
+//}
 
 pub struct LimitRelation {
     schema: Schema,
@@ -420,22 +430,22 @@ impl SimpleRelation for FilterRelation {
 
     fn scan<'a>(&'a mut self, ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 
+        let filter_expr = &self.expr;
+
         Box::new(self.input.scan(ctx).map(move |b| {
             match b {
                 Ok(ref batch) => {
 
-//                    // evaluate the filter expression for every row in the batch
-//                    let filter_eval: ColumnData = (*self.expr)(batch.as_ref());
-//
-//                    let filtered_columns : Vec<ColumnData> = (0 .. batch.col_count())
-//                        .map(move|column_index| { batch.column(column_index).filter(filter_eval) })
-//                        .collect();
-//
-//                    let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
-//
-//                    Ok(filtered_batch)
+                    // evaluate the filter expression for every row in the batch
+                    let filter_eval: ColumnData = (*filter_expr)(batch.as_ref());
 
-                    unimplemented!()
+                    let filtered_columns : Vec<ColumnData> = (0 .. batch.col_count())
+                        .map(move|column_index| { batch.column(column_index).filter(&filter_eval) })
+                        .collect();
+
+                    let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
+
+                    Ok(filtered_batch)
                 }
                 _ => panic!()
             }
@@ -447,69 +457,69 @@ impl SimpleRelation for FilterRelation {
     }
 }
 
-impl SimpleRelation for SortRelation {
-
-    // this needs rewriting completely
-
-    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
-
-//        // collect entire relation into memory (obviously not scalable!)
-//        let batches = self.input.scan(ctx);
+//impl SimpleRelation for SortRelation {
 //
-//        // convert into rows for now but this should be converted to columnar
-//        let mut rows : Vec<Vec<Value>> = vec![];
-//        batches.for_each(|r| match r {
-//            Ok(ref batch) => {
-//                for i in 0 .. batch.row_count() {
-//                    let row : Vec<&Value> = batch.row_slice(i);
-//                    let values : Vec<Value> = row.into_iter()
-//                        .map(|v| v.clone())
-//                        .collect();
+//    // this needs rewriting completely
 //
-//                    rows.push(values);
-//                }
-//            },
-//            _ => {}
-//                //return Err(ExecutionError::Custom(format!("TBD")))
-//        });
+//    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
 //
-//        // now sort them
-//        rows.sort_by(|a,b| {
+////        // collect entire relation into memory (obviously not scalable!)
+////        let batches = self.input.scan(ctx);
+////
+////        // convert into rows for now but this should be converted to columnar
+////        let mut rows : Vec<Vec<Value>> = vec![];
+////        batches.for_each(|r| match r {
+////            Ok(ref batch) => {
+////                for i in 0 .. batch.row_count() {
+////                    let row : Vec<&Value> = batch.row_slice(i);
+////                    let values : Vec<Value> = row.into_iter()
+////                        .map(|v| v.clone())
+////                        .collect();
+////
+////                    rows.push(values);
+////                }
+////            },
+////            _ => {}
+////                //return Err(ExecutionError::Custom(format!("TBD")))
+////        });
+////
+////        // now sort them
+////        rows.sort_by(|a,b| {
+////
+////            for i in 0 .. self.sort_expr.len() {
+////
+////                let evaluate = &self.sort_expr[i];
+////                let asc = self.sort_asc[i];
+////
+////                // ugh, this is ugly - convert rows into column batches to evaluate sort expressions
+////
+////                let a_value = evaluate(&ColumnBatch::from_rows(vec![a.clone()]));
+////                let b_value = evaluate(&ColumnBatch::from_rows(vec![b.clone()]));
+////
+////                if a_value < b_value {
+////                    return if asc { Less } else { Greater };
+////                } else if a_value > b_value {
+////                    return if asc { Greater } else { Less };
+////                }
+////            }
+////
+////            Equal
+////        });
+////
+////        // now turn back into columnar!
+////        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
+////        let result_it = vec![Ok(result_batch)].into_iter();
+////
+////
+////        Box::new(result_it)
 //
-//            for i in 0 .. self.sort_expr.len() {
+//        unimplemented!()
+//    }
 //
-//                let evaluate = &self.sort_expr[i];
-//                let asc = self.sort_asc[i];
-//
-//                // ugh, this is ugly - convert rows into column batches to evaluate sort expressions
-//
-//                let a_value = evaluate(&ColumnBatch::from_rows(vec![a.clone()]));
-//                let b_value = evaluate(&ColumnBatch::from_rows(vec![b.clone()]));
-//
-//                if a_value < b_value {
-//                    return if asc { Less } else { Greater };
-//                } else if a_value > b_value {
-//                    return if asc { Greater } else { Less };
-//                }
-//            }
-//
-//            Equal
-//        });
-//
-//        // now turn back into columnar!
-//        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
-//        let result_it = vec![Ok(result_batch)].into_iter();
-//
-//
-//        Box::new(result_it)
-
-        unimplemented!()
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        &self.schema
-    }
-}
+//    fn schema<'a>(&'a self) -> &'a Schema {
+//        &self.schema
+//    }
+//}
 
 impl SimpleRelation for ProjectRelation {
 
@@ -730,28 +740,28 @@ impl ExecutionContext {
                 Ok(Box::new(rel))
             }
 
-            LogicalPlan::Sort { ref expr, ref input, ref schema } => {
-                let input_rel = self.create_execution_plan(data_dir, input)?;
-
-                let compiled_expr : Result<Vec<CompiledExpr>, ExecutionError> = expr.iter()
-                    .map(|e| compile_expr(&self,e))
-                    .collect();
-
-                let sort_asc : Vec<bool> = expr.iter()
-                    .map(|e| match e {
-                        &Expr::Sort { asc, .. } => asc,
-                        _ => panic!()
-                    })
-                    .collect();
-
-                let rel = SortRelation {
-                    input: input_rel,
-                    sort_expr: compiled_expr?,
-                    sort_asc: sort_asc,
-                    schema: schema.clone()
-                };
-                Ok(Box::new(rel))
-            },
+//            LogicalPlan::Sort { ref expr, ref input, ref schema } => {
+//                let input_rel = self.create_execution_plan(data_dir, input)?;
+//
+//                let compiled_expr : Result<Vec<CompiledExpr>, ExecutionError> = expr.iter()
+//                    .map(|e| compile_expr(&self,e))
+//                    .collect();
+//
+//                let sort_asc : Vec<bool> = expr.iter()
+//                    .map(|e| match e {
+//                        &Expr::Sort { asc, .. } => asc,
+//                        _ => panic!()
+//                    })
+//                    .collect();
+//
+//                let rel = SortRelation {
+//                    input: input_rel,
+//                    sort_expr: compiled_expr?,
+//                    sort_asc: sort_asc,
+//                    schema: schema.clone()
+//                };
+//                Ok(Box::new(rel))
+//            },
 
             LogicalPlan::Limit { limit, ref input, ref schema, .. } => {
                 let input_rel = self.create_execution_plan(data_dir,input)?;
@@ -762,6 +772,8 @@ impl ExecutionContext {
                 };
                 Ok(Box::new(rel))
             }
+
+            _ => unimplemented!()
         }
     }
 
@@ -838,7 +850,7 @@ impl ExecutionContext {
                 it.for_each(|t| {
                     match t {
                         Ok(ref batch) => {
-                            println!("Processing batch of {} rows", batch.row_count());
+                            //println!("Processing batch of {} rows", batch.row_count());
                             for i in 0 .. batch.row_count() {
                                 let row = batch.row_slice(i);
                                 let csv = row.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(",");
@@ -1059,6 +1071,7 @@ mod tests {
         //TODO: check that generated file has expected contents
     }
 
+    /*
     #[test]
     fn test_sort() {
 
@@ -1083,6 +1096,7 @@ mod tests {
 
         //TODO: check that generated file has expected contents
     }
+    */
 
     #[test]
     fn test_chaining_functions() {

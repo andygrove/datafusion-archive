@@ -19,7 +19,7 @@ use super::super::rel::{Schema, DataType, Value};
 use super::super::exec::*;
 
 extern crate csv;
-use super::super::csv::{StringRecord, StringRecordsIter};
+use super::super::csv::StringRecord;
 
 /// Represents a csv file with a known schema
 pub struct CsvRelation {
@@ -64,10 +64,14 @@ impl<'a> CsvIterator<'a> {
     fn parse_record(&self, r: &StringRecord) -> Vec<Value> {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
-            //TODO: remove unwrap use here
-            DataType::UnsignedLong => Value::Long(s.parse::<i64>().unwrap()),
-            DataType::String => Value::String(s.to_string()),
+            DataType::Boolean => Value::Boolean(s.parse::<bool>().unwrap()),
+            DataType::Float => Value::Float(s.parse::<f32>().unwrap()),
             DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
+            DataType::Int => Value::Int(s.parse::<i32>().unwrap()),
+            DataType::UnsignedInt => Value::UnsignedInt(s.parse::<u32>().unwrap()),
+            DataType::Long => Value::Long(s.parse::<i64>().unwrap()),
+            DataType::UnsignedLong => Value::UnsignedLong(s.parse::<u64>().unwrap()),
+            DataType::String => Value::String(s.to_string()),
             _ => panic!("csv unsupported type")
         }).collect();
         values
@@ -80,7 +84,7 @@ impl<'a> Iterator for CsvIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
 
-        println!("CsvIterator::next()");
+        //println!("CsvIterator::next()");
 
         let max_size = 1000;
 
@@ -120,7 +124,7 @@ impl<'a> Iterator for CsvIterator<'a> {
                     columns.push(ColumnData::UnsignedLong(
                         rows.iter().map(|row| match &row[i] {
                             &Value::UnsignedLong(v) => v,
-                            _ => panic!()
+                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
                         }).collect()))
                 },
                 DataType::String => {
