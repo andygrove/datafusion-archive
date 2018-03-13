@@ -1,5 +1,8 @@
+use std::rc::Rc;
+
 use super::super::api::*;
 use super::super::rel::*;
+use super::super::exec::*;
 
 pub struct SqrtFunction {
 }
@@ -10,14 +13,14 @@ impl ScalarFunction for SqrtFunction {
         "sqrt".to_string()
     }
 
-    fn execute(&self, args: Vec<Value>) -> Result<Value,Box<String>> {
-        match args[0] {
-            Value::Double(d) => Ok(Value::Double(d.sqrt())),
-            Value::Float(d) => Ok(Value::Double((d as f64).sqrt())),
-            Value::Int(l) => Ok(Value::Double((l as f64).sqrt())),
-            Value::UnsignedInt(l) => Ok(Value::Double((l as f64).sqrt())),
-            Value::Long(l) => Ok(Value::Double((l as f64).sqrt())),
-            Value::UnsignedLong(l) => Ok(Value::Double((l as f64).sqrt())),
+    fn execute(&self, args: Vec<Rc<ColumnData>>) -> Result<Rc<ColumnData>,Box<String>> {
+        match args[0].as_ref() {
+            &ColumnData::Float(ref v) => Ok(Rc::new(ColumnData::Float(v.iter().map(|v| v.sqrt()).collect()))),
+            &ColumnData::Double(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| v.sqrt()).collect()))),
+//            &ColumnData::Int(ref v) => Ok(ColumnData::Int(v.iter().map(|v| v.sqrt()).collect())),
+//            &ColumnData::UnsignedInt(ref v) => Ok(ColumnData::UnsignedInt(v.iter().map(|v| v.sqrt()).collect())),
+//            &ColumnData::Long(ref v) => Ok(ColumnData::Long(v.iter().map(|v| v.sqrt()).collect())),
+//            &ColumnData::UnsignedLong(ref v) => Ok(ColumnData::UnsignedLong(v.iter().map(|v| v.sqrt()).collect())),
             _ => Err(Box::new("Unsupported arg type for sqrt".to_string()))
         }
     }

@@ -85,7 +85,7 @@ pub trait Batch {
     fn row_count(&self) -> usize;
     fn column(&self, index: usize) -> &Rc<ColumnData>;
 
-    /// access a row
+    /// copy values into a row (EXPENSIVE)
     fn row_slice(&self, index: usize) -> Vec<Value>;
 }
 
@@ -138,36 +138,6 @@ pub enum ColumnData {
 }
 
 impl ColumnData {
-
-    fn from_row_field(vec: Vec<&Value>) -> Self {
-        match vec[0] {
-            &Value::Boolean(_) => ColumnData::Boolean(vec.iter().map(|v| match v { &&Value::Boolean(v) => v, _ => panic!() }).collect()),
-            &Value::Float(_) => ColumnData::Float(vec.iter().map(|v| match v { &&Value::Float(v) => v, _ => panic!() }).collect()),
-            &Value::Double(_) => ColumnData::Double(vec.iter().map(|v| match v { &&Value::Double(v) => v, _ => panic!() }).collect()),
-            &Value::Int(_) => ColumnData::Int(vec.iter().map(|v| match v { &&Value::Int(v) => v, _ => panic!() }).collect()),
-            &Value::UnsignedInt(_) => ColumnData::UnsignedInt(vec.iter().map(|v| match v { &&Value::UnsignedInt(v) => v, _ => panic!() }).collect()),
-            &Value::Long(_) => ColumnData::Long(vec.iter().map(|v| match v { &&Value::Long(v) => v, _ => panic!() }).collect()),
-            &Value::UnsignedLong(_) => ColumnData::UnsignedLong(vec.iter().map(|v| match v { &&Value::UnsignedLong(v) => v, _ => panic!() }).collect()),
-            &Value::String(_) => ColumnData::String(vec.iter().map(|v| match v { &&Value::String(ref v) => v.clone(), _ => panic!() }).collect()),
-            &Value::ComplexValue(ref first) => {
-                //ComplexValue(Vec<Value>) where each value is one field
-
-                let field_count = first.len(); // assumes all fields are always present i.e. no skipping nulls.. probably need type info here too?
-
-                // map each field to a ColumnData
-                let columns : Vec<ColumnData> = (0 .. field_count)
-                    .map(|field_index| {
-                        let column_values : Vec<&Value> = vec.iter().map(|field_value| match field_value {
-                            &&Value::ComplexValue(ref v) => &v[field_index],
-                            _ => *field_value
-                        }).collect();
-                        ColumnData::from_row_field(column_values)
-                    }).collect();
-
-                ColumnData::ComplexValue(columns)
-            },
-        }
-    }
 
     pub fn len(&self) -> usize {
         match self {
@@ -347,6 +317,8 @@ impl ColumnData {
                 &ColumnData::Boolean(ref v) => ColumnData::Boolean(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
                 &ColumnData::Float(ref v) => ColumnData::Float(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
                 &ColumnData::Double(ref v) => ColumnData::Double(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
+                &ColumnData::Int(ref v) => ColumnData::Int(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
+                &ColumnData::UnsignedInt(ref v) => ColumnData::UnsignedInt(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
                 &ColumnData::Long(ref v) => ColumnData::Long(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
                 &ColumnData::UnsignedLong(ref v) => ColumnData::UnsignedLong(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
                 &ColumnData::String(ref v) => ColumnData::String(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| v.clone()).collect()),
@@ -436,20 +408,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                     .map(|expr| expr(batch))
                     .collect();
 
-                let result : Vec<Value> = (0 .. batch.row_count()).map(|i| {
-
-                    // get args for one row
-                    //TODO avoid cloning values here
-                    let args: Vec<Value> = arg_values.iter()
-                        .map(|c|c.get_value(i))
-                        .collect();
-
-                    func.execute(args).unwrap()
-
-                }).collect();
-
-
-                Rc::new(ColumnData::from_row_field(result.iter().map(|v| v).collect()))
+                func.execute(arg_values).unwrap()
             }))
         }
         //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
