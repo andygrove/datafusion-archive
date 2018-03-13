@@ -19,6 +19,6 @@ pub trait ScalarFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&self, args: Vec<&Value>) -> Result<Value,Box<String>>;
+    fn execute(&self, args: Vec<Value>) -> Result<Value,Box<String>>;
 }
 

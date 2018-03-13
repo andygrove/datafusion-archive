@@ -114,11 +114,11 @@ impl Tokenizer {
                     }
                 },
                 // numbers
-                '0' ... '9' => {
+                '0' ... '9' | '.' => {
                     let mut s = String::new();
                     while let Some(&ch) = chars.peek() {
                         match ch {
-                            '0' ... '9' => {
+                            '0' ... '9' | '.' => {
                                 chars.next(); // consume
                                 s.push(ch);
                             },
@@ -248,8 +248,15 @@ impl Parser {
                             _ => Ok(ASTNode::SQLIdentifier(id))
                         }
                     }
-                    Token::Number(n) => match n.parse::<i64>() {
-                        Ok(n) => Ok(ASTNode::SQLLiteralInt(n)),
+                    Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
+                        Ok(n) => Ok(ASTNode::SQLLiteralDouble(n)),
+                        Err(e) => Err(ParserError::ParserError(format!(
+                            "Could not parse '{}' as i64: {}",
+                            n, e
+                        ))),
+                    },
+                    Token::Number(ref n) => match n.parse::<i64>() {
+                        Ok(n) => Ok(ASTNode::SQLLiteralLong(n)),
                         Err(e) => Err(ParserError::ParserError(format!(
                             "Could not parse '{}' as i64: {}",
                             n, e
@@ -609,7 +616,7 @@ impl Parser {
         if self.parse_keyword("ALL") {
             Ok(None)
         } else {
-            self.parse_literal_int().map(|n| Some(Box::new(ASTNode::SQLLiteralInt(n))))
+            self.parse_literal_int().map(|n| Some(Box::new(ASTNode::SQLLiteralLong(n))))
         }
     }
 }
@@ -685,7 +692,7 @@ mod tests {
                 projection, limit, ..
             } => {
                 assert_eq!(3, projection.len());
-                assert_eq!(Some(Box::new(ASTNode::SQLLiteralInt(5))), limit);
+                assert_eq!(Some(Box::new(ASTNode::SQLLiteralLong(5))), limit);
             }
             _ => assert!(false),
         }

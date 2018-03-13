@@ -61,3 +61,4 @@ rm -f _*.csv 2>/dev/null
 
 # run benchmarks
 cargo bench
+
