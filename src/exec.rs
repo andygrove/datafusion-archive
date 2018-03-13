@@ -137,17 +137,18 @@ pub enum ColumnData {
     ComplexValue(Vec<ColumnData>)
 }
 
-impl From<Vec<Value>> for ColumnData {
-    fn from(vec: Vec<Value>) -> Self {
-        match &vec[0] {
-            &Value::Boolean(_) => ColumnData::Boolean(vec.iter().map(|v| match v { &Value::Boolean(v) => v, _ => panic!() }).collect()),
-            &Value::Float(_) => ColumnData::Float(vec.iter().map(|v| match v { &Value::Float(v) => v, _ => panic!() }).collect()),
-            &Value::Double(_) => ColumnData::Double(vec.iter().map(|v| match v { &Value::Double(v) => v, _ => panic!() }).collect()),
-            &Value::Int(_) => ColumnData::Int(vec.iter().map(|v| match v { &Value::Int(v) => v, _ => panic!() }).collect()),
-            &Value::UnsignedInt(_) => ColumnData::UnsignedInt(vec.iter().map(|v| match v { &Value::UnsignedInt(v) => v, _ => panic!() }).collect()),
-            &Value::Long(_) => ColumnData::Long(vec.iter().map(|v| match v { &Value::Long(v) => v, _ => panic!() }).collect()),
-            &Value::UnsignedLong(_) => ColumnData::UnsignedLong(vec.iter().map(|v| match v { &Value::UnsignedLong(v) => v, _ => panic!() }).collect()),
-            &Value::String(_) => ColumnData::String(vec.iter().map(|v| match v { &Value::String(ref v) => v.clone(), _ => panic!() }).collect()),
+impl ColumnData {
+
+    fn from_row_field(vec: Vec<&Value>) -> Self {
+        match vec[0] {
+            &Value::Boolean(_) => ColumnData::Boolean(vec.iter().map(|v| match v { &&Value::Boolean(v) => v, _ => panic!() }).collect()),
+            &Value::Float(_) => ColumnData::Float(vec.iter().map(|v| match v { &&Value::Float(v) => v, _ => panic!() }).collect()),
+            &Value::Double(_) => ColumnData::Double(vec.iter().map(|v| match v { &&Value::Double(v) => v, _ => panic!() }).collect()),
+            &Value::Int(_) => ColumnData::Int(vec.iter().map(|v| match v { &&Value::Int(v) => v, _ => panic!() }).collect()),
+            &Value::UnsignedInt(_) => ColumnData::UnsignedInt(vec.iter().map(|v| match v { &&Value::UnsignedInt(v) => v, _ => panic!() }).collect()),
+            &Value::Long(_) => ColumnData::Long(vec.iter().map(|v| match v { &&Value::Long(v) => v, _ => panic!() }).collect()),
+            &Value::UnsignedLong(_) => ColumnData::UnsignedLong(vec.iter().map(|v| match v { &&Value::UnsignedLong(v) => v, _ => panic!() }).collect()),
+            &Value::String(_) => ColumnData::String(vec.iter().map(|v| match v { &&Value::String(ref v) => v.clone(), _ => panic!() }).collect()),
             &Value::ComplexValue(ref first) => {
                 //ComplexValue(Vec<Value>) where each value is one field
 
@@ -156,24 +157,17 @@ impl From<Vec<Value>> for ColumnData {
                 // map each field to a ColumnData
                 let columns : Vec<ColumnData> = (0 .. field_count)
                     .map(|field_index| {
-                        let column_values : Vec<Value> = vec.iter().map(|field_value| match field_value {
-                            &Value::ComplexValue(ref v) => (&v[field_index]).clone(),
-                            &Value::Double(v) => Value::Double(v),
-                            _ => {
-                                println!("Panic on field value {:?}", field_value);
-                                panic!()
-                            }
+                        let column_values : Vec<&Value> = vec.iter().map(|field_value| match field_value {
+                            &&Value::ComplexValue(ref v) => &v[field_index],
+                            _ => *field_value
                         }).collect();
-                        ColumnData::from(column_values)
+                        ColumnData::from_row_field(column_values)
                     }).collect();
 
                 ColumnData::ComplexValue(columns)
             },
         }
     }
-}
-
-impl ColumnData {
 
     pub fn len(&self) -> usize {
         match self {
@@ -450,12 +444,10 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                         .map(|c|c.get_value(i))
                         .collect();
 
-                    let value = func.execute(args).unwrap();
-
-                    result.push(value);
+                    result.push(func.execute(args).unwrap());
                 }
 
-               Rc::new(ColumnData::from(result))
+               Rc::new(ColumnData::from_row_field(result.iter().map(|v| v).collect()))
             }))
         }
         //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
