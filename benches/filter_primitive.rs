@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 #[macro_use]
 extern crate criterion;
 
@@ -25,9 +27,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         // generate some random data
         let n = 1000;
         let batch : Box<Batch> = Box::new(ColumnBatch { columns: vec![
-            ColumnData::String((0 .. n).map(|_| "city_name".to_string()).collect()),
-            ColumnData::Double((0 .. n).map(|_| 50.0).collect()),
-            ColumnData::Double((0 .. n).map(|_| 0.0).collect())
+            Rc::new(ColumnData::String((0 .. n).map(|_| "city_name".to_string()).collect())),
+            Rc::new(ColumnData::Double((0 .. n).map(|_| 50.0).collect())),
+            Rc::new(ColumnData::Double((0 .. n).map(|_| 0.0).collect()))
         ]});
 
         //let lat = df1.col("lat").unwrap();
@@ -47,11 +49,11 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(move || {
 
             // evaluate the filter expression against every row
-            let filter_eval: ColumnData = (compiled_filter_expr)(batch_ref.as_ref());
+            let filter_eval: Rc<ColumnData> = (compiled_filter_expr)(batch_ref.as_ref());
 
             // filter the columns
-            let filtered_columns: Vec<ColumnData> = (0..col_count)
-                .map(|column_index| { batch_ref.column(column_index).filter(&filter_eval) })
+            let filtered_columns: Vec<Rc<ColumnData>> = (0..col_count)
+                .map(|column_index| { Rc::new(batch_ref.column(column_index).filter(&filter_eval)) })
                 .collect();
 
             // create the new batch with the filtered columns

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 #[macro_use]
 extern crate criterion;
 
@@ -25,9 +27,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         // generate some random data
         let n = 1000;
         let batch : Box<Batch> = Box::new(ColumnBatch { columns: vec![
-            ColumnData::String((0 .. n).map(|_| "city_name".to_string()).collect()),
-            ColumnData::Double((0 .. n).map(|_| 50.0).collect()),
-            ColumnData::Double((0 .. n).map(|_| 0.0).collect())
+            Rc::new(ColumnData::String((0 .. n).map(|_| "city_name".to_string()).collect())),
+            Rc::new(ColumnData::Double((0 .. n).map(|_| 50.0).collect())),
+            Rc::new(ColumnData::Double((0 .. n).map(|_| 0.0).collect()))
         ]});
 
         // ST_Point(lat, lng)
@@ -43,7 +45,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         b.iter(move || {
             // evaluate the scalar function against against every row
-            let points: ColumnData = (compiled_expr)(batch_ref.as_ref());
+            let points: Rc<ColumnData> = (compiled_expr)(batch_ref.as_ref());
         })
     });
 

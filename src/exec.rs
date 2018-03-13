@@ -18,6 +18,7 @@ use std::io::{BufWriter, Error};
 use std::io::prelude::*;
 use std::iter::Iterator;
 use std::fs::File;
+use std::rc::Rc;
 use std::str;
 use std::string::String;
 use std::convert::*;
@@ -82,14 +83,14 @@ impl From<ParserError> for ExecutionError {
 pub trait Batch {
     fn col_count(&self) -> usize;
     fn row_count(&self) -> usize;
-    fn column(&self, index: usize) -> &ColumnData;
+    fn column(&self, index: usize) -> &Rc<ColumnData>;
 
     /// access a row
     fn row_slice(&self, index: usize) -> Vec<Value>;
 }
 
 pub struct ColumnBatch {
-    pub columns: Vec<ColumnData>
+    pub columns: Vec<Rc<ColumnData>>
 }
 
 //impl ColumnBatch {
@@ -112,7 +113,7 @@ impl Batch for ColumnBatch {
         self.columns[0].len()
     }
 
-    fn column(&self, index: usize) -> &ColumnData {
+    fn column(&self, index: usize) -> &Rc<ColumnData> {
         &self.columns[index]
     }
 
@@ -364,7 +365,7 @@ impl ColumnData {
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Batch) -> ColumnData>;
+pub type CompiledExpr = Box<Fn(&Batch) -> Rc<ColumnData>>;
 
 
 /// Compiles a relational expression into a closure
@@ -375,46 +376,45 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                ColumnData::BroadcastVariable(literal_value.clone())
+                Rc::new(ColumnData::BroadcastVariable(literal_value.clone()))
             }))
         }
         &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
-            let c: &ColumnData = batch.column(index);
-            (*c).clone()
+            (*batch.column(index)).clone()
         })),
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
             let left_expr = compile_expr(ctx,left)?;
             let right_expr = compile_expr(ctx,right)?;
             match op {
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values : ColumnData = left_expr(batch);
-                    let right_values : ColumnData = right_expr(batch);
-                    ColumnData::Boolean(left_values.eq(&right_values))
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    Rc::new(ColumnData::Boolean(left_values.eq(&right_values)))
                 })),
                 &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values : ColumnData = left_expr(batch);
-                    let right_values : ColumnData = right_expr(batch);
-                    ColumnData::Boolean(left_values.not_eq(&right_values))
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    Rc::new(ColumnData::Boolean(left_values.not_eq(&right_values)))
                 })),
                 &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
-                    let left_values : ColumnData = left_expr(batch);
-                    let right_values : ColumnData = right_expr(batch);
-                    ColumnData::Boolean(left_values.lt(&right_values))
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    Rc::new(ColumnData::Boolean(left_values.lt(&right_values)))
                 })),
                 &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values : ColumnData = left_expr(batch);
-                    let right_values : ColumnData = right_expr(batch);
-                    ColumnData::Boolean(left_values.lt_eq(&right_values))
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    Rc::new(ColumnData::Boolean(left_values.lt_eq(&right_values)))
                 })),
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
-                    let left_values : ColumnData = left_expr(batch);
-                    let right_values : ColumnData = right_expr(batch);
-                    ColumnData::Boolean(left_values.gt(&right_values))
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    Rc::new(ColumnData::Boolean(left_values.gt(&right_values)))
                 })),
                 &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values : ColumnData = left_expr(batch);
-                    let right_values : ColumnData = right_expr(batch);
-                    ColumnData::Boolean(left_values.gt_eq(&right_values))
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    Rc::new(ColumnData::Boolean(left_values.gt_eq(&right_values)))
                 })),
                 _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
@@ -438,7 +438,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             Ok(Box::new(move |batch| {
 
-                let arg_values : Vec<ColumnData> = compiled_args_ok.iter()
+                let arg_values : Vec<Rc<ColumnData>> = compiled_args_ok.iter()
                     .map(|expr| expr(batch))
                     .collect();
 
@@ -455,7 +455,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                     result.push(value);
                 }
 
-               ColumnData::from(result)
+               Rc::new(ColumnData::from(result))
             }))
         }
         //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
@@ -507,10 +507,10 @@ impl SimpleRelation for FilterRelation {
                 Ok(ref batch) => {
 
                     // evaluate the filter expression for every row in the batch
-                    let filter_eval: ColumnData = (*filter_expr)(batch.as_ref());
+                    let filter_eval: Rc<ColumnData> = (*filter_expr)(batch.as_ref());
 
-                    let filtered_columns : Vec<ColumnData> = (0 .. batch.col_count())
-                        .map(move|column_index| { batch.column(column_index).filter(&filter_eval) })
+                    let filtered_columns : Vec<Rc<ColumnData>> = (0 .. batch.col_count())
+                        .map(move|column_index| { Rc::new(batch.column(column_index).filter(&filter_eval)) })
                         .collect();
 
                     let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
@@ -600,9 +600,7 @@ impl SimpleRelation for ProjectRelation {
         let projection_iter = self.input.scan(ctx).map(move|r| match r {
             Ok(ref batch) => {
 
-                //TODO projection causes columns to be copied ... should be able to avoid that
-
-                let projected_columns : Vec<ColumnData> = project_expr.iter()
+                let projected_columns : Vec<Rc<ColumnData>> = project_expr.iter()
                     .map(|e| (*e)(batch.as_ref()))
                     .collect();
 

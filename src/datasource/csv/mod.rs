@@ -14,6 +14,7 @@
 
 use std::io::{BufReader};
 use std::fs::File;
+use std::rc::Rc;
 
 use super::super::rel::{Schema, DataType, Value};
 use super::super::exec::*;
@@ -88,9 +89,10 @@ impl<'a> Iterator for CsvIterator<'a> {
 
         let max_size = 1000;
 
-        //TODO: this seems inefficient .. loading as rows then converting to columns
+        // this seems inefficient .. loading as rows then converting to columns but this
+        // is a row-based data source so what can we do?
 
-        let mut rows : Vec<Vec<Value>> = vec![];
+        let mut rows : Vec<Vec<Value>> = Vec::with_capacity(max_size);
         for _ in 0 .. max_size {
             match self.iter.next() {
                 Some(r) => rows.push(self.parse_record(&r.unwrap())),
@@ -102,37 +104,37 @@ impl<'a> Iterator for CsvIterator<'a> {
             return None
         }
 
-        let mut columns : Vec<ColumnData> = Vec::with_capacity(self.schema.columns.len());
+        let mut columns : Vec<Rc<ColumnData>> = Vec::with_capacity(self.schema.columns.len());
 
         for i in 0 .. self.schema.columns.len() {
             match self.schema.columns[i].data_type {
                 DataType::Float => {
-                    columns.push(ColumnData::Float(
+                    columns.push(Rc::new(ColumnData::Float(
                         rows.iter().map(|row| match &row[i] {
                             &Value::Float(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect())))
                 },
                 DataType::Double => {
-                    columns.push(ColumnData::Double(
+                    columns.push(Rc::new(ColumnData::Double(
                         rows.iter().map(|row| match &row[i] {
                             &Value::Double(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect())))
                 },
                 DataType::UnsignedLong => {
-                    columns.push(ColumnData::UnsignedLong(
+                    columns.push(Rc::new(ColumnData::UnsignedLong(
                         rows.iter().map(|row| match &row[i] {
                             &Value::UnsignedLong(v) => v,
                             other => panic!(format!("Expected UnsignedLong, found {:?}", other))
-                        }).collect()))
+                        }).collect())))
                 },
                 DataType::String => {
-                    columns.push(ColumnData::String(
+                    columns.push(Rc::new(ColumnData::String(
                         rows.iter().map(|row| match &row[i] {
                             &Value::String(ref v) => v.clone(),
                             _ => panic!()
-                        }).collect()))
+                        }).collect())))
                 },
                 _ => unimplemented!()
             }
