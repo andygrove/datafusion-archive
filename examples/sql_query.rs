@@ -28,7 +28,7 @@ fn main() {
         lng DOUBLE)").unwrap();
 
     // define the SQL statement
-    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities WHERE lat < 53";
+    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities WHERE lat < 53.0";
 
     // create a data frame
     let df1 = ctx.sql(&sql).unwrap();
