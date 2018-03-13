@@ -535,7 +535,7 @@ impl ExecutionContext {
             LogicalPlan::TableScan { ref table_name, ref schema, .. } => {
                 // for now, tables are csv files
                 let filename = format!("{}/{}.csv", data_dir, table_name);
-                println!("Reading {}", filename);
+                //println!("Reading {}", filename);
                 let file = File::open(filename)?;
                 let rel = CsvRelation::open(file, schema.clone())?;
                 Ok(Box::new(rel))

@@ -58,3 +58,6 @@ diff -b _a.txt _b.txt
 # clean up
 rm -f _*.txt 2>/dev/null
 rm -f _*.csv 2>/dev/null
+
+# run benchmarks
+cargo bench
