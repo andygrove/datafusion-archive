@@ -436,18 +436,20 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                     .map(|expr| expr(batch))
                     .collect();
 
-                let mut result : Vec<Value> = Vec::with_capacity(batch.row_count());
-                for i in 0 .. batch.row_count() {
+                let result : Vec<Value> = (0 .. batch.row_count()).map(|i| {
 
                     // get args for one row
+                    //TODO avoid cloning values here
                     let args: Vec<Value> = arg_values.iter()
                         .map(|c|c.get_value(i))
                         .collect();
 
-                    result.push(func.execute(args).unwrap());
-                }
+                    func.execute(args).unwrap()
 
-               Rc::new(ColumnData::from_row_field(result.iter().map(|v| v).collect()))
+                }).collect();
+
+
+                Rc::new(ColumnData::from_row_field(result.iter().map(|v| v).collect()))
             }))
         }
         //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
