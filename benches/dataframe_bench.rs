@@ -12,7 +12,7 @@ extern crate serde_json;
 fn dataframe() {
 
     // create execution context
-    let ctx = ExecutionContext::local();
+    let ctx = ExecutionContext::local("test/data".to_string());
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![
@@ -37,7 +37,7 @@ fn dataframe() {
     let df3 = df2.select(vec![st_point]).unwrap();
 
     // write the results to a file
-    df3.write("_northern_cities.csv").unwrap();
+    ctx.write(df3, "_northern_cities.csv").unwrap();
 
 }
 
