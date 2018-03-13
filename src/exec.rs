@@ -442,11 +442,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                     .map(|expr| expr(batch))
                     .collect();
 
-                // convert into rows to call scalar function until the function trait is
-                // update to accept columns
-
                 let mut result : Vec<Value> = Vec::with_capacity(batch.row_count());
-//
                 for i in 0 .. batch.row_count() {
 
                     // get args for one row
@@ -456,19 +452,10 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
                     let value = func.execute(args).unwrap();
 
-                    //println!("function returned {:?}", value);
-
                     result.push(value);
                 }
 
-               let x = ColumnData::from(result);
-//                match x {
-//                    ColumnData::Empty => panic!(), //format!("failed to convert results to column: {:?}", result)),
-//                    _ => {}
-//
-//                }
-               //println!("as column: {:?}", x);
-               x
+               ColumnData::from(result)
             }))
         }
         //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
