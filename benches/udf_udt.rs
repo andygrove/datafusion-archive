@@ -13,7 +13,7 @@ extern crate serde_json;
 
 fn criterion_benchmark(c: &mut Criterion) {
 
-    c.bench_function("filter_primitive", move |b| {
+    c.bench_function("udf_udt", move |b| {
 
         // create execution context
         let ctx = ExecutionContext::local("test/data".to_string());
@@ -32,32 +32,20 @@ fn criterion_benchmark(c: &mut Criterion) {
             Rc::new(ColumnData::Double((0 .. n).map(|_| 0.0).collect()))
         ]});
 
-        //let lat = df1.col("lat").unwrap();
-        let filter_expr = Expr::BinaryExpr {
-            left: Box::new(Expr::Column(1)),
-            op: Operator::Gt,
-            right: Box::new(Expr::Literal(Value::Double(52.0)))
+        // ST_Point(lat, lng)
+        let expr = Expr::ScalarFunction {
+            name: "ST_Point".to_string(),
+            args: vec![Expr::Column(1), Expr::Column(2)]
         };
 
         let ctx = ExecutionContext::local("test/data".to_string());
-        let compiled_filter_expr = &compile_expr(&ctx, &filter_expr).unwrap();
+        let compiled_expr = &compile_expr(&ctx, &expr).unwrap();
 
         let batch_ref: &Box<Batch> = &batch;
 
-        let col_count = batch.col_count();
-
         b.iter(move || {
-
-            // evaluate the filter expression against every row
-            let filter_eval: Rc<ColumnData> = (compiled_filter_expr)(batch_ref.as_ref());
-
-            // filter the columns
-            let filtered_columns: Vec<Rc<ColumnData>> = (0..col_count)
-                .map(|column_index| { Rc::new(batch_ref.column(column_index).filter(&filter_eval)) })
-                .collect();
-
-            // create the new batch with the filtered columns
-            let filtered_batch: Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
+            // evaluate the scalar function against against every row
+            let points: Rc<ColumnData> = (compiled_expr)(batch_ref.as_ref());
         })
     });
 

@@ -198,7 +198,7 @@ pub enum Operator {
 /// Relation Expression
 #[derive(Debug,Clone,Serialize, Deserialize)]
 pub enum Expr {
-    /// index into a value within the row
+    /// index into a value within the row or complex value
     Column(usize),
     /// literal value
     Literal(Value),
