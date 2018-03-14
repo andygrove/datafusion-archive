@@ -17,10 +17,10 @@ impl ScalarFunction for SqrtFunction {
         match args[0].as_ref() {
             &ColumnData::Float(ref v) => Ok(Rc::new(ColumnData::Float(v.iter().map(|v| v.sqrt()).collect()))),
             &ColumnData::Double(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| v.sqrt()).collect()))),
-//            &ColumnData::Int(ref v) => Ok(ColumnData::Int(v.iter().map(|v| v.sqrt()).collect())),
-//            &ColumnData::UnsignedInt(ref v) => Ok(ColumnData::UnsignedInt(v.iter().map(|v| v.sqrt()).collect())),
-//            &ColumnData::Long(ref v) => Ok(ColumnData::Long(v.iter().map(|v| v.sqrt()).collect())),
-//            &ColumnData::UnsignedLong(ref v) => Ok(ColumnData::UnsignedLong(v.iter().map(|v| v.sqrt()).collect())),
+            &ColumnData::Int(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
+            &ColumnData::UnsignedInt(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
+            &ColumnData::Long(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
+            &ColumnData::UnsignedLong(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
             _ => Err(Box::new("Unsupported arg type for sqrt".to_string()))
         }
     }
