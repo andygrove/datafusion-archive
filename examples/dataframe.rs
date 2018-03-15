@@ -13,8 +13,9 @@
 // limitations under the License.
 
 extern crate datafusion;
-use datafusion::rel::*;
+use datafusion::data::*;
 use datafusion::exec::*;
+use datafusion::rel::*;
 
 extern crate serde_json;
 
