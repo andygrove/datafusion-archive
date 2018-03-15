@@ -14,6 +14,7 @@
 
 use std::clone::Clone;
 use std::iter::Iterator;
+use std::rc::Rc;
 use std::str;
 use std::string::String;
 use std::cmp::{Ordering, PartialOrd};
@@ -61,7 +62,7 @@ pub struct ComplexType {
     fields: Vec<Field>
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug)]
 pub enum ColumnData {
     BroadcastVariable(Value),
     Boolean(Vec<bool>),
@@ -72,7 +73,7 @@ pub enum ColumnData {
     Long(Vec<i64>),
     UnsignedLong(Vec<u64>),
     String(Vec<String>),
-    ComplexValue(Vec<ColumnData>)
+    ComplexValue(Vec<Rc<ColumnData>>)
 }
 
 impl ColumnData {
