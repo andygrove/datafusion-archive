@@ -16,8 +16,8 @@ use std::clone::Clone;
 use std::collections::HashMap;
 use std::io::{BufWriter, Error};
 use std::io::prelude::*;
-use std::iter::Iterator;
 use std::fs::File;
+use std::iter::Iterator;
 use std::rc::Rc;
 use std::str;
 use std::string::String;
@@ -36,6 +36,7 @@ use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
+use super::data::*;
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
@@ -121,213 +122,6 @@ impl Batch for ColumnBatch {
         //println!("row_slice() index = {}", index);
         self.columns.iter().map(|c| c.get_value(index)).collect()
     }
-}
-
-#[derive(Debug,Clone)]
-pub enum ColumnData {
-    BroadcastVariable(Value),
-    Boolean(Vec<bool>),
-    Float(Vec<f32>),
-    Double(Vec<f64>),
-    Int(Vec<i32>),
-    UnsignedInt(Vec<u32>),
-    Long(Vec<i64>),
-    UnsignedLong(Vec<u64>),
-    String(Vec<String>),
-    ComplexValue(Vec<ColumnData>)
-}
-
-impl ColumnData {
-
-    pub fn len(&self) -> usize {
-        match self {
-            &ColumnData::BroadcastVariable(_) => 1,
-            &ColumnData::Boolean(ref v) => v.len(),
-            &ColumnData::Float(ref v) => v.len(),
-            &ColumnData::Double(ref v) => v.len(),
-            &ColumnData::Int(ref v) => v.len(),
-            &ColumnData::UnsignedInt(ref v) => v.len(),
-            &ColumnData::Long(ref v) => v.len(),
-            &ColumnData::UnsignedLong(ref v) => v.len(),
-            &ColumnData::String(ref v) => v.len(),
-            &ColumnData::ComplexValue(ref v) => v[0].len(),
-        }
-    }
-
-    pub fn eq(&self, other: &ColumnData) -> Vec<bool> {
-        match (self, other) {
-            // compare column to literal
-            (&ColumnData::Float(ref l), &ColumnData::BroadcastVariable(Value::Float(b))) => l.iter().map(|a| a==&b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::BroadcastVariable(Value::Double(b))) => l.iter().map(|a| a==&b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::BroadcastVariable(Value::Int(b))) => l.iter().map(|a| a==&b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::BroadcastVariable(Value::UnsignedInt(b))) => l.iter().map(|a| a==&b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::BroadcastVariable(Value::Long(b))) => l.iter().map(|a| a==&b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::BroadcastVariable(Value::UnsignedLong(b))) => l.iter().map(|a| a==&b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::BroadcastVariable(Value::String(ref b))) => l.iter().map(|a| a==b).collect(),
-            // compare column to column
-            (&ColumnData::Float(ref l), &ColumnData::Float(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::Double(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::Int(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::UnsignedInt(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::Long(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::UnsignedLong(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::String(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            _ => panic!(format!("ColumnData.eq() Type mismatch: {:?} vs {:?}", self, other))
-        }
-    }
-
-    pub fn not_eq(&self, other: &ColumnData) -> Vec<bool> {
-        match (self, other) {
-            // compare column to literal
-            (&ColumnData::Float(ref l), &ColumnData::BroadcastVariable(Value::Float(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::BroadcastVariable(Value::Double(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::BroadcastVariable(Value::Int(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::BroadcastVariable(Value::UnsignedInt(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::BroadcastVariable(Value::Long(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::BroadcastVariable(Value::UnsignedLong(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::BroadcastVariable(Value::String(ref b))) => l.iter().map(|a| a!=b).collect(),
-            // compare column to column
-            (&ColumnData::Float(ref l), &ColumnData::Float(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::Double(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::Int(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::UnsignedInt(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::Long(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::UnsignedLong(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::String(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            _ => panic!(format!("ColumnData.eq() Type mismatch: {:?} vs {:?}", self, other))
-        }
-    }
-
-    pub fn lt(&self, other: &ColumnData) -> Vec<bool> {
-        match (self, other) {
-            // compare column to literal
-            (&ColumnData::Float(ref l), &ColumnData::BroadcastVariable(Value::Float(b))) => l.iter().map(|a| a<&b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::BroadcastVariable(Value::Double(b))) => l.iter().map(|a| a<&b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::BroadcastVariable(Value::Int(b))) => l.iter().map(|a| a<&b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::BroadcastVariable(Value::UnsignedInt(b))) => l.iter().map(|a| a<&b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::BroadcastVariable(Value::Long(b))) => l.iter().map(|a| a<&b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::BroadcastVariable(Value::UnsignedLong(b))) => l.iter().map(|a| a<&b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::BroadcastVariable(Value::String(ref b))) => l.iter().map(|a| a<b).collect(),
-            // compare column to column
-            (&ColumnData::Float(ref l), &ColumnData::Float(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::Double(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::Int(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::UnsignedInt(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::Long(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::UnsignedLong(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::String(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            _ => panic!(format!("ColumnData.lt() Type mismatch: {:?} vs {:?}", self, other))
-        }
-    }
-
-    pub fn lt_eq(&self, other: &ColumnData) -> Vec<bool> {
-        match (self, other) {
-            // compare column to literal
-            (&ColumnData::Float(ref l), &ColumnData::BroadcastVariable(Value::Float(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::BroadcastVariable(Value::Double(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::BroadcastVariable(Value::Int(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::BroadcastVariable(Value::UnsignedInt(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::BroadcastVariable(Value::Long(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::BroadcastVariable(Value::UnsignedLong(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::BroadcastVariable(Value::String(ref b))) => l.iter().map(|a| a<=b).collect(),
-            // compare column to column
-            (&ColumnData::Float(ref l), &ColumnData::Float(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::Double(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::Int(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::UnsignedInt(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::Long(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::UnsignedLong(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::String(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            _ => panic!(format!("ColumnData.lt_eq() Type mismatch: {:?} vs {:?}", self, other))
-        }
-    }
-
-    pub fn gt(&self, other: &ColumnData) -> Vec<bool> {
-        match (self, other) {
-            // compare column to literal
-            (&ColumnData::Float(ref l), &ColumnData::BroadcastVariable(Value::Float(b))) => l.iter().map(|a| a>&b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::BroadcastVariable(Value::Double(b))) => l.iter().map(|a| a>&b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::BroadcastVariable(Value::Int(b))) => l.iter().map(|a| a>&b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::BroadcastVariable(Value::UnsignedInt(b))) => l.iter().map(|a| a>&b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::BroadcastVariable(Value::Long(b))) => l.iter().map(|a| a>&b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::BroadcastVariable(Value::UnsignedLong(b))) => l.iter().map(|a| a>&b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::BroadcastVariable(Value::String(ref b))) => l.iter().map(|a| a>b).collect(),
-            // compare column to column
-            (&ColumnData::Float(ref l), &ColumnData::Float(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::Double(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::Int(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::UnsignedInt(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::Long(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::UnsignedLong(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::String(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            _ => panic!(format!("ColumnData.gt() Type mismatch: {:?} vs {:?}", self, other))
-        }
-    }
-
-    pub fn gt_eq(&self, other: &ColumnData) -> Vec<bool> {
-        match (self, other) {
-            // compare column to literal
-            (&ColumnData::Float(ref l), &ColumnData::BroadcastVariable(Value::Float(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::BroadcastVariable(Value::Double(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::BroadcastVariable(Value::Int(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::BroadcastVariable(Value::UnsignedInt(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::BroadcastVariable(Value::Long(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::BroadcastVariable(Value::UnsignedLong(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::BroadcastVariable(Value::String(ref b))) => l.iter().map(|a| a>=b).collect(),
-            // compare column to column
-            (&ColumnData::Float(ref l), &ColumnData::Float(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            (&ColumnData::Double(ref l), &ColumnData::Double(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            (&ColumnData::Int(ref l), &ColumnData::Int(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            (&ColumnData::UnsignedInt(ref l), &ColumnData::UnsignedInt(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            (&ColumnData::Long(ref l), &ColumnData::Long(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            (&ColumnData::UnsignedLong(ref l), &ColumnData::UnsignedLong(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            (&ColumnData::String(ref l), &ColumnData::String(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            _ => panic!(format!("ColumnData.gt_eq() Type mismatch: {:?} vs {:?}", self, other))
-        }
-    }
-
-    pub fn get_value(&self, index: usize) -> Value {
-//        println!("get_value() index={}", index);
-        let v = match self {
-            &ColumnData::BroadcastVariable(ref v) => v.clone(),
-            &ColumnData::Boolean(ref v) => Value::Boolean(v[index]),
-            &ColumnData::Float(ref v) => Value::Float(v[index]),
-            &ColumnData::Double(ref v) => Value::Double(v[index]),
-            &ColumnData::Int(ref v) => Value::Int(v[index]),
-            &ColumnData::UnsignedInt(ref v) => Value::UnsignedInt(v[index]),
-            &ColumnData::Long(ref v) => Value::Long(v[index]),
-            &ColumnData::UnsignedLong(ref v) => Value::UnsignedLong(v[index]),
-            &ColumnData::String(ref v) => Value::String(v[index].clone()),
-            &ColumnData::ComplexValue(ref v) => {
-                // v is Vec<ColumnData>
-                // each field has its own ColumnData e.g. lat, lon so we want to get a value from each (but it's recursive)
-    //            println!("get_value() complex value has {} fields", v.len());
-                let fields = v.iter().map(|field| field.get_value(index)).collect();
-                Value::ComplexValue(fields)
-            }
-        };
-      //  println!("get_value() index={} returned {:?}", index, v);
-
-        v
-    }
-
-    pub fn filter(&self, bools: &ColumnData) -> ColumnData {
-        match bools {
-            &ColumnData::Boolean(ref b) => match self {
-                &ColumnData::Boolean(ref v) => ColumnData::Boolean(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
-                &ColumnData::Float(ref v) => ColumnData::Float(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
-                &ColumnData::Double(ref v) => ColumnData::Double(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
-                &ColumnData::Int(ref v) => ColumnData::Int(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
-                &ColumnData::UnsignedInt(ref v) => ColumnData::UnsignedInt(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
-                &ColumnData::Long(ref v) => ColumnData::Long(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
-                &ColumnData::UnsignedLong(ref v) => ColumnData::UnsignedLong(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| *v).collect()),
-                &ColumnData::String(ref v) => ColumnData::String(v.iter().zip(b.iter()).filter(|&(_,f)| *f).map(|(v,_)| v.clone()).collect()),
-                _ => unimplemented!()
-            },
-            _ => panic!()
-        }
-    }
-
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)

@@ -12,50 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::{Ordering, PartialOrd};
 
-/// The data types supported by this database. Currently just u64 and string but others
-/// will be added later, including complex types
-#[derive(Debug,Clone,Serialize,Deserialize)]
-pub enum DataType {
-    Boolean,
-    Float,
-    Double,
-    Int,
-    UnsignedInt,
-    Long,
-    UnsignedLong,
-    String,
-    ComplexType(Vec<Field>)
-}
+use super::data::*;
 
-/// Definition of a column in a relation (data set).
-#[derive(Debug,Clone,Serialize,Deserialize)]
-pub struct Field {
-    pub name: String,
-    pub data_type: DataType,
-    pub nullable: bool
-}
-
-impl Field {
-    pub fn new(name: &str, data_type: DataType, nullable: bool) -> Self {
-        Field {
-            name: name.to_string(),
-            data_type: data_type,
-            nullable: nullable
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        format!("{}: {:?}", self.name, self.data_type)
-    }
-}
-
-#[derive(Debug,Clone,Serialize,Deserialize)]
-pub struct ComplexType {
-    name: String,
-    fields: Vec<Field>
-}
 
 /// Definition of a relation (data set) consisting of one or more columns.
 #[derive(Debug,Clone,Serialize,Deserialize)]
@@ -112,72 +71,6 @@ impl Row for Vec<Value> {
         // return comma-separated
         value_strings.join(",")
     }
-}
-
-/// Value holder for all supported data types
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
-pub enum Value {
-    Boolean(bool),
-    Float(f32),
-    Double(f64),
-    Int(i32),
-    UnsignedInt(u32),
-    Long(i64),
-    UnsignedLong(u64),
-    String(String),
-    /// Complex value which is a list of values (which in turn can be complex
-    /// values to support nested types)
-    ComplexValue(Vec<Value>),
-}
-
-impl PartialOrd for Value {
-    fn partial_cmp(&self, other: &Value) -> Option<Ordering> {
-
-        //TODO: implement all type coercion rules
-
-        match self {
-            &Value::Double(l) => match other {
-                &Value::Double(r) => l.partial_cmp(&r),
-                &Value::Long(r) => l.partial_cmp(&(r as f64)),
-                _ => unimplemented!("type coercion rules missing")
-            },
-            &Value::Long(l) => match other {
-                &Value::Double(r) => (l as f64).partial_cmp(&r),
-                &Value::Long(r) => l.partial_cmp(&r),
-                _ => unimplemented!("type coercion rules missing")
-            },
-            &Value::String(ref l) => match other {
-                &Value::String(ref r) => l.partial_cmp(r),
-                _ => unimplemented!("type coercion rules missing")
-            },
-            &Value::ComplexValue(_) => None,
-            _ => unimplemented!("type coercion rules missing")
-        }
-
-    }
-}
-
-
-
-impl Value {
-
-    pub fn to_string(&self) -> String {
-        match self {
-            &Value::Long(l) => l.to_string(),
-            &Value::UnsignedLong(l) => l.to_string(),
-            &Value::Double(d) => d.to_string(),
-            &Value::Boolean(b) => b.to_string(),
-            &Value::String(ref s) => s.clone(),
-            &Value::ComplexValue(ref v) => {
-                let s : Vec<String> = v.iter()
-                    .map(|v| v.to_string())
-                    .collect();
-                s.join(",")
-            },
-            _ => unimplemented!()
-        }
-    }
-
 }
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
