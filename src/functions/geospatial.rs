@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
 use super::super::api::*;
-use super::super::rel::*;
-use super::super::exec::*;
+use super::super::data::*;
 
 /// create a point from two doubles
 pub struct STPointFunc;

@@ -16,7 +16,8 @@ use std::io::{BufReader};
 use std::fs::File;
 use std::rc::Rc;
 
-use super::super::rel::{Schema, DataType, Value};
+use super::super::rel::Schema;
+use super::super::data::*;
 use super::super::exec::*;
 
 extern crate csv;

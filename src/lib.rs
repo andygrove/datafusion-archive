@@ -14,6 +14,7 @@
 
 pub mod api;
 pub mod cluster;
+pub mod data;
 pub mod dataframe;
 pub mod datasource;
 pub mod exec;
@@ -22,6 +23,7 @@ pub mod rel;
 pub mod sql;
 pub mod sqltorel;
 pub mod parser;
+pub mod persist;
 
 extern crate serde;
 extern crate serde_json;

@@ -1,12 +1,16 @@
 [package]
 name = "datafusion"
 description = "DataFusion is a SQL query parser, planner, and distributed query processing framework for Rust inspired by Apache Calcite and Apache Spark"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://datafusion.rs"
 keywords = [ "distributed", "query", "data", "processing", "sql" ]
 repository = "https://github.com/andygrove/datafusion-rs"
 license = "Apache-2.0"
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+]
 
 [lib]
 name = "datafusion"
@@ -21,6 +25,7 @@ name = "console"
 path = "src/bin/console/main.rs"
 
 [dependencies]
+byteorder = "1"
 csv = "1.0.0-beta.5"
 futures = "0.1.18"
 futures-timer = "0.1"

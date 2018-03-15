@@ -14,8 +14,7 @@
 
 use std::rc::Rc;
 
-use super::rel::{Field, DataType};
-use super::exec::ColumnData;
+use super::data::{ColumnData, DataType, Field};
 
 /// Scalar function. User-defined implementations will be dynamically loaded at runtime.
 pub trait ScalarFunction {
