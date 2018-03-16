@@ -53,7 +53,18 @@ docker run \
 # did we get the expected results?
 grep -v seconds _smoketest.txt > _a.txt
 grep -v seconds test/data/smoketest-expected.txt > _b.txt
-diff -b _a.txt _b.txt
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+diff -b -q -s _a.txt _b.txt
+code=$?
+if [ $code -eq 1 ]; then
+    echo -e "${RED}error: Smoketest failed to compare the output file, file generated differs from the expected result${NC}"
+elif [ $code -eq 0 ]; then
+    echo -e "${GREEN}Smoketest exited with success!${NC}"
+fi
 
 # clean up
 rm -f _*.txt 2>/dev/null
