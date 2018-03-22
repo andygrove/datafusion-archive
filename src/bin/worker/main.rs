@@ -34,7 +34,7 @@ use clap::{Arg, App};
 use etcd::Client;
 use etcd::kv;
 use datafusion::exec::*;
-use futures::future::{ok, loop_fn, Future, Loop};
+use futures::future::{ok, err, loop_fn, Future, Loop};
 use futures::Stream;
 use hyper::{Method, StatusCode};
 use hyper::client::HttpConnector;
@@ -100,25 +100,26 @@ fn main() {
     // start a loop to register with etcd every 5 seconds with a ttl of 10 seconds
     match Client::new(&handle, &[etcd_endpoints], None) {
         Ok(etcd) => {
-            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
-                client.register()
-                    .and_then(|(client, done)| {
-                        if done {
-                            Ok(Loop::Break(client))
-                        } else {
-                            Ok(Loop::Continue(client))
-                        }
-                    })
+            let client = Membership::new(etcd, uuid, bind_addr_str)
+                .with_max_retry(10)
+                .build();
+
+            let heartbeat_loop = loop_fn(client, |client| {
+                client.register().and_then(|(client, done)| {
+                    if done {
+                        return Ok(Loop::Break(client));
+                    } else {
+                        return Ok(Loop::Continue(client));
+                    }
+                })
             });
             match core.run(heartbeat_loop) {
                 Ok(_) => println!("Heartbeat loop finished"),
                 Err(e) => println!("Heartbeat loop failed: {:?}", e),
             }
-
         }
-        Err(e) => println!("Failed to connect to etcd: {:?}", e)
+        Err(e) => println!("Failed to connect to etcd: {:?}", e),
     }
-
 }
 
 /// Worker struct to store state
@@ -282,30 +283,72 @@ fn error_response(msg: String) -> Response {
         .with_body(msg)
 }
 
+#[derive(Debug, Clone)]
 struct Membership {
     etcd: Client<HttpConnector>,
     uuid: Uuid,
-    bind_address: String
+    bind_address: String,
+    retry_count: usize,
+    max_retry: usize,
 }
 
 impl Membership {
-
     fn new(etcd: Client<HttpConnector>, uuid: Uuid, bind_address: String) -> Self {
-        Membership { etcd, uuid, bind_address }
+        Membership {
+            etcd,
+            uuid,
+            bind_address,
+            retry_count: 1,
+            max_retry: 10,
+        }
     }
 
-    fn register(self) -> Box<Future<Item=(Self,bool),Error=Error>> {
-
-        let key = format!("/datafusion/workers/{}", self.uuid);
-
-        Box::new(kv::set(&self.etcd, &key, &self.bind_address, Some(10))
-            .and_then(|_etcd_response| {
-                println!("Registered with etcd: {} -> {}", self.uuid, self.bind_address);
-                thread::sleep(Duration::from_millis(5000));
-                ok((self,false))
-            })
-            .map_err(|_| Error::from(ErrorKind::NotFound)))
+    fn with_max_retry(mut self, max_retry: usize) -> Self {
+        self.max_retry = max_retry;
+        self
     }
 
+    fn build(self) -> Self {
+        Membership {
+            etcd: self.etcd,
+            uuid: self.uuid,
+            bind_address: self.bind_address,
+            retry_count: self.retry_count,
+            max_retry: self.max_retry,
+        }
+    }
+
+    fn register_retry(&mut self) {
+        println!(
+            "Connection to etcd `{}` failed. Retrying... {}/{}",
+            self.uuid, self.retry_count, self.max_retry
+        );
+        self.retry_count += 1;
+    }
+
+    fn register(mut self) -> Box<Future<Item = (Self, bool), Error = Error>> {
+        let key = format!("/datafusion/workers/{}", &self.uuid);
+        let client = self.clone();
+
+        Box::new(
+            kv::set(&self.etcd, &key, &self.bind_address, Some(10))
+                .and_then(|_response| {
+                    println!(
+                        "Registered with etcd: {} -> {}",
+                        client.uuid, client.bind_address
+                    );
+                    thread::sleep(Duration::from_millis(5000));
+                    ok((client, false))
+                })
+                .or_else(|_| {
+                    thread::sleep(Duration::from_millis(5000));
+                    if self.retry_count > self.max_retry {
+                        err(Error::from(ErrorKind::NotFound))
+                    } else {
+                        self.register_retry();
+                        ok((self, false))
+                    }
+                }),
+        )
+    }
 }
-
