@@ -15,36 +15,6 @@
 
 use super::arrow::*;
 
-
-/// Definition of a relation (data set) consisting of one or more columns.
-#[derive(Debug,Clone,Serialize,Deserialize)]
-pub struct Schema {
-    pub columns: Vec<Field>
-}
-
-impl Schema {
-
-    /// create an empty schema
-    pub fn empty() -> Self { Schema { columns: vec![] } }
-
-    pub fn new(columns: Vec<Field>) -> Self { Schema { columns: columns } }
-
-    /// look up a column by name and return a reference to the column along with it's index
-    pub fn column(&self, name: &str) -> Option<(usize, &Field)> {
-        self.columns.iter()
-            .enumerate()
-            .find(|&(_,c)| c.name == name)
-    }
-
-    pub fn to_string(&self) -> String {
-        let s : Vec<String> = self.columns.iter()
-            .map(|c| c.to_string())
-            .collect();
-        s.join(",")
-    }
-
-}
-
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct FunctionMeta {
     pub name: String,
