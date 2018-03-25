@@ -82,7 +82,7 @@ impl Schema {
 
 #[derive(Debug)]
 pub enum ArrayData {
-    BroadcastVariable(ScalarValue), //TODO remove .. not an arrow concept
+    BroadcastVariable(ScalarValue), //TODO remove .. not an arrow concept .. should just use a single element array instead
     Boolean(Vec<bool>),
     Float32(Vec<f32>),
     Float64(Vec<f64>),
