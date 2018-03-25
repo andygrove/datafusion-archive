@@ -12,27 +12,25 @@ impl ScalarFunction for SqrtFunction {
         "sqrt".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<ColumnData>>) -> Result<Rc<ColumnData>,Box<String>> {
+    fn execute(&self, args: Vec<Rc<Array>>) -> Result<Rc<Array>,Box<String>> {
         match args[0].as_ref() {
-            &ColumnData::Float(ref v) => Ok(Rc::new(ColumnData::Float(v.iter().map(|v| v.sqrt()).collect()))),
-            &ColumnData::Double(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| v.sqrt()).collect()))),
-            &ColumnData::Int(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
-            &ColumnData::UnsignedInt(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
-            &ColumnData::Long(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
-            &ColumnData::UnsignedLong(ref v) => Ok(Rc::new(ColumnData::Double(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
+            &Array::Float32(ref v) => Ok(Rc::new(Array::Float32(v.iter().map(|v| v.sqrt()).collect()))),
+            &Array::Float64(ref v) => Ok(Rc::new(Array::Float64(v.iter().map(|v| v.sqrt()).collect()))),
+            &Array::Int32(ref v) => Ok(Rc::new(Array::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
+            &Array::Int64(ref v) => Ok(Rc::new(Array::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
             _ => Err(Box::new("Unsupported arg type for sqrt".to_string()))
         }
     }
 
     fn args(&self) -> Vec<Field> {
         vec![
-            Field::new("x", DataType::Double, false),
-            Field::new("y", DataType::Double, false)
+            Field::new("x", DataType::Float64, false),
+            Field::new("y", DataType::Float64, false)
         ]
     }
 
     fn return_type(&self) -> DataType {
-        DataType::Double
+        DataType::Float64
     }
 }
 

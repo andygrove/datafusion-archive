@@ -142,8 +142,8 @@ mod tests {
 
         let schema = Schema {
             columns: vec![
-                Field { name: "id".to_string(), data_type: DataType::UnsignedLong, nullable: false },
-                Field { name: "name".to_string(), data_type: DataType::String, nullable: false }
+                Field { name: "id".to_string(), data_type: DataType::Int32, nullable: false },
+                Field { name: "name".to_string(), data_type: DataType::Utf8, nullable: false }
             ]
         };
 
@@ -152,7 +152,7 @@ mod tests {
         let filter_expr = BinaryExpr {
             left: Box::new(Column(0)),
             op: Operator::Eq,
-            right: Box::new(Literal(Long(2)))
+            right: Box::new(Literal(Int64(2)))
         };
 
         let plan = Selection {

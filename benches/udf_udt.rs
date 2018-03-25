@@ -21,16 +21,16 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         // define schema for data source (csv file)
         let schema = Schema::new(vec![
-            Field::new("city", DataType::String, false),
-            Field::new("lat", DataType::Double, false),
-            Field::new("lng", DataType::Double, false)]);
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false)]);
 
         // generate some random data
         let n = 1000;
         let batch : Box<Batch> = Box::new(ColumnBatch { columns: vec![
-            Rc::new(ColumnData::String((0 .. n).map(|_| "city_name".to_string()).collect())),
-            Rc::new(ColumnData::Double((0 .. n).map(|_| 50.0).collect())),
-            Rc::new(ColumnData::Double((0 .. n).map(|_| 0.0).collect()))
+            Rc::new(Array::Utf8((0 .. n).map(|_| "city_name".to_string()).collect())),
+            Rc::new(Array::Float64((0 .. n).map(|_| 50.0).collect())),
+            Rc::new(Array::Float64((0 .. n).map(|_| 0.0).collect()))
         ]});
 
         // ST_Point(lat, lng)
@@ -46,7 +46,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         b.iter(move || {
             // evaluate the scalar function against against every row
-            let points: Rc<ColumnData> = (compiled_expr)(batch_ref.as_ref());
+            let points: Rc<Array> = (compiled_expr)(batch_ref.as_ref());
         })
     });
 

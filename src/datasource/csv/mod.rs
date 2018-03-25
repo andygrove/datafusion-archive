@@ -66,13 +66,11 @@ impl<'a> CsvIterator<'a> {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
             DataType::Boolean => Value::Boolean(s.parse::<bool>().unwrap()),
-            DataType::Float => Value::Float(s.parse::<f32>().unwrap()),
-            DataType::Double => Value::Double(s.parse::<f64>().unwrap()),
-            DataType::Int => Value::Int(s.parse::<i32>().unwrap()),
-            DataType::UnsignedInt => Value::UnsignedInt(s.parse::<u32>().unwrap()),
-            DataType::Long => Value::Long(s.parse::<i64>().unwrap()),
-            DataType::UnsignedLong => Value::UnsignedLong(s.parse::<u64>().unwrap()),
-            DataType::String => Value::String(s.to_string()),
+            DataType::Float32 => Value::Float32(s.parse::<f32>().unwrap()),
+            DataType::Float64 => Value::Float64(s.parse::<f64>().unwrap()),
+            DataType::Int32 => Value::Int32(s.parse::<i32>().unwrap()),
+            DataType::Int64 => Value::Int64(s.parse::<i64>().unwrap()),
+            DataType::Utf8 => Value::Utf8(s.to_string()),
             _ => panic!("csv unsupported type")
         }).collect();
         values
@@ -104,35 +102,42 @@ impl<'a> Iterator for CsvIterator<'a> {
             return None
         }
 
-        let mut columns : Vec<Rc<ColumnData>> = Vec::with_capacity(self.schema.columns.len());
+        let mut columns : Vec<Rc<Array>> = Vec::with_capacity(self.schema.columns.len());
 
         for i in 0 .. self.schema.columns.len() {
             match self.schema.columns[i].data_type {
-                DataType::Float => {
-                    columns.push(Rc::new(ColumnData::Float(
+                DataType::Float32 => {
+                    columns.push(Rc::new(Array::Float32(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::Float(v) => v,
+                            &Value::Float32(v) => v,
                             _ => panic!()
                         }).collect())))
                 },
-                DataType::Double => {
-                    columns.push(Rc::new(ColumnData::Double(
+                DataType::Float64 => {
+                    columns.push(Rc::new(Array::Float64(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::Double(v) => v,
+                            &Value::Float64(v) => v,
                             _ => panic!()
                         }).collect())))
                 },
-                DataType::UnsignedLong => {
-                    columns.push(Rc::new(ColumnData::UnsignedLong(
+                DataType::Int32 => {
+                    columns.push(Rc::new(Array::Int32(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::UnsignedLong(v) => v,
+                            &Value::Int32(v) => v,
                             other => panic!(format!("Expected UnsignedLong, found {:?}", other))
                         }).collect())))
                 },
-                DataType::String => {
-                    columns.push(Rc::new(ColumnData::String(
+                DataType::Int64 => {
+                    columns.push(Rc::new(Array::Int64(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::String(ref v) => v.clone(),
+                            &Value::Int64(v) => v,
+                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
+                        }).collect())))
+                },
+                DataType::Utf8 => {
+                    columns.push(Rc::new(Array::Utf8(
+                        rows.iter().map(|row| match &row[i] {
+                            &Value::Utf8(ref v) => v.clone(),
                             _ => panic!()
                         }).collect())))
                 },
@@ -155,9 +160,9 @@ mod tests {
     fn load_batch() {
 
         let schema = Schema::new(vec![
-            Field::new("city", DataType::String, false),
-            Field::new("lat", DataType::Double, false),
-            Field::new("lng", DataType::Double, false)]);
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false)]);
 
         let file = File::open("test/data/uk_cities.csv").unwrap();
 
@@ -178,9 +183,9 @@ mod tests {
 
         let row = batch.row_slice(0);
         assert_eq!(vec![
-            Value::String("Elgin, Scotland, the UK".to_string()),
-            Value::Double(57.653484),
-            Value::Double(-3.335724)], row);
+            Value::Utf8("Elgin, Scotland, the UK".to_string()),
+            Value::Float64(57.653484),
+            Value::Float64(-3.335724)], row);
 
         let names = batch.column(0);
         println!("names: {:?}", names);

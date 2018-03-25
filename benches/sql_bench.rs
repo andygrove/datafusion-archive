@@ -17,9 +17,9 @@ fn sql() {
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![
-        Field::new("city", DataType::String, false),
-        Field::new("lat", DataType::Double, false),
-        Field::new("lng", DataType::Double, false)]);
+        Field::new("city", DataType::Utf8, false),
+        Field::new("lat", DataType::Float64, false),
+        Field::new("lng", DataType::Float64, false)]);
 
     // register the csv file as a table that can be queried via sql
     ctx.define_schema("uk_cities", &schema);
