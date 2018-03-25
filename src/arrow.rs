@@ -82,7 +82,7 @@ impl Schema {
 
 #[derive(Debug)]
 pub enum Array {
-    BroadcastVariable(Value), //TODO remove .. not an arrow concept
+    BroadcastVariable(ScalarValue), //TODO remove .. not an arrow concept
     Boolean(Vec<bool>),
     Float32(Vec<f32>),
     Float64(Vec<f64>),
@@ -110,11 +110,11 @@ impl Array {
     pub fn eq(&self, other: &Array) -> Vec<bool> {
         match (self, other) {
             // compare column to literal
-            (&Array::Float32(ref l), &Array::BroadcastVariable(Value::Float32(b))) => l.iter().map(|a| a==&b).collect(),
-            (&Array::Float64(ref l), &Array::BroadcastVariable(Value::Float64(b))) => l.iter().map(|a| a==&b).collect(),
-            (&Array::Int32(ref l), &Array::BroadcastVariable(Value::Int32(b))) => l.iter().map(|a| a==&b).collect(),
-            (&Array::Int64(ref l), &Array::BroadcastVariable(Value::Int64(b))) => l.iter().map(|a| a==&b).collect(),
-            (&Array::Utf8(ref l), &Array::BroadcastVariable(Value::Utf8(ref b))) => l.iter().map(|a| a==b).collect(),
+            (&Array::Float32(ref l), &Array::BroadcastVariable(ScalarValue::Float32(b))) => l.iter().map(|a| a==&b).collect(),
+            (&Array::Float64(ref l), &Array::BroadcastVariable(ScalarValue::Float64(b))) => l.iter().map(|a| a==&b).collect(),
+            (&Array::Int32(ref l), &Array::BroadcastVariable(ScalarValue::Int32(b))) => l.iter().map(|a| a==&b).collect(),
+            (&Array::Int64(ref l), &Array::BroadcastVariable(ScalarValue::Int64(b))) => l.iter().map(|a| a==&b).collect(),
+            (&Array::Utf8(ref l), &Array::BroadcastVariable(ScalarValue::Utf8(ref b))) => l.iter().map(|a| a==b).collect(),
             // compare column to column
             (&Array::Float32(ref l), &Array::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
             (&Array::Float64(ref l), &Array::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
@@ -128,11 +128,11 @@ impl Array {
     pub fn not_eq(&self, other: &Array) -> Vec<bool> {
         match (self, other) {
             // compare column to literal
-            (&Array::Float32(ref l), &Array::BroadcastVariable(Value::Float32(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&Array::Float64(ref l), &Array::BroadcastVariable(Value::Float64(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&Array::Int32(ref l), &Array::BroadcastVariable(Value::Int32(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&Array::Int64(ref l), &Array::BroadcastVariable(Value::Int64(b))) => l.iter().map(|a| a!=&b).collect(),
-            (&Array::Utf8(ref l), &Array::BroadcastVariable(Value::Utf8(ref b))) => l.iter().map(|a| a!=b).collect(),
+            (&Array::Float32(ref l), &Array::BroadcastVariable(ScalarValue::Float32(b))) => l.iter().map(|a| a!=&b).collect(),
+            (&Array::Float64(ref l), &Array::BroadcastVariable(ScalarValue::Float64(b))) => l.iter().map(|a| a!=&b).collect(),
+            (&Array::Int32(ref l), &Array::BroadcastVariable(ScalarValue::Int32(b))) => l.iter().map(|a| a!=&b).collect(),
+            (&Array::Int64(ref l), &Array::BroadcastVariable(ScalarValue::Int64(b))) => l.iter().map(|a| a!=&b).collect(),
+            (&Array::Utf8(ref l), &Array::BroadcastVariable(ScalarValue::Utf8(ref b))) => l.iter().map(|a| a!=b).collect(),
             // compare column to column
             (&Array::Float32(ref l), &Array::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
             (&Array::Float64(ref l), &Array::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
@@ -146,11 +146,11 @@ impl Array {
     pub fn lt(&self, other: &Array) -> Vec<bool> {
         match (self, other) {
             // compare column to literal
-            (&Array::Float32(ref l), &Array::BroadcastVariable(Value::Float32(b))) => l.iter().map(|a| a<&b).collect(),
-            (&Array::Float64(ref l), &Array::BroadcastVariable(Value::Float64(b))) => l.iter().map(|a| a<&b).collect(),
-            (&Array::Int32(ref l), &Array::BroadcastVariable(Value::Int32(b))) => l.iter().map(|a| a<&b).collect(),
-            (&Array::Int64(ref l), &Array::BroadcastVariable(Value::Int64(b))) => l.iter().map(|a| a<&b).collect(),
-            (&Array::Utf8(ref l), &Array::BroadcastVariable(Value::Utf8(ref b))) => l.iter().map(|a| a<b).collect(),
+            (&Array::Float32(ref l), &Array::BroadcastVariable(ScalarValue::Float32(b))) => l.iter().map(|a| a<&b).collect(),
+            (&Array::Float64(ref l), &Array::BroadcastVariable(ScalarValue::Float64(b))) => l.iter().map(|a| a<&b).collect(),
+            (&Array::Int32(ref l), &Array::BroadcastVariable(ScalarValue::Int32(b))) => l.iter().map(|a| a<&b).collect(),
+            (&Array::Int64(ref l), &Array::BroadcastVariable(ScalarValue::Int64(b))) => l.iter().map(|a| a<&b).collect(),
+            (&Array::Utf8(ref l), &Array::BroadcastVariable(ScalarValue::Utf8(ref b))) => l.iter().map(|a| a<b).collect(),
             // compare column to column
             (&Array::Float32(ref l), &Array::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
             (&Array::Float64(ref l), &Array::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
@@ -164,11 +164,11 @@ impl Array {
     pub fn lt_eq(&self, other: &Array) -> Vec<bool> {
         match (self, other) {
             // compare column to literal
-            (&Array::Float32(ref l), &Array::BroadcastVariable(Value::Float32(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&Array::Float64(ref l), &Array::BroadcastVariable(Value::Float64(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&Array::Int32(ref l), &Array::BroadcastVariable(Value::Int32(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&Array::Int64(ref l), &Array::BroadcastVariable(Value::Int64(b))) => l.iter().map(|a| a<=&b).collect(),
-            (&Array::Utf8(ref l), &Array::BroadcastVariable(Value::Utf8(ref b))) => l.iter().map(|a| a<=b).collect(),
+            (&Array::Float32(ref l), &Array::BroadcastVariable(ScalarValue::Float32(b))) => l.iter().map(|a| a<=&b).collect(),
+            (&Array::Float64(ref l), &Array::BroadcastVariable(ScalarValue::Float64(b))) => l.iter().map(|a| a<=&b).collect(),
+            (&Array::Int32(ref l), &Array::BroadcastVariable(ScalarValue::Int32(b))) => l.iter().map(|a| a<=&b).collect(),
+            (&Array::Int64(ref l), &Array::BroadcastVariable(ScalarValue::Int64(b))) => l.iter().map(|a| a<=&b).collect(),
+            (&Array::Utf8(ref l), &Array::BroadcastVariable(ScalarValue::Utf8(ref b))) => l.iter().map(|a| a<=b).collect(),
             // compare column to column
             (&Array::Float32(ref l), &Array::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
             (&Array::Float64(ref l), &Array::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
@@ -182,11 +182,11 @@ impl Array {
     pub fn gt(&self, other: &Array) -> Vec<bool> {
         match (self, other) {
             // compare column to literal
-            (&Array::Float32(ref l), &Array::BroadcastVariable(Value::Float32(b))) => l.iter().map(|a| a>&b).collect(),
-            (&Array::Float64(ref l), &Array::BroadcastVariable(Value::Float64(b))) => l.iter().map(|a| a>&b).collect(),
-            (&Array::Int32(ref l), &Array::BroadcastVariable(Value::Int32(b))) => l.iter().map(|a| a>&b).collect(),
-            (&Array::Int64(ref l), &Array::BroadcastVariable(Value::Int64(b))) => l.iter().map(|a| a>&b).collect(),
-            (&Array::Utf8(ref l), &Array::BroadcastVariable(Value::Utf8(ref b))) => l.iter().map(|a| a>b).collect(),
+            (&Array::Float32(ref l), &Array::BroadcastVariable(ScalarValue::Float32(b))) => l.iter().map(|a| a>&b).collect(),
+            (&Array::Float64(ref l), &Array::BroadcastVariable(ScalarValue::Float64(b))) => l.iter().map(|a| a>&b).collect(),
+            (&Array::Int32(ref l), &Array::BroadcastVariable(ScalarValue::Int32(b))) => l.iter().map(|a| a>&b).collect(),
+            (&Array::Int64(ref l), &Array::BroadcastVariable(ScalarValue::Int64(b))) => l.iter().map(|a| a>&b).collect(),
+            (&Array::Utf8(ref l), &Array::BroadcastVariable(ScalarValue::Utf8(ref b))) => l.iter().map(|a| a>b).collect(),
             // compare column to column
             (&Array::Float32(ref l), &Array::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
             (&Array::Float64(ref l), &Array::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
@@ -200,11 +200,11 @@ impl Array {
     pub fn gt_eq(&self, other: &Array) -> Vec<bool> {
         match (self, other) {
             // compare column to literal
-            (&Array::Float32(ref l), &Array::BroadcastVariable(Value::Float32(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&Array::Float64(ref l), &Array::BroadcastVariable(Value::Float64(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&Array::Int32(ref l), &Array::BroadcastVariable(Value::Int32(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&Array::Int64(ref l), &Array::BroadcastVariable(Value::Int64(b))) => l.iter().map(|a| a>=&b).collect(),
-            (&Array::Utf8(ref l), &Array::BroadcastVariable(Value::Utf8(ref b))) => l.iter().map(|a| a>=b).collect(),
+            (&Array::Float32(ref l), &Array::BroadcastVariable(ScalarValue::Float32(b))) => l.iter().map(|a| a>=&b).collect(),
+            (&Array::Float64(ref l), &Array::BroadcastVariable(ScalarValue::Float64(b))) => l.iter().map(|a| a>=&b).collect(),
+            (&Array::Int32(ref l), &Array::BroadcastVariable(ScalarValue::Int32(b))) => l.iter().map(|a| a>=&b).collect(),
+            (&Array::Int64(ref l), &Array::BroadcastVariable(ScalarValue::Int64(b))) => l.iter().map(|a| a>=&b).collect(),
+            (&Array::Utf8(ref l), &Array::BroadcastVariable(ScalarValue::Utf8(ref b))) => l.iter().map(|a| a>=b).collect(),
             // compare column to column
             (&Array::Float32(ref l), &Array::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
             (&Array::Float64(ref l), &Array::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
@@ -215,22 +215,22 @@ impl Array {
         }
     }
 
-    pub fn get_value(&self, index: usize) -> Value {
+    pub fn get_value(&self, index: usize) -> ScalarValue {
 //        println!("get_value() index={}", index);
         let v = match self {
             &Array::BroadcastVariable(ref v) => v.clone(),
-            &Array::Boolean(ref v) => Value::Boolean(v[index]),
-            &Array::Float32(ref v) => Value::Float32(v[index]),
-            &Array::Float64(ref v) => Value::Float64(v[index]),
-            &Array::Int32(ref v) => Value::Int32(v[index]),
-            &Array::Int64(ref v) => Value::Int64(v[index]),
-            &Array::Utf8(ref v) => Value::Utf8(v[index].clone()),
+            &Array::Boolean(ref v) => ScalarValue::Boolean(v[index]),
+            &Array::Float32(ref v) => ScalarValue::Float32(v[index]),
+            &Array::Float64(ref v) => ScalarValue::Float64(v[index]),
+            &Array::Int32(ref v) => ScalarValue::Int32(v[index]),
+            &Array::Int64(ref v) => ScalarValue::Int64(v[index]),
+            &Array::Utf8(ref v) => ScalarValue::Utf8(v[index].clone()),
             &Array::Struct(ref v) => {
                 // v is Vec<ColumnData>
                 // each field has its own ColumnData e.g. lat, lon so we want to get a value from each (but it's recursive)
                 //            println!("get_value() complex value has {} fields", v.len());
                 let fields = v.iter().map(|field| field.get_value(index)).collect();
-                Value::Struct(fields)
+                ScalarValue::Struct(fields)
             }
         };
         //  println!("get_value() index={} returned {:?}", index, v);
@@ -258,37 +258,37 @@ impl Array {
 
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
-pub enum Value {
+pub enum ScalarValue {
     Boolean(bool),
     Float32(f32),
     Float64(f64),
     Int32(i32),
     Int64(i64),
     Utf8(String),
-    Struct(Vec<Value>),
+    Struct(Vec<ScalarValue>),
 }
 
-impl PartialOrd for Value {
-    fn partial_cmp(&self, other: &Value) -> Option<Ordering> {
+impl PartialOrd for ScalarValue {
+    fn partial_cmp(&self, other: &ScalarValue) -> Option<Ordering> {
 
         //TODO: implement all type coercion rules
 
         match self {
-            &Value::Float64(l) => match other {
-                &Value::Float64(r) => l.partial_cmp(&r),
-                &Value::Int64(r) => l.partial_cmp(&(r as f64)),
+            &ScalarValue::Float64(l) => match other {
+                &ScalarValue::Float64(r) => l.partial_cmp(&r),
+                &ScalarValue::Int64(r) => l.partial_cmp(&(r as f64)),
                 _ => unimplemented!("type coercion rules missing")
             },
-            &Value::Int64(l) => match other {
-                &Value::Float64(r) => (l as f64).partial_cmp(&r),
-                &Value::Int64(r) => l.partial_cmp(&r),
+            &ScalarValue::Int64(l) => match other {
+                &ScalarValue::Float64(r) => (l as f64).partial_cmp(&r),
+                &ScalarValue::Int64(r) => l.partial_cmp(&r),
                 _ => unimplemented!("type coercion rules missing")
             },
-            &Value::Utf8(ref l) => match other {
-                &Value::Utf8(ref r) => l.partial_cmp(r),
+            &ScalarValue::Utf8(ref l) => match other {
+                &ScalarValue::Utf8(ref r) => l.partial_cmp(r),
                 _ => unimplemented!("type coercion rules missing")
             },
-            &Value::Struct(_) => None,
+            &ScalarValue::Struct(_) => None,
             _ => unimplemented!("type coercion rules missing")
         }
 
@@ -296,17 +296,17 @@ impl PartialOrd for Value {
 }
 
 
-impl Value {
+impl ScalarValue {
 
     pub fn to_string(&self) -> String {
         match self {
-            &Value::Boolean(b) => b.to_string(),
-            &Value::Int32(l) => l.to_string(),
-            &Value::Int64(l) => l.to_string(),
-            &Value::Float32(d) => d.to_string(),
-            &Value::Float64(d) => d.to_string(),
-            &Value::Utf8(ref s) => s.clone(),
-            &Value::Struct(ref v) => {
+            &ScalarValue::Boolean(b) => b.to_string(),
+            &ScalarValue::Int32(l) => l.to_string(),
+            &ScalarValue::Int64(l) => l.to_string(),
+            &ScalarValue::Float32(d) => d.to_string(),
+            &ScalarValue::Float64(d) => d.to_string(),
+            &ScalarValue::Utf8(ref s) => s.clone(),
+            &ScalarValue::Struct(ref v) => {
                 let s : Vec<String> = v.iter()
                     .map(|v| v.to_string())
                     .collect();

@@ -62,15 +62,15 @@ struct CsvIterator<'a> {
 impl<'a> CsvIterator<'a> {
 
     /// Convert StringRecord into our internal row type based on the known schema
-    fn parse_record(&self, r: &StringRecord) -> Vec<Value> {
+    fn parse_record(&self, r: &StringRecord) -> Vec<ScalarValue> {
         assert_eq!(self.schema.columns.len(), r.len());
         let values = self.schema.columns.iter().zip(r.into_iter()).map(|(c,s)| match c.data_type {
-            DataType::Boolean => Value::Boolean(s.parse::<bool>().unwrap()),
-            DataType::Float32 => Value::Float32(s.parse::<f32>().unwrap()),
-            DataType::Float64 => Value::Float64(s.parse::<f64>().unwrap()),
-            DataType::Int32 => Value::Int32(s.parse::<i32>().unwrap()),
-            DataType::Int64 => Value::Int64(s.parse::<i64>().unwrap()),
-            DataType::Utf8 => Value::Utf8(s.to_string()),
+            DataType::Boolean => ScalarValue::Boolean(s.parse::<bool>().unwrap()),
+            DataType::Float32 => ScalarValue::Float32(s.parse::<f32>().unwrap()),
+            DataType::Float64 => ScalarValue::Float64(s.parse::<f64>().unwrap()),
+            DataType::Int32 => ScalarValue::Int32(s.parse::<i32>().unwrap()),
+            DataType::Int64 => ScalarValue::Int64(s.parse::<i64>().unwrap()),
+            DataType::Utf8 => ScalarValue::Utf8(s.to_string()),
             _ => panic!("csv unsupported type")
         }).collect();
         values
@@ -90,7 +90,7 @@ impl<'a> Iterator for CsvIterator<'a> {
         // this seems inefficient .. loading as rows then converting to columns but this
         // is a row-based data source so what can we do?
 
-        let mut rows : Vec<Vec<Value>> = Vec::with_capacity(max_size);
+        let mut rows : Vec<Vec<ScalarValue>> = Vec::with_capacity(max_size);
         for _ in 0 .. max_size {
             match self.iter.next() {
                 Some(r) => rows.push(self.parse_record(&r.unwrap())),
@@ -109,35 +109,35 @@ impl<'a> Iterator for CsvIterator<'a> {
                 DataType::Float32 => {
                     columns.push(Rc::new(Array::Float32(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::Float32(v) => v,
+                            &ScalarValue::Float32(v) => v,
                             _ => panic!()
                         }).collect())))
                 },
                 DataType::Float64 => {
                     columns.push(Rc::new(Array::Float64(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::Float64(v) => v,
+                            &ScalarValue::Float64(v) => v,
                             _ => panic!()
                         }).collect())))
                 },
                 DataType::Int32 => {
                     columns.push(Rc::new(Array::Int32(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::Int32(v) => v,
+                            &ScalarValue::Int32(v) => v,
                             other => panic!(format!("Expected UnsignedLong, found {:?}", other))
                         }).collect())))
                 },
                 DataType::Int64 => {
                     columns.push(Rc::new(Array::Int64(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::Int64(v) => v,
+                            &ScalarValue::Int64(v) => v,
                             other => panic!(format!("Expected UnsignedLong, found {:?}", other))
                         }).collect())))
                 },
                 DataType::Utf8 => {
                     columns.push(Rc::new(Array::Utf8(
                         rows.iter().map(|row| match &row[i] {
-                            &Value::Utf8(ref v) => v.clone(),
+                            &ScalarValue::Utf8(ref v) => v.clone(),
                             _ => panic!()
                         }).collect())))
                 },
@@ -183,9 +183,9 @@ mod tests {
 
         let row = batch.row_slice(0);
         assert_eq!(vec![
-            Value::Utf8("Elgin, Scotland, the UK".to_string()),
-            Value::Float64(57.653484),
-            Value::Float64(-3.335724)], row);
+            ScalarValue::Utf8("Elgin, Scotland, the UK".to_string()),
+            ScalarValue::Float64(57.653484),
+            ScalarValue::Float64(-3.335724)], row);
 
         let names = batch.column(0);
         println!("names: {:?}", names);

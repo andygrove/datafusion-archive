@@ -23,13 +23,13 @@ pub struct FunctionMeta {
 }
 
 pub trait Row {
-    fn get(&self, index: usize) -> &Value;
+    fn get(&self, index: usize) -> &ScalarValue;
     fn to_string(&self) -> String;
 }
 
-impl Row for Vec<Value> {
+impl Row for Vec<ScalarValue> {
 
-    fn get(&self, index: usize) -> &Value {
+    fn get(&self, index: usize) -> &ScalarValue {
         &self[index]
     }
 
@@ -64,7 +64,7 @@ pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),
     /// literal value
-    Literal(Value),
+    Literal(ScalarValue),
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
     /// sort expression
@@ -134,7 +134,7 @@ mod tests {
     use super::*;
     use super::LogicalPlan::*;
     use super::Expr::*;
-    use super::Value::*;
+    use super::ScalarValue::*;
     extern crate serde_json;
 
     #[test]

@@ -37,7 +37,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let filter_expr = Expr::BinaryExpr {
             left: Box::new(Expr::Column(1)),
             op: Operator::Gt,
-            right: Box::new(Expr::Literal(Value::Float64(52.0)))
+            right: Box::new(Expr::Literal(ScalarValue::Float64(52.0)))
         };
 
         let ctx = ExecutionContext::local("test/data".to_string());

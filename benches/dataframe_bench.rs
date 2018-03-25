@@ -26,7 +26,7 @@ fn dataframe() {
 
     // filter on lat > 52.0
     let lat = df1.col("lat").unwrap();
-    let value = Expr::Literal(Value::Float64(52.0));
+    let value = Expr::Literal(ScalarValue::Float64(52.0));
     let df2 = df1.filter(lat.gt(&value)).unwrap();
 
     // apply a projection using a scalar function to create a complex type

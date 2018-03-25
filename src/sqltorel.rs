@@ -149,8 +149,8 @@ impl SqlToRel {
     pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
 
-            &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(Value::Int64(n))),
-            &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(Value::Float64(n))),
+            &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(ScalarValue::Int64(n))),
+            &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(ScalarValue::Float64(n))),
 
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.columns.iter().position(|c| c.name.eq(id) ) {

@@ -87,7 +87,7 @@ pub trait Batch {
     fn column(&self, index: usize) -> &Rc<Array>;
 
     /// copy values into a row (EXPENSIVE)
-    fn row_slice(&self, index: usize) -> Vec<Value>;
+    fn row_slice(&self, index: usize) -> Vec<ScalarValue>;
 }
 
 pub struct ColumnBatch {
@@ -118,7 +118,7 @@ impl Batch for ColumnBatch {
         &self.columns[index]
     }
 
-    fn row_slice(&self, index: usize) -> Vec<Value> {
+    fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
         //println!("row_slice() index = {}", index);
         self.columns.iter().map(|c| c.get_value(index)).collect()
     }
@@ -878,7 +878,7 @@ mod tests {
         let df2 = df.filter(Expr::BinaryExpr {
             left: Box::new(Expr::Column(1)), // lat
             op: Operator::Gt,
-            right: Box::new(Expr::Literal(Value::Float64(52.0)))
+            right: Box::new(Expr::Literal(ScalarValue::Float64(52.0)))
         }).unwrap();
 
         ctx.write(df2,"_uk_cities_filtered_gt_52.csv").unwrap();
