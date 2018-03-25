@@ -13,7 +13,7 @@
 // limitations under the License.
 
 
-use super::data::*;
+use super::arrow::*;
 
 
 /// Definition of a relation (data set) consisting of one or more columns.

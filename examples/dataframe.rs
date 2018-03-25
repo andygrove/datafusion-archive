@@ -13,7 +13,7 @@
 // limitations under the License.
 
 extern crate datafusion;
-use datafusion::data::*;
+use datafusion::arrow::*;
 use datafusion::exec::*;
 use datafusion::rel::*;
 

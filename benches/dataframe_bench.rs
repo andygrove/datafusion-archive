@@ -4,7 +4,7 @@ extern crate criterion;
 use criterion::Criterion;
 
 extern crate datafusion;
-use datafusion::data::*;
+use datafusion::arrow::*;
 use datafusion::exec::*;
 use datafusion::rel::*;
 

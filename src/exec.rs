@@ -36,7 +36,7 @@ use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
-use super::data::*;
+use super::arrow::*;
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;

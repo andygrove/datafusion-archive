@@ -17,7 +17,7 @@ use std::string::String;
 
 use super::sql::*;
 use super::rel::*;
-use super::data::*;
+use super::arrow::*;
 
 pub struct SqlToRel {
     //default_schema: Option<String>,
