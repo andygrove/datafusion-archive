@@ -13,11 +13,11 @@ impl ScalarFunction for SqrtFunction {
     }
 
     fn execute(&self, args: Vec<Rc<Array>>) -> Result<Rc<Array>,Box<String>> {
-        match args[0].as_ref() {
-            &Array::Float32(ref v) => Ok(Rc::new(Array::Float32(v.iter().map(|v| v.sqrt()).collect()))),
-            &Array::Float64(ref v) => Ok(Rc::new(Array::Float64(v.iter().map(|v| v.sqrt()).collect()))),
-            &Array::Int32(ref v) => Ok(Rc::new(Array::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
-            &Array::Int64(ref v) => Ok(Rc::new(Array::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect()))),
+        match args[0].as_ref().data() {
+            &ArrayData::Float32(ref v) => Ok(Rc::new(Array::new(ArrayData::Float32(v.iter().map(|v| v.sqrt()).collect())))),
+            &ArrayData::Float64(ref v) => Ok(Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| v.sqrt()).collect())))),
+            &ArrayData::Int32(ref v) => Ok(Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect())))),
+            &ArrayData::Int64(ref v) => Ok(Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect())))),
             _ => Err(Box::new("Unsupported arg type for sqrt".to_string()))
         }
     }

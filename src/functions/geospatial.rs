@@ -17,9 +17,9 @@ impl ScalarFunction for STPointFunc {
         if args.len() != 2 {
             return Err(Box::new("Wrong argument count for ST_Point".to_string()))
         }
-        match (args[0].as_ref(), args[1].as_ref()) {
-            (&Array::Float64(_), &Array::Float64(_)) =>
-                Ok(Rc::new(Array::Struct(vec![args[0].clone(), args[1].clone()]))),
+        match (args[0].as_ref().data(), args[1].as_ref().data()) {
+            (&ArrayData::Float64(_), &ArrayData::Float64(_)) =>
+                Ok(Rc::new(Array::new(ArrayData::Struct(vec![args[0].clone(), args[1].clone()])))),
             _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
         }
     }
@@ -52,13 +52,13 @@ impl ScalarFunction for STAsText {
         if args.len() != 1 {
             return Err(Box::new("Wrong argument count for ST_AsText".to_string()))
         }
-        match args[0].as_ref() {
-            &Array::Struct(ref fields) => match (fields[0].as_ref(), fields[1].as_ref()) {
-                (&Array::Float64(ref lat), &Array::Float64(ref lon)) => {
-                    Ok(Rc::new(Array::Utf8(
+        match args[0].as_ref().data() {
+            &ArrayData::Struct(ref fields) => match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
+                (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
+                    Ok(Rc::new(Array::new(ArrayData::Utf8(
                         lat.iter().zip(lon.iter())
                             .map(|(lat2,lon2)| format!("POINT ({} {})", lat2, lon2))
-                            .collect())))
+                            .collect()))))
                 },
                 _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
             },

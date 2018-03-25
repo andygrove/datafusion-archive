@@ -21,41 +21,41 @@ extern crate byteorder;
 
 use self::byteorder::{WriteBytesExt, LittleEndian};
 
-fn write_column(col: &Array) {
-
-    let mut stream = BufWriter::new(TcpStream::connect("127.0.0.1:34254").unwrap());
-
-    use std::slice;
-    use std::mem;
-
-    //stream.write_u32(col.len() as u32).unwrap();
-    let slice_u8: &[u8] = match col {
-        &Array::Float32(ref v) => {
-            let slice : &[f32] = &v;
-            unsafe {
-                slice::from_raw_parts(
-                    slice.as_ptr() as *const u8,
-                    slice.len() * mem::size_of::<f32>(),
-                )
-            }
-        },
-        &Array::Float64(ref v) => {
-            let slice : &[f64] = &v;
-            unsafe {
-                slice::from_raw_parts(
-                    slice.as_ptr() as *const u8,
-                    slice.len() * mem::size_of::<f64>(),
-                )
-            }
-        },
-        _ => unimplemented!()
-    };
-
-    let mut wtr = vec![];
-    wtr.write_u32::<LittleEndian>(col.len() as u32).unwrap();
-    stream.write(&wtr).unwrap();
-    stream.write(slice_u8).unwrap();
-
-
-}
+//fn write_column(col: &ArrayData) {
+//
+//    let mut stream = BufWriter::new(TcpStream::connect("127.0.0.1:34254").unwrap());
+//
+//    use std::slice;
+//    use std::mem;
+//
+//    //stream.write_u32(col.len() as u32).unwrap();
+//    let slice_u8: &[u8] = match col {
+//        &ArrayData::Float32(ref v) => {
+//            let slice : &[f32] = &v;
+//            unsafe {
+//                slice::from_raw_parts(
+//                    slice.as_ptr() as *const u8,
+//                    slice.len() * mem::size_of::<f32>(),
+//                )
+//            }
+//        },
+//        &ArrayData::Float64(ref v) => {
+//            let slice : &[f64] = &v;
+//            unsafe {
+//                slice::from_raw_parts(
+//                    slice.as_ptr() as *const u8,
+//                    slice.len() * mem::size_of::<f64>(),
+//                )
+//            }
+//        },
+//        _ => unimplemented!()
+//    };
+//
+//    let mut wtr = vec![];
+//    wtr.write_u32::<LittleEndian>(col.len() as u32).unwrap();
+//    stream.write(&wtr).unwrap();
+//    stream.write(slice_u8).unwrap();
+//
+//
+//}
 
