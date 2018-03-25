@@ -15,13 +15,13 @@
 use std::io::{BufWriter, Write};
 use std::net::TcpStream;
 
-use super::data::*;
+use super::arrow::*;
 
 extern crate byteorder;
 
 use self::byteorder::{WriteBytesExt, LittleEndian};
 
-fn write_column(col: &ColumnData) {
+fn write_column(col: &Array) {
 
     let mut stream = BufWriter::new(TcpStream::connect("127.0.0.1:34254").unwrap());
 
@@ -30,7 +30,7 @@ fn write_column(col: &ColumnData) {
 
     //stream.write_u32(col.len() as u32).unwrap();
     let slice_u8: &[u8] = match col {
-        &ColumnData::Float(ref v) => {
+        &Array::Float32(ref v) => {
             let slice : &[f32] = &v;
             unsafe {
                 slice::from_raw_parts(
@@ -39,7 +39,7 @@ fn write_column(col: &ColumnData) {
                 )
             }
         },
-        &ColumnData::Double(ref v) => {
+        &Array::Float64(ref v) => {
             let slice : &[f64] = &v;
             unsafe {
                 slice::from_raw_parts(

@@ -36,7 +36,7 @@ use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
-use super::data::*;
+use super::arrow::*;
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
@@ -84,14 +84,14 @@ impl From<ParserError> for ExecutionError {
 pub trait Batch {
     fn col_count(&self) -> usize;
     fn row_count(&self) -> usize;
-    fn column(&self, index: usize) -> &Rc<ColumnData>;
+    fn column(&self, index: usize) -> &Rc<Array>;
 
     /// copy values into a row (EXPENSIVE)
-    fn row_slice(&self, index: usize) -> Vec<Value>;
+    fn row_slice(&self, index: usize) -> Vec<ScalarValue>;
 }
 
 pub struct ColumnBatch {
-    pub columns: Vec<Rc<ColumnData>>
+    pub columns: Vec<Rc<Array>>
 }
 
 //impl ColumnBatch {
@@ -114,18 +114,18 @@ impl Batch for ColumnBatch {
         self.columns[0].len()
     }
 
-    fn column(&self, index: usize) -> &Rc<ColumnData> {
+    fn column(&self, index: usize) -> &Rc<Array> {
         &self.columns[index]
     }
 
-    fn row_slice(&self, index: usize) -> Vec<Value> {
+    fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
         //println!("row_slice() index = {}", index);
         self.columns.iter().map(|c| c.get_value(index)).collect()
     }
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Batch) -> Rc<ColumnData>>;
+pub type CompiledExpr = Box<Fn(&Batch) -> Rc<Array>>;
 
 
 /// Compiles a relational expression into a closure
@@ -136,7 +136,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                Rc::new(ColumnData::BroadcastVariable(literal_value.clone()))
+                Rc::new(Array::BroadcastVariable(literal_value.clone()))
             }))
         }
         &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
@@ -149,32 +149,32 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(ColumnData::Boolean(left_values.eq(&right_values)))
+                    Rc::new(Array::Boolean(left_values.eq(&right_values)))
                 })),
                 &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(ColumnData::Boolean(left_values.not_eq(&right_values)))
+                    Rc::new(Array::Boolean(left_values.not_eq(&right_values)))
                 })),
                 &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(ColumnData::Boolean(left_values.lt(&right_values)))
+                    Rc::new(Array::Boolean(left_values.lt(&right_values)))
                 })),
                 &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(ColumnData::Boolean(left_values.lt_eq(&right_values)))
+                    Rc::new(Array::Boolean(left_values.lt_eq(&right_values)))
                 })),
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(ColumnData::Boolean(left_values.gt(&right_values)))
+                    Rc::new(Array::Boolean(left_values.gt(&right_values)))
                 })),
                 &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(ColumnData::Boolean(left_values.gt_eq(&right_values)))
+                    Rc::new(Array::Boolean(left_values.gt_eq(&right_values)))
                 })),
                 _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
@@ -198,7 +198,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             Ok(Box::new(move |batch| {
 
-                let arg_values : Vec<Rc<ColumnData>> = compiled_args_ok.iter()
+                let arg_values : Vec<Rc<Array>> = compiled_args_ok.iter()
                     .map(|expr| expr(batch))
                     .collect();
 
@@ -254,9 +254,9 @@ impl SimpleRelation for FilterRelation {
                 Ok(ref batch) => {
 
                     // evaluate the filter expression for every row in the batch
-                    let filter_eval: Rc<ColumnData> = (*filter_expr)(batch.as_ref());
+                    let filter_eval: Rc<Array> = (*filter_expr)(batch.as_ref());
 
-                    let filtered_columns : Vec<Rc<ColumnData>> = (0 .. batch.col_count())
+                    let filtered_columns : Vec<Rc<Array>> = (0 .. batch.col_count())
                         .map(move|column_index| { Rc::new(batch.column(column_index).filter(&filter_eval)) })
                         .collect();
 
@@ -347,7 +347,7 @@ impl SimpleRelation for ProjectRelation {
         let projection_iter = self.input.scan(ctx).map(move|r| match r {
             Ok(ref batch) => {
 
-                let projected_columns : Vec<Rc<ColumnData>> = project_expr.iter()
+                let projected_columns : Vec<Rc<Array>> = project_expr.iter()
                     .map(|e| (*e)(batch.as_ref()))
                     .collect();
 
@@ -532,7 +532,7 @@ impl ExecutionContext {
                         &Expr::Column(i) => input_schema.columns[i].clone(),
                         &Expr::ScalarFunction {ref name, .. } => Field {
                             name: name.clone(),
-                            data_type: DataType::Double, //TODO: hard-coded .. no function metadata yet
+                            data_type: DataType::Float64, //TODO: hard-coded .. no function metadata yet
                             nullable: true
                         },
                         _ => unimplemented!("Unsupported projection expression")
@@ -834,9 +834,9 @@ mod tests {
         ctx.define_function(&STPointFunc {});
 
         let schema = Schema::new(vec![
-            Field::new("city", DataType::String, false),
-            Field::new("lat", DataType::Double, false),
-            Field::new("lng", DataType::Double, false)]);
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false)]);
 
         let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
 
@@ -868,9 +868,9 @@ mod tests {
         ctx.define_function(&STPointFunc {});
 
         let schema = Schema::new(vec![
-            Field::new("city", DataType::String, false),
-            Field::new("lat", DataType::Double, false),
-            Field::new("lng", DataType::Double, false)]);
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false)]);
 
         let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
 
@@ -878,7 +878,7 @@ mod tests {
         let df2 = df.filter(Expr::BinaryExpr {
             left: Box::new(Expr::Column(1)), // lat
             op: Operator::Gt,
-            right: Box::new(Expr::Literal(Value::Double(52.0)))
+            right: Box::new(Expr::Literal(ScalarValue::Float64(52.0)))
         }).unwrap();
 
         ctx.write(df2,"_uk_cities_filtered_gt_52.csv").unwrap();
@@ -934,13 +934,13 @@ mod tests {
 
         // define schemas for test data
         ctx.define_schema("people", &Schema::new(vec![
-            Field::new("id", DataType::UnsignedLong, false),
-            Field::new("name", DataType::String, false)]));
+            Field::new("id", DataType::Int32, false),
+            Field::new("name", DataType::Utf8, false)]));
 
         ctx.define_schema("uk_cities", &Schema::new(vec![
-            Field::new("city", DataType::String, false),
-            Field::new("lat", DataType::Double, false),
-            Field::new("lng", DataType::Double, false)]));
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false)]));
 
         ctx
     }

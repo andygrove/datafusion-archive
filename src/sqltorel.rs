@@ -17,7 +17,7 @@ use std::string::String;
 
 use super::sql::*;
 use super::rel::*;
-use super::data::*;
+use super::arrow::*;
 
 pub struct SqlToRel {
     //default_schema: Option<String>,
@@ -60,7 +60,7 @@ impl SqlToRel {
                         &Expr::Column(i) => input_schema.columns[i].clone(),
                         &Expr::ScalarFunction { ref name, .. } => Field {
                             name: name.clone(),
-                            data_type: DataType::Double, //TODO: hard-coded until I have function metadata in place
+                            data_type: DataType::Float64, //TODO: hard-coded until I have function metadata in place
                             nullable: true
                         },
                         _ => unimplemented!()
@@ -149,8 +149,8 @@ impl SqlToRel {
     pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
 
-            &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(Value::Long(n))),
-            &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(Value::Double(n))),
+            &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(ScalarValue::Int64(n))),
+            &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(ScalarValue::Float64(n))),
 
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.columns.iter().position(|c| c.name.eq(id) ) {
@@ -202,11 +202,11 @@ impl SqlToRel {
 /// Convert SQL data type to relational representation of data type
 pub fn convert_data_type(sql: &SQLType) -> DataType {
     match sql {
-        &SQLType::Varchar(_) => DataType::String,
-        &SQLType::Int => DataType::UnsignedLong,
-        &SQLType::Long => DataType::UnsignedLong,
-        &SQLType::Float => DataType::Double,
-        &SQLType::Double => DataType::Double,
+        &SQLType::Varchar(_) => DataType::Utf8,
+        &SQLType::Int => DataType::Int32,
+        &SQLType::Long => DataType::Int64,
+        &SQLType::Float => DataType::Float64,
+        &SQLType::Double => DataType::Float64,
     }
 }
 

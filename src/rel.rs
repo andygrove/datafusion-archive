@@ -13,37 +13,7 @@
 // limitations under the License.
 
 
-use super::data::*;
-
-
-/// Definition of a relation (data set) consisting of one or more columns.
-#[derive(Debug,Clone,Serialize,Deserialize)]
-pub struct Schema {
-    pub columns: Vec<Field>
-}
-
-impl Schema {
-
-    /// create an empty schema
-    pub fn empty() -> Self { Schema { columns: vec![] } }
-
-    pub fn new(columns: Vec<Field>) -> Self { Schema { columns: columns } }
-
-    /// look up a column by name and return a reference to the column along with it's index
-    pub fn column(&self, name: &str) -> Option<(usize, &Field)> {
-        self.columns.iter()
-            .enumerate()
-            .find(|&(_,c)| c.name == name)
-    }
-
-    pub fn to_string(&self) -> String {
-        let s : Vec<String> = self.columns.iter()
-            .map(|c| c.to_string())
-            .collect();
-        s.join(",")
-    }
-
-}
+use super::arrow::*;
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct FunctionMeta {
@@ -53,13 +23,13 @@ pub struct FunctionMeta {
 }
 
 pub trait Row {
-    fn get(&self, index: usize) -> &Value;
+    fn get(&self, index: usize) -> &ScalarValue;
     fn to_string(&self) -> String;
 }
 
-impl Row for Vec<Value> {
+impl Row for Vec<ScalarValue> {
 
-    fn get(&self, index: usize) -> &Value {
+    fn get(&self, index: usize) -> &ScalarValue {
         &self[index]
     }
 
@@ -94,7 +64,7 @@ pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),
     /// literal value
-    Literal(Value),
+    Literal(ScalarValue),
     /// binary expression e.g. "age > 21"
     BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
     /// sort expression
@@ -164,7 +134,7 @@ mod tests {
     use super::*;
     use super::LogicalPlan::*;
     use super::Expr::*;
-    use super::Value::*;
+    use super::ScalarValue::*;
     extern crate serde_json;
 
     #[test]
@@ -172,8 +142,8 @@ mod tests {
 
         let schema = Schema {
             columns: vec![
-                Field { name: "id".to_string(), data_type: DataType::UnsignedLong, nullable: false },
-                Field { name: "name".to_string(), data_type: DataType::String, nullable: false }
+                Field { name: "id".to_string(), data_type: DataType::Int32, nullable: false },
+                Field { name: "name".to_string(), data_type: DataType::Utf8, nullable: false }
             ]
         };
 
@@ -182,7 +152,7 @@ mod tests {
         let filter_expr = BinaryExpr {
             left: Box::new(Column(0)),
             op: Operator::Eq,
-            right: Box::new(Literal(Long(2)))
+            right: Box::new(Literal(Int64(2)))
         };
 
         let plan = Selection {

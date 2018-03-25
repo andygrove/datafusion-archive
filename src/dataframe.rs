@@ -14,6 +14,7 @@
 
 use std::io::Error;
 
+use super::arrow::*;
 use super::rel::*;
 use super::exec::*;
 

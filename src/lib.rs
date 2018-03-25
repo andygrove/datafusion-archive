@@ -13,8 +13,8 @@
 // limitations under the License.
 
 pub mod api;
+pub mod arrow;
 pub mod cluster;
-pub mod data;
 pub mod dataframe;
 pub mod datasource;
 pub mod exec;
