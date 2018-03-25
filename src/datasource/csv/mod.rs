@@ -107,39 +107,39 @@ impl<'a> Iterator for CsvIterator<'a> {
         for i in 0 .. self.schema.columns.len() {
             match self.schema.columns[i].data_type {
                 DataType::Float32 => {
-                    columns.push(Rc::new(Array::Float32(
+                    columns.push(Rc::new(Array::new(ArrayData::Float32(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Float32(v) => v,
                             _ => panic!()
-                        }).collect())))
+                        }).collect()))))
                 },
                 DataType::Float64 => {
-                    columns.push(Rc::new(Array::Float64(
+                    columns.push(Rc::new(Array::new(ArrayData::Float64(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Float64(v) => v,
                             _ => panic!()
-                        }).collect())))
+                        }).collect()))))
                 },
                 DataType::Int32 => {
-                    columns.push(Rc::new(Array::Int32(
+                    columns.push(Rc::new(Array::new(ArrayData::Int32(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Int32(v) => v,
                             other => panic!(format!("Expected UnsignedLong, found {:?}", other))
-                        }).collect())))
+                        }).collect()))))
                 },
                 DataType::Int64 => {
-                    columns.push(Rc::new(Array::Int64(
+                    columns.push(Rc::new(Array::new(ArrayData::Int64(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Int64(v) => v,
                             other => panic!(format!("Expected UnsignedLong, found {:?}", other))
-                        }).collect())))
+                        }).collect()))))
                 },
                 DataType::Utf8 => {
-                    columns.push(Rc::new(Array::Utf8(
+                    columns.push(Rc::new(Array::new(ArrayData::Utf8(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Utf8(ref v) => v.clone(),
                             _ => panic!()
-                        }).collect())))
+                        }).collect()))))
                 },
                 _ => unimplemented!()
             }

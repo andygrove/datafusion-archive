@@ -28,9 +28,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         // generate some random data
         let n = 1000;
         let batch : Box<Batch> = Box::new(ColumnBatch { columns: vec![
-            Rc::new(Array::Utf8((0 .. n).map(|_| "city_name".to_string()).collect())),
-            Rc::new(Array::Float64((0 .. n).map(|_| 50.0).collect())),
-            Rc::new(Array::Float64((0 .. n).map(|_| 0.0).collect()))
+            Rc::new(Array::new(ArrayData::Utf8((0 .. n).map(|_| "city_name".to_string()).collect()))),
+            Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 50.0).collect()))),
+            Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 0.0).collect())))
         ]});
 
         //let lat = df1.col("lat").unwrap();

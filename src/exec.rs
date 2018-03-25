@@ -94,24 +94,13 @@ pub struct ColumnBatch {
     pub columns: Vec<Rc<Array>>
 }
 
-//impl ColumnBatch {
-//
-//    pub fn from_rows(rows: Vec<Vec<Value>>) -> Self {
-//        let column_count = rows[0].len();
-//        let columns : Vec<ColumnData> = (0 .. column_count)
-//            .map(|i| rows.iter().map(|r| (&r[i]).clone()).collect() )
-//            .collect();
-//        ColumnBatch { columns }
-//    }
-//}
-
 impl Batch for ColumnBatch {
     fn col_count(&self) -> usize {
         self.columns.len()
     }
 
     fn row_count(&self) -> usize {
-        self.columns[0].len()
+        self.columns[0].as_ref().len()
     }
 
     fn column(&self, index: usize) -> &Rc<Array> {
@@ -136,7 +125,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                Rc::new(Array::BroadcastVariable(literal_value.clone()))
+                Rc::new(Array::new(ArrayData::BroadcastVariable(literal_value.clone())))
             }))
         }
         &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
@@ -149,32 +138,32 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::Boolean(left_values.eq(&right_values)))
+                    Rc::new(Array::new(ArrayData::Boolean(left_values.eq(&right_values))))
                 })),
                 &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::Boolean(left_values.not_eq(&right_values)))
+                    Rc::new(Array::new(ArrayData::Boolean(left_values.not_eq(&right_values))))
                 })),
                 &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::Boolean(left_values.lt(&right_values)))
+                    Rc::new(Array::new(ArrayData::Boolean(left_values.lt(&right_values))))
                 })),
                 &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::Boolean(left_values.lt_eq(&right_values)))
+                    Rc::new(Array::new(ArrayData::Boolean(left_values.lt_eq(&right_values))))
                 })),
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::Boolean(left_values.gt(&right_values)))
+                    Rc::new(Array::new(ArrayData::Boolean(left_values.gt(&right_values))))
                 })),
                 &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::Boolean(left_values.gt_eq(&right_values)))
+                    Rc::new(Array::new(ArrayData::Boolean(left_values.gt_eq(&right_values))))
                 })),
                 _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
