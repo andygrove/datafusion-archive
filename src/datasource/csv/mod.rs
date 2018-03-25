@@ -154,7 +154,6 @@ impl<'a> Iterator for CsvIterator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::super::rel::*;
 
     #[test]
     fn load_batch() {
