@@ -1269,7 +1269,7 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
     v
 }
 
-pub fn filter(column: &Rc<Value>, bools: &Rc<Array>) -> Array {
+pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
     match column.as_ref() {
         &Value::Scalar(_, _) => unimplemented!(),
         &Value::Column(_, ref arr) =>

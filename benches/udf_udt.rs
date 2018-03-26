@@ -27,11 +27,22 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         // generate some random data
         let n = 1000;
-        let batch : Box<Batch> = Box::new(ColumnBatch { columns: vec![
-            Rc::new(Array::new(ArrayData::Utf8((0 .. n).map(|_| "city_name".to_string()).collect()))),
-            Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 50.0).collect()))),
-            Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 0.0).collect())))
+        let n = 1000;
+        let batch : Box<Batch> = Box::new(ColumnBatch { row_count: n, columns: vec![
+            Rc::new(Value::Column(
+                Rc::new(Field::new("city_name", DataType::Utf8, false)),
+                Rc::new(Array::new(ArrayData::Utf8((0 .. n).map(|_| "city_name".to_string()).collect())))
+            )),
+            Rc::new(Value::Column(
+                Rc::new(Field::new("city_name", DataType::Utf8, false)),
+                Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 50.0).collect())))
+            )),
+            Rc::new(Value::Column(
+                Rc::new(Field::new("city_name", DataType::Utf8, false)),
+                Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 0.0).collect())))
+            ))
         ]});
+
 
         // ST_Point(lat, lng)
         let expr = Expr::ScalarFunction {
@@ -46,7 +57,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         b.iter(move || {
             // evaluate the scalar function against against every row
-            let points: Rc<Array> = (compiled_expr)(batch_ref.as_ref());
+            let points: Rc<Value> = (compiled_expr)(batch_ref.as_ref());
         })
     });
 
