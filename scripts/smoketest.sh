@@ -1,4 +1,18 @@
 #!/usr/bin/env bash
+
+test_dir="target/smoketest"
+expected_file="test/data/smoketest-expected.txt"
+output_file="${test_dir}/smoketest_output.txt"
+
+mkdir -p $test_dir
+
+function cleanup {
+    echo "CLEANUP: Removing ${test_dir}"
+    rm -rf $test_dir
+}
+trap cleanup EXIT
+
+
 cargo test
 cargo run --example sql_query
 cargo run --example dataframe
@@ -47,18 +61,19 @@ docker run \
   -it datafusionrs/console:latest \
  --etcd http://127.0.0.1:2379 \
  --script /test/data/smoketest.sql \
- > _smoketest.txt
+ > $output_file
 
 
-# did we get the expected results?
-grep -v seconds _smoketest.txt > _a.txt
-grep -v seconds test/data/smoketest-expected.txt > _b.txt
-diff -b _a.txt _b.txt
+echo "###### Verifying smoke test results"
 
-# clean up
-rm -f _*.txt 2>/dev/null
-rm -f _*.csv 2>/dev/null
+file_diff="$(diff -bBZ -I seconds $output_file $expected_file)"
+if [ -n "$file_diff" ]
+then
+   echo "${file_diff}"
+   echo "ERROR: smoke test output differs from expected output"
+   exit 1
+fi
+echo "SUCCESS: smoke test successfully executed"
 
 # run benchmarks
 cargo bench
-
