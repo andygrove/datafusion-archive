@@ -19,14 +19,39 @@ use std::str;
 use std::string::String;
 use std::cmp::{Ordering, PartialOrd};
 
+//
+// Warning! The type system is now loosely based on Apache Arrow but is not yet compatible with
+// Apache Arrow. This is a work-in-progress.
+//
+
+#[derive(Debug,Clone,Serialize,Deserialize)]
+pub enum TimeUnit {
+    Seconds,
+    Milliseconds,
+    Microseconds,
+    Nanoseconds
+}
+
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum DataType {
     Boolean,
-    Float32,
-    Float64,
+    Int8,
+    Int16,
     Int32,
     Int64,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Float32,
+    Float64,
+    Timestamp(TimeUnit),
+    Time(TimeUnit),
+    Date32,
+    Date64,
     Utf8,
+    Binary,
+    List(Vec<DataType>),
     Struct(Vec<Field>)
 }
 
@@ -86,8 +111,14 @@ pub enum ArrayData {
     Boolean(Vec<bool>),
     Float32(Vec<f32>),
     Float64(Vec<f64>),
+    Int8(Vec<i8>),
+    Int16(Vec<i16>),
     Int32(Vec<i32>),
     Int64(Vec<i64>),
+    UInt8(Vec<u8>),
+    UInt16(Vec<u16>),
+    UInt32(Vec<u32>),
+    UInt64(Vec<u64>),
     Utf8(Vec<String>), // not compatible with Arrow
     Struct(Vec<Rc<Array>>)
 }
@@ -114,8 +145,14 @@ impl Array {
             &ArrayData::Boolean(ref v) => v.len(),
             &ArrayData::Float32(ref v) => v.len(),
             &ArrayData::Float64(ref v) => v.len(),
+            &ArrayData::Int8(ref v) => v.len(),
+            &ArrayData::Int16(ref v) => v.len(),
             &ArrayData::Int32(ref v) => v.len(),
             &ArrayData::Int64(ref v) => v.len(),
+            &ArrayData::UInt8(ref v) => v.len(),
+            &ArrayData::UInt16(ref v) => v.len(),
+            &ArrayData::UInt32(ref v) => v.len(),
+            &ArrayData::UInt64(ref v) => v.len(),
             &ArrayData::Utf8(ref v) => v.len(),
             &ArrayData::Struct(ref v) => v[0].as_ref().len(),
         }
@@ -236,8 +273,14 @@ impl Array {
             &ArrayData::Boolean(ref v) => ScalarValue::Boolean(v[index]),
             &ArrayData::Float32(ref v) => ScalarValue::Float32(v[index]),
             &ArrayData::Float64(ref v) => ScalarValue::Float64(v[index]),
+            &ArrayData::Int8(ref v) => ScalarValue::Int8(v[index]),
+            &ArrayData::Int16(ref v) => ScalarValue::Int16(v[index]),
             &ArrayData::Int32(ref v) => ScalarValue::Int32(v[index]),
             &ArrayData::Int64(ref v) => ScalarValue::Int64(v[index]),
+            &ArrayData::UInt8(ref v) => ScalarValue::UInt8(v[index]),
+            &ArrayData::UInt16(ref v) => ScalarValue::UInt16(v[index]),
+            &ArrayData::UInt32(ref v) => ScalarValue::UInt32(v[index]),
+            &ArrayData::UInt64(ref v) => ScalarValue::UInt64(v[index]),
             &ArrayData::Utf8(ref v) => ScalarValue::Utf8(v[index].clone()),
             &ArrayData::Struct(ref v) => {
                 // v is Vec<ArrayData>
@@ -276,8 +319,14 @@ pub enum ScalarValue {
     Boolean(bool),
     Float32(f32),
     Float64(f64),
+    Int8(i8),
+    Int16(i16),
     Int32(i32),
     Int64(i64),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
     Utf8(String),
     Struct(Vec<ScalarValue>),
 }
@@ -315,8 +364,14 @@ impl ScalarValue {
     pub fn to_string(&self) -> String {
         match self {
             &ScalarValue::Boolean(b) => b.to_string(),
+            &ScalarValue::Int8(l) => l.to_string(),
+            &ScalarValue::Int16(l) => l.to_string(),
             &ScalarValue::Int32(l) => l.to_string(),
             &ScalarValue::Int64(l) => l.to_string(),
+            &ScalarValue::UInt8(l) => l.to_string(),
+            &ScalarValue::UInt16(l) => l.to_string(),
+            &ScalarValue::UInt32(l) => l.to_string(),
+            &ScalarValue::UInt64(l) => l.to_string(),
             &ScalarValue::Float32(d) => d.to_string(),
             &ScalarValue::Float64(d) => d.to_string(),
             &ScalarValue::Utf8(ref s) => s.clone(),
