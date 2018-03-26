@@ -18,6 +18,7 @@ use std::rc::Rc;
 
 use super::super::arrow::*;
 use super::super::exec::*;
+use super::super::rel::*;
 
 extern crate csv;
 use super::super::csv::StringRecord;
@@ -102,50 +103,56 @@ impl<'a> Iterator for CsvIterator<'a> {
             return None
         }
 
-        let mut columns : Vec<Rc<Array>> = Vec::with_capacity(self.schema.columns.len());
+        let mut columns : Vec<Rc<Value>> = Vec::with_capacity(self.schema.columns.len());
 
         for i in 0 .. self.schema.columns.len() {
-            match self.schema.columns[i].data_type {
+
+            let name = format!("col{}", i+1);
+            let field = Field::new(&name, self.schema.columns[i].data_type.clone(), false);
+
+            let values : Array = match self.schema.columns[i].data_type {
                 DataType::Float32 => {
-                    columns.push(Rc::new(Array::new(ArrayData::Float32(
+                    Array::new(ArrayData::Float32(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Float32(v) => v,
                             _ => panic!()
-                        }).collect()))))
+                        }).collect()))
                 },
-                DataType::Float64 => {
-                    columns.push(Rc::new(Array::new(ArrayData::Float64(
-                        rows.iter().map(|row| match &row[i] {
-                            &ScalarValue::Float64(v) => v,
-                            _ => panic!()
-                        }).collect()))))
-                },
-                DataType::Int32 => {
-                    columns.push(Rc::new(Array::new(ArrayData::Int32(
-                        rows.iter().map(|row| match &row[i] {
-                            &ScalarValue::Int32(v) => v,
-                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
-                        }).collect()))))
-                },
-                DataType::Int64 => {
-                    columns.push(Rc::new(Array::new(ArrayData::Int64(
-                        rows.iter().map(|row| match &row[i] {
-                            &ScalarValue::Int64(v) => v,
-                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
-                        }).collect()))))
-                },
-                DataType::Utf8 => {
-                    columns.push(Rc::new(Array::new(ArrayData::Utf8(
-                        rows.iter().map(|row| match &row[i] {
-                            &ScalarValue::Utf8(ref v) => v.clone(),
-                            _ => panic!()
-                        }).collect()))))
-                },
+//                DataType::Float64 => {
+//                    columns.push(Rc::new(Array::new(ArrayData::Float64(
+//                        rows.iter().map(|row| match &row[i] {
+//                            &ScalarValue::Float64(v) => v,
+//                            _ => panic!()
+//                        }).collect()))))
+//                },
+//                DataType::Int32 => {
+//                    columns.push(Rc::new(Array::new(ArrayData::Int32(
+//                        rows.iter().map(|row| match &row[i] {
+//                            &ScalarValue::Int32(v) => v,
+//                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
+//                        }).collect()))))
+//                },
+//                DataType::Int64 => {
+//                    columns.push(Rc::new(Array::new(ArrayData::Int64(
+//                        rows.iter().map(|row| match &row[i] {
+//                            &ScalarValue::Int64(v) => v,
+//                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
+//                        }).collect()))))
+//                },
+//                DataType::Utf8 => {
+//                    columns.push(Rc::new(Array::new(ArrayData::Utf8(
+//                        rows.iter().map(|row| match &row[i] {
+//                            &ScalarValue::Utf8(ref v) => v.clone(),
+//                            _ => panic!()
+//                        }).collect()))))
+//                },
                 _ => unimplemented!()
-            }
+            };
+
+            columns.push(Rc::new(Value::Column(Rc::new(field), Rc::new(values))));
         }
 
-        Some(Ok(Box::new(ColumnBatch { columns })))
+        Some(Ok(Box::new(ColumnBatch { row_count: rows.len(), columns })))
     }
 
 }

@@ -36,7 +36,7 @@ use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
-use super::arrow::*;
+use super::arrow::{Schema, DataType, Field, Array, ArrayData};
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
@@ -79,42 +79,237 @@ impl From<ParserError> for ExecutionError {
     }
 }
 
-/// A batch of data organized as columns. The intent is to implement this using Apache Arrow
-/// soon but for now there will be a naive version while I integrate this.
 pub trait Batch {
     fn col_count(&self) -> usize;
     fn row_count(&self) -> usize;
-    fn column(&self, index: usize) -> &Rc<Array>;
+    fn column(&self, index: usize) -> &Rc<Value>;
 
     /// copy values into a row (EXPENSIVE)
     fn row_slice(&self, index: usize) -> Vec<ScalarValue>;
 }
 
 pub struct ColumnBatch {
-    pub columns: Vec<Rc<Array>>
+    pub row_count: usize,
+    pub columns: Vec<Rc<Value>>
 }
 
 impl Batch for ColumnBatch {
+
     fn col_count(&self) -> usize {
         self.columns.len()
     }
 
     fn row_count(&self) -> usize {
-        self.columns[0].as_ref().len()
+        self.row_count
     }
 
-    fn column(&self, index: usize) -> &Rc<Array> {
+    fn column(&self, index: usize) -> &Rc<Value> {
         &self.columns[index]
     }
 
     fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
         //println!("row_slice() index = {}", index);
-        self.columns.iter().map(|c| c.get_value(index)).collect()
+        self.columns.iter().map(|c| match c.as_ref() {
+            &Value::Scalar(_, ref v) => v.clone(),
+            &Value::Column(_, ref v) => get_value(v, index)
+        })
+        .collect()
     }
 }
 
+pub enum Value {
+    Column(Rc<Field>,Rc<Array>),
+    Scalar(Rc<Field>,ScalarValue)
+}
+
+impl Value {
+
+    pub fn eq(&self, other: &Value) -> Rc<Value> {
+//        match (self, other) {
+//            (&Value::Column(ref a, v1), &Value::Column(ref b, v2)) => v1.eq(v2),
+//            (&Value::Scalar(ref a, v1), &Value::Scalar(ref b, v2)) => v1.eq(v2),
+//            (&Value::Column(ref a, v1), &Value::Scalar(ref b, v2)) => v1.eq_scalar(v2),
+//            _ => unimplemented!()
+//        }
+        unimplemented!()
+    }
+
+    pub fn not_eq(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn lt(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn lt_eq(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn gt(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn gt_eq(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn add(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn subtract(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn multiply(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+    pub fn divide(&self, other: &Value) -> Rc<Value> {
+        unimplemented!()
+    }
+
+        /*
+            pub fn eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
+            match (&self.data, other) {
+                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a==&b).collect(),
+                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a==&b).collect(),
+                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a==&b).collect(),
+                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a==&b).collect(),
+                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a==b).collect(),
+                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn not_eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
+            match (&self.data, other) {
+                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a!=&b).collect(),
+                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a!=&b).collect(),
+                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a!=&b).collect(),
+                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a!=&b).collect(),
+                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a!=b).collect(),
+                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn lt_scalar(&self, other: &ScalarValue) -> Vec<bool> {
+            match (&self.data, other) {
+                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<&b).collect(),
+                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<&b).collect(),
+                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<&b).collect(),
+                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<&b).collect(),
+                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<b).collect(),
+                _ => panic!(format!("ArrayData.lt() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn eq(&self, other: &Array) -> Vec<bool> {
+            match (&self.data, &other.data) {
+                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn not_eq(&self, other: &Array) -> Vec<bool> {
+            match (&self.data, &other.data) {
+                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn lt(&self, other: &Array) -> Vec<bool> {
+            match (&self.data, &other.data) {
+                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                _ => panic!(format!("ArrayData.lt() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn lt_eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
+            match (&self.data, other) {
+                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<=&b).collect(),
+                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<=&b).collect(),
+                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<=&b).collect(),
+                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<=&b).collect(),
+                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<=b).collect(),
+                _ => panic!(format!("ArrayData.lt_eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn lt_eq(&self, other: &Array) -> Vec<bool> {
+            match (&self.data, &other.data) {
+                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                _ => panic!(format!("ArrayData.lt_eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn gt_scalar(&self, other: &ScalarValue) -> Vec<bool> {
+            match (&self.data, other) {
+                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>&b).collect(),
+                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>&b).collect(),
+                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>&b).collect(),
+                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>&b).collect(),
+                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>b).collect(),
+                _ => panic!(format!("ArrayData.gt() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn gt(&self, other: &Array) -> Vec<bool> {
+            match (&self.data, &other.data) {
+                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                _ => panic!(format!("ArrayData.gt() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn gt_eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
+            match (&self.data, other) {
+                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>=&b).collect(),
+                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>=&b).collect(),
+                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>=&b).collect(),
+                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>=&b).collect(),
+                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>=b).collect(),
+                _ => panic!(format!("ArrayData.gt_eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+        pub fn gt_eq(&self, other: &Array) -> Vec<bool> {
+            match (&self.data, &other.data) {
+                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                _ => panic!(format!("ArrayData.gt_eq() Type mismatch: {:?} vs {:?}", self, other))
+            }
+        }
+
+
+    */
+
+}
+
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Batch) -> Rc<Array>>;
+pub type CompiledExpr = Box<Fn(&Batch) -> Rc<Value>>;
 
 
 /// Compiles a relational expression into a closure
@@ -125,11 +320,14 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                Rc::new(Array::new(ArrayData::BroadcastVariable(literal_value.clone())))
+                Rc::new(Value::Scalar(
+                    Rc::new(Field::new("lit", DataType::Int64, false)), //TODO: get data type from plan
+                    literal_value.clone()
+                ))
             }))
         }
         &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
-            (*batch.column(index)).clone()
+        (*batch.column(index)).clone()
         })),
         &Expr::BinaryExpr { ref left, ref op, ref right } => {
             let left_expr = compile_expr(ctx,left)?;
@@ -138,32 +336,52 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::new(ArrayData::Boolean(left_values.eq(&right_values))))
+                    left_values.eq(&right_values)
                 })),
                 &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::new(ArrayData::Boolean(left_values.not_eq(&right_values))))
+                    left_values.not_eq(&right_values)
                 })),
                 &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::new(ArrayData::Boolean(left_values.lt(&right_values))))
+                    left_values.lt(&right_values)
                 })),
                 &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::new(ArrayData::Boolean(left_values.lt_eq(&right_values))))
+                    left_values.lt_eq(&right_values)
                 })),
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::new(ArrayData::Boolean(left_values.gt(&right_values))))
+                    left_values.gt(&right_values)
                 })),
                 &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    Rc::new(Array::new(ArrayData::Boolean(left_values.gt_eq(&right_values))))
+                    left_values.gt_eq(&right_values)
+                })),
+                &Operator::Plus => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    left_values.add(&right_values)
+                })),
+                &Operator::Minus => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    left_values.subtract(&right_values)
+                })),
+                &Operator::Divide => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    left_values.divide(&right_values)
+                })),
+                &Operator::Multiply => Ok(Box::new(move |batch: &Batch| {
+                    let left_values = left_expr(batch);
+                    let right_values = right_expr(batch);
+                    left_values.multiply(&right_values)
                 })),
                 _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
@@ -187,7 +405,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             Ok(Box::new(move |batch| {
 
-                let arg_values : Vec<Rc<Array>> = compiled_args_ok.iter()
+                let arg_values : Vec<Rc<Value>> = compiled_args_ok.iter()
                     .map(|expr| expr(batch))
                     .collect();
 
@@ -243,15 +461,38 @@ impl SimpleRelation for FilterRelation {
                 Ok(ref batch) => {
 
                     // evaluate the filter expression for every row in the batch
-                    let filter_eval: Rc<Array> = (*filter_expr)(batch.as_ref());
+                    match ((*filter_expr)(batch.as_ref())).as_ref() {
+                        &Value::Column(_, ref filter_eval) => {
 
-                    let filtered_columns : Vec<Rc<Array>> = (0 .. batch.col_count())
-                        .map(move|column_index| { Rc::new(batch.column(column_index).filter(&filter_eval)) })
-                        .collect();
+                            let filtered_columns : Vec<Rc<Value>> = (0 .. batch.col_count())
+                                .map(move|column_index| {
+                                    let column = batch.column(column_index);
+                                    Rc::new(Value::Column(
+                                        Rc::new(Field::new("filter", DataType::Int64, false)), //TODO: use correct type
+                                        Rc::new(filter(column, &filter_eval))
+                                    ))
+                                })
+                                .collect();
 
-                    let filtered_batch : Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
+                            let row_count_opt : Option<usize> = filtered_columns.iter()
+                                .map(|c| match c.as_ref() {
+                                    &Value::Scalar(_,_) => 1,
+                                    &Value::Column(_, ref v) => v.len()
+                                })
+                                .max();
 
-                    Ok(filtered_batch)
+                            //TODO: should ge able to something like `row_count_opt.or_else(0)` ?
+                            let row_count = match row_count_opt {
+                                None => 0,
+                                Some(n) => n
+                            };
+
+                            let filtered_batch : Box<Batch> = Box::new(ColumnBatch { row_count, columns: filtered_columns });
+
+                            Ok(filtered_batch)
+                        },
+                        _ => panic!()
+                    }
                 }
                 _ => panic!()
             }
@@ -336,11 +577,11 @@ impl SimpleRelation for ProjectRelation {
         let projection_iter = self.input.scan(ctx).map(move|r| match r {
             Ok(ref batch) => {
 
-                let projected_columns : Vec<Rc<Array>> = project_expr.iter()
+                let projected_columns : Vec<Rc<Value>> = project_expr.iter()
                     .map(|e| (*e)(batch.as_ref()))
                     .collect();
 
-                let projected_batch : Box<Batch> = Box::new(ColumnBatch { columns: projected_columns.clone() });
+                let projected_batch : Box<Batch> = Box::new(ColumnBatch { row_count: batch.row_count(), columns: projected_columns.clone() });
 
                 Ok(projected_batch)
             },
@@ -934,3 +1175,52 @@ mod tests {
         ctx
     }
 }
+
+
+pub fn get_value(column: &Array, index: usize) -> ScalarValue {
+//        println!("get_value() index={}", index);
+    let v = match column.data() {
+        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(v[index]),
+        &ArrayData::Float32(ref v) => ScalarValue::Float32(v[index]),
+        &ArrayData::Float64(ref v) => ScalarValue::Float64(v[index]),
+        &ArrayData::Int8(ref v) => ScalarValue::Int8(v[index]),
+        &ArrayData::Int16(ref v) => ScalarValue::Int16(v[index]),
+        &ArrayData::Int32(ref v) => ScalarValue::Int32(v[index]),
+        &ArrayData::Int64(ref v) => ScalarValue::Int64(v[index]),
+        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(v[index]),
+        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(v[index]),
+        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(v[index]),
+        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(v[index]),
+        &ArrayData::Utf8(ref v) => ScalarValue::Utf8(v[index].clone()),
+        &ArrayData::Struct(ref v) => {
+            // v is Vec<ArrayData>
+            // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
+            //            println!("get_value() complex value has {} fields", v.len());
+            let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
+            ScalarValue::Struct(fields)
+        }
+    };
+    //  println!("get_value() index={} returned {:?}", index, v);
+
+    v
+}
+
+pub fn filter(column: &Rc<Value>, bools: &Rc<Array>) -> Array {
+    match column.as_ref() {
+        &Value::Scalar(_, _) => unimplemented!(),
+        &Value::Column(_, ref arr) =>
+            match bools.data() {
+                &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
+                    &ArrayData::Boolean(ref v) => Array::new(ArrayData::Boolean(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
+                    &ArrayData::Float32(ref v) => Array::new(ArrayData::Float32(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
+                    &ArrayData::Float64(ref v) => Array::new(ArrayData::Float64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
+                    &ArrayData::Int32(ref v) => Array::new(ArrayData::Int32(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
+                    &ArrayData::Int64(ref v) => Array::new(ArrayData::Int64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
+                    &ArrayData::Utf8(ref v) => Array::new(ArrayData::Utf8(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| v.clone()).collect())),
+                    _ => unimplemented!()
+                },
+                _ => panic!()
+            }
+    }
+}
+
