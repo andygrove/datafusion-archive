@@ -118,34 +118,34 @@ impl<'a> Iterator for CsvIterator<'a> {
                             _ => panic!()
                         }).collect()))
                 },
-//                DataType::Float64 => {
-//                    columns.push(Rc::new(Array::new(ArrayData::Float64(
-//                        rows.iter().map(|row| match &row[i] {
-//                            &ScalarValue::Float64(v) => v,
-//                            _ => panic!()
-//                        }).collect()))))
-//                },
-//                DataType::Int32 => {
-//                    columns.push(Rc::new(Array::new(ArrayData::Int32(
-//                        rows.iter().map(|row| match &row[i] {
-//                            &ScalarValue::Int32(v) => v,
-//                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
-//                        }).collect()))))
-//                },
-//                DataType::Int64 => {
-//                    columns.push(Rc::new(Array::new(ArrayData::Int64(
-//                        rows.iter().map(|row| match &row[i] {
-//                            &ScalarValue::Int64(v) => v,
-//                            other => panic!(format!("Expected UnsignedLong, found {:?}", other))
-//                        }).collect()))))
-//                },
-//                DataType::Utf8 => {
-//                    columns.push(Rc::new(Array::new(ArrayData::Utf8(
-//                        rows.iter().map(|row| match &row[i] {
-//                            &ScalarValue::Utf8(ref v) => v.clone(),
-//                            _ => panic!()
-//                        }).collect()))))
-//                },
+                DataType::Float64 => {
+                    Array::new(ArrayData::Float64(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Float64(v) => v,
+                            _ => panic!()
+                        }).collect()))
+                },
+                DataType::Int32 => {
+                    Array::new(ArrayData::Int32(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Int32(v) => v,
+                            _ => panic!()
+                        }).collect()))
+                },
+                DataType::Int64 => {
+                    Array::new(ArrayData::Int64(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Int64(v) => v,
+                            _ => panic!()
+                        }).collect()))
+                },
+                DataType::Utf8 => {
+                    Array::new(ArrayData::Utf8(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Utf8(ref v) => v.clone(),
+                            _ => panic!()
+                        }).collect()))
+                },
                 _ => unimplemented!()
             };
 
@@ -194,7 +194,7 @@ mod tests {
             ScalarValue::Float64(-3.335724)], row);
 
         let names = batch.column(0);
-        println!("names: {:?}", names);
+        //println!("names: {:?}", names);
 
     }
 }

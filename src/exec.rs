@@ -124,34 +124,234 @@ pub enum Value {
 
 impl Value {
 
+    //TODO use macros to implement the bulk of this code
+
     pub fn eq(&self, other: &Value) -> Rc<Value> {
-//        match (self, other) {
-//            (&Value::Column(ref a, v1), &Value::Column(ref b, v2)) => v1.eq(v2),
-//            (&Value::Scalar(ref a, v1), &Value::Scalar(ref b, v2)) => v1.eq(v2),
-//            (&Value::Column(ref a, v1), &Value::Scalar(ref b, v2)) => v1.eq_scalar(v2),
-//            _ => unimplemented!()
-//        }
-        unimplemented!()
+        match (self, other) {
+            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
+                let bools = match (v1.data(), v2.data()) {
+                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
+                let bools = match (v1.data(), v2) {
+                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a==&b).collect(),
+                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a==&b).collect(),
+                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a==&b).collect(),
+                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a==&b).collect(),
+                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a==b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            _ => unimplemented!()
+        }
     }
 
     pub fn not_eq(&self, other: &Value) -> Rc<Value> {
-        unimplemented!()
+        match (self, other) {
+            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
+                let bools = match (v1.data(), v2.data()) {
+                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
+                let bools = match (v1.data(), v2) {
+                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a!=&b).collect(),
+                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a!=&b).collect(),
+                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a!=&b).collect(),
+                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a!=&b).collect(),
+                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a!=b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            _ => unimplemented!()
+        }
     }
 
     pub fn lt(&self, other: &Value) -> Rc<Value> {
-        unimplemented!()
+        match (self, other) {
+            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
+                let bools = match (v1.data(), v2.data()) {
+                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
+                let bools = match (v1.data(), v2) {
+                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<&b).collect(),
+                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<&b).collect(),
+                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<&b).collect(),
+                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<&b).collect(),
+                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            _ => unimplemented!()
+        }
     }
 
     pub fn lt_eq(&self, other: &Value) -> Rc<Value> {
-        unimplemented!()
+        match (self, other) {
+            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
+                let bools = match (v1.data(), v2.data()) {
+                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
+                let bools = match (v1.data(), v2) {
+                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<=&b).collect(),
+                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<=&b).collect(),
+                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<=&b).collect(),
+                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<=&b).collect(),
+                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<=b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            _ => unimplemented!()
+        }
     }
 
     pub fn gt(&self, other: &Value) -> Rc<Value> {
-        unimplemented!()
+        match (self, other) {
+            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
+                let bools = match (v1.data(), v2.data()) {
+                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
+                let bools = match (v1.data(), v2) {
+                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>&b).collect(),
+                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>&b).collect(),
+                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>&b).collect(),
+                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>&b).collect(),
+                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            _ => unimplemented!()
+        }
     }
 
     pub fn gt_eq(&self, other: &Value) -> Rc<Value> {
-        unimplemented!()
+        match (self, other) {
+            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
+                let bools = match (v1.data(), v2.data()) {
+                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
+                let bools = match (v1.data(), v2) {
+                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>=&b).collect(),
+                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>=&b).collect(),
+                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>=&b).collect(),
+                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>=&b).collect(),
+                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>=b).collect(),
+                    _ => unimplemented!()
+                };
+
+                Rc::new(Value::Column(
+                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
+                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                ))
+
+            },
+            _ => unimplemented!()
+        }
     }
 
     pub fn add(&self, other: &Value) -> Rc<Value> {
@@ -169,142 +369,6 @@ impl Value {
     pub fn divide(&self, other: &Value) -> Rc<Value> {
         unimplemented!()
     }
-
-        /*
-            pub fn eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
-            match (&self.data, other) {
-                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a==&b).collect(),
-                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a==&b).collect(),
-                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a==&b).collect(),
-                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a==&b).collect(),
-                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a==b).collect(),
-                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn not_eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
-            match (&self.data, other) {
-                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a!=&b).collect(),
-                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a!=&b).collect(),
-                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a!=&b).collect(),
-                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a!=&b).collect(),
-                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a!=b).collect(),
-                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn lt_scalar(&self, other: &ScalarValue) -> Vec<bool> {
-            match (&self.data, other) {
-                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<&b).collect(),
-                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<&b).collect(),
-                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<&b).collect(),
-                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<&b).collect(),
-                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<b).collect(),
-                _ => panic!(format!("ArrayData.lt() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn eq(&self, other: &Array) -> Vec<bool> {
-            match (&self.data, &other.data) {
-                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn not_eq(&self, other: &Array) -> Vec<bool> {
-            match (&self.data, &other.data) {
-                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn lt(&self, other: &Array) -> Vec<bool> {
-            match (&self.data, &other.data) {
-                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                _ => panic!(format!("ArrayData.lt() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn lt_eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
-            match (&self.data, other) {
-                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<=&b).collect(),
-                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<=&b).collect(),
-                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<=&b).collect(),
-                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<=&b).collect(),
-                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<=b).collect(),
-                _ => panic!(format!("ArrayData.lt_eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn lt_eq(&self, other: &Array) -> Vec<bool> {
-            match (&self.data, &other.data) {
-                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                _ => panic!(format!("ArrayData.lt_eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn gt_scalar(&self, other: &ScalarValue) -> Vec<bool> {
-            match (&self.data, other) {
-                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>&b).collect(),
-                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>&b).collect(),
-                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>&b).collect(),
-                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>&b).collect(),
-                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>b).collect(),
-                _ => panic!(format!("ArrayData.gt() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn gt(&self, other: &Array) -> Vec<bool> {
-            match (&self.data, &other.data) {
-                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                _ => panic!(format!("ArrayData.gt() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn gt_eq_scalar(&self, other: &ScalarValue) -> Vec<bool> {
-            match (&self.data, other) {
-                (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>=&b).collect(),
-                (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>=&b).collect(),
-                (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>=&b).collect(),
-                (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>=&b).collect(),
-                (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>=b).collect(),
-                _ => panic!(format!("ArrayData.gt_eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-        pub fn gt_eq(&self, other: &Array) -> Vec<bool> {
-            match (&self.data, &other.data) {
-                (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                _ => panic!(format!("ArrayData.gt_eq() Type mismatch: {:?} vs {:?}", self, other))
-            }
-        }
-
-
-    */
 
 }
 
