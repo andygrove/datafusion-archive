@@ -27,10 +27,19 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         // generate some random data
         let n = 1000;
-        let batch : Box<Batch> = Box::new(ColumnBatch { columns: vec![
-            Rc::new(Array::new(ArrayData::Utf8((0 .. n).map(|_| "city_name".to_string()).collect()))),
-            Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 50.0).collect()))),
-            Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 0.0).collect())))
+        let batch : Box<Batch> = Box::new(ColumnBatch { row_count: n, columns: vec![
+            Rc::new(Value::Column(
+                Rc::new(Field::new("city_name", DataType::Utf8, false)),
+                Rc::new(Array::new(ArrayData::Utf8((0 .. n).map(|_| "city_name".to_string()).collect())))
+            )),
+            Rc::new(Value::Column(
+                Rc::new(Field::new("city_name", DataType::Utf8, false)),
+                Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 50.0).collect())))
+            )),
+            Rc::new(Value::Column(
+                Rc::new(Field::new("city_name", DataType::Utf8, false)),
+                Rc::new(Array::new(ArrayData::Float64((0 .. n).map(|_| 0.0).collect())))
+            ))
         ]});
 
         //let lat = df1.col("lat").unwrap();
@@ -50,15 +59,26 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(move || {
 
             // evaluate the filter expression against every row
-            let filter_eval: Rc<Array> = (compiled_filter_expr)(batch_ref.as_ref());
+            match (compiled_filter_expr)(batch_ref.as_ref()).as_ref() {
+                &Value::Column(_, ref filter_eval) => {
+                    // filter the columns
+                    let filtered_columns: Vec<Rc<Value>> = (0..col_count)
+                        .map(|column_index| {
+                            let array = filter(batch_ref.column(column_index), &filter_eval);
+                            Rc::new(Value::Column(
+                                Rc::new(Field::new("tbd", DataType::Boolean, false)),
+                                Rc::new(array)
+                            ))
+                        })
+                        .collect();
 
-            // filter the columns
-            let filtered_columns: Vec<Rc<Array>> = (0..col_count)
-                .map(|column_index| { Rc::new(batch_ref.column(column_index).filter(&filter_eval)) })
-                .collect();
+                    // create the new batch with the filtered columns
+                    let filtered_batch: Box<Batch> = Box::new(ColumnBatch { row_count: n, columns: filtered_columns });
 
-            // create the new batch with the filtered columns
-            let filtered_batch: Box<Batch> = Box::new(ColumnBatch { columns: filtered_columns });
+                },
+                _ => panic!()
+            };
+
         })
     });
 

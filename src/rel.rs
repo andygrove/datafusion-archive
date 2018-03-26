@@ -12,8 +12,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 
 use super::arrow::*;
+
+/// Value holder for all supported data types
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+pub enum ScalarValue {
+    Boolean(bool),
+    Float32(f32),
+    Float64(f64),
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
+    Utf8(String),
+    Struct(Vec<ScalarValue>),
+}
+
+impl PartialOrd for ScalarValue {
+    fn partial_cmp(&self, other: &ScalarValue) -> Option<Ordering> {
+
+        //TODO: implement all type coercion rules
+
+        match self {
+            &ScalarValue::Float64(l) => match other {
+                &ScalarValue::Float64(r) => l.partial_cmp(&r),
+                &ScalarValue::Int64(r) => l.partial_cmp(&(r as f64)),
+                _ => unimplemented!("type coercion rules missing")
+            },
+            &ScalarValue::Int64(l) => match other {
+                &ScalarValue::Float64(r) => (l as f64).partial_cmp(&r),
+                &ScalarValue::Int64(r) => l.partial_cmp(&r),
+                _ => unimplemented!("type coercion rules missing")
+            },
+            &ScalarValue::Utf8(ref l) => match other {
+                &ScalarValue::Utf8(ref r) => l.partial_cmp(r),
+                _ => unimplemented!("type coercion rules missing")
+            },
+            &ScalarValue::Struct(_) => None,
+            _ => unimplemented!("type coercion rules missing")
+        }
+
+    }
+}
+
+
+impl ScalarValue {
+
+    pub fn to_string(&self) -> String {
+        match self {
+            &ScalarValue::Boolean(b) => b.to_string(),
+            &ScalarValue::Int8(l) => l.to_string(),
+            &ScalarValue::Int16(l) => l.to_string(),
+            &ScalarValue::Int32(l) => l.to_string(),
+            &ScalarValue::Int64(l) => l.to_string(),
+            &ScalarValue::UInt8(l) => l.to_string(),
+            &ScalarValue::UInt16(l) => l.to_string(),
+            &ScalarValue::UInt32(l) => l.to_string(),
+            &ScalarValue::UInt64(l) => l.to_string(),
+            &ScalarValue::Float32(d) => d.to_string(),
+            &ScalarValue::Float64(d) => d.to_string(),
+            &ScalarValue::Utf8(ref s) => s.clone(),
+            &ScalarValue::Struct(ref v) => {
+                let s : Vec<String> = v.iter()
+                    .map(|v| v.to_string())
+                    .collect();
+                s.join(",")
+            }
+        }
+    }
+
+}
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct FunctionMeta {

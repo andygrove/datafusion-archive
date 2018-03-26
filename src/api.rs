@@ -14,13 +14,14 @@
 
 use std::rc::Rc;
 
-use super::arrow::{Array, DataType, Field};
+use super::arrow::{DataType, Field};
+use super::exec::Value;
 
 /// Scalar function. User-defined implementations will be dynamically loaded at runtime.
 pub trait ScalarFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&self, args: Vec<Rc<Array>>) -> Result<Rc<Array>,Box<String>>;
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>,Box<String>>;
 }
 
