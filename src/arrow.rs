@@ -135,7 +135,7 @@ impl Array {
             (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
             (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
             (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-            _ => panic!(format!("ColumnData.eq() Type mismatch: {:?} vs {:?}", self, other))
+            _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
         }
     }
 
@@ -153,7 +153,7 @@ impl Array {
             (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
             (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
             (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-            _ => panic!(format!("ColumnData.eq() Type mismatch: {:?} vs {:?}", self, other))
+            _ => panic!(format!("ArrayData.eq() Type mismatch: {:?} vs {:?}", self, other))
         }
     }
 
@@ -171,7 +171,7 @@ impl Array {
             (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
             (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
             (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-            _ => panic!(format!("ColumnData.lt() Type mismatch: {:?} vs {:?}", self, other))
+            _ => panic!(format!("ArrayData.lt() Type mismatch: {:?} vs {:?}", self, other))
         }
     }
 
@@ -189,7 +189,7 @@ impl Array {
             (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
             (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
             (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-            _ => panic!(format!("ColumnData.lt_eq() Type mismatch: {:?} vs {:?}", self, other))
+            _ => panic!(format!("ArrayData.lt_eq() Type mismatch: {:?} vs {:?}", self, other))
         }
     }
 
@@ -207,7 +207,7 @@ impl Array {
             (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
             (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
             (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-            _ => panic!(format!("ColumnData.gt() Type mismatch: {:?} vs {:?}", self, other))
+            _ => panic!(format!("ArrayData.gt() Type mismatch: {:?} vs {:?}", self, other))
         }
     }
 
@@ -225,7 +225,7 @@ impl Array {
             (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
             (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
             (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-            _ => panic!(format!("ColumnData.gt_eq() Type mismatch: {:?} vs {:?}", self, other))
+            _ => panic!(format!("ArrayData.gt_eq() Type mismatch: {:?} vs {:?}", self, other))
         }
     }
 
@@ -240,8 +240,8 @@ impl Array {
             &ArrayData::Int64(ref v) => ScalarValue::Int64(v[index]),
             &ArrayData::Utf8(ref v) => ScalarValue::Utf8(v[index].clone()),
             &ArrayData::Struct(ref v) => {
-                // v is Vec<ColumnData>
-                // each field has its own ColumnData e.g. lat, lon so we want to get a value from each (but it's recursive)
+                // v is Vec<ArrayData>
+                // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
                 //            println!("get_value() complex value has {} fields", v.len());
                 let fields = v.iter().map(|field| field.get_value(index)).collect();
                 ScalarValue::Struct(fields)
