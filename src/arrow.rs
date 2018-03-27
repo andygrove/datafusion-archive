@@ -106,7 +106,6 @@ impl Schema {
 }
 
 pub struct ListData {
-    //TODO: null bitmap
     pub offsets: Vec<i32>,
     pub bytes: Bytes
 }
@@ -159,25 +158,8 @@ impl ArrayData {
 //
 //    }
 
-}
-
-pub struct Array {
-    //TODO: add null bitmap
-    data: ArrayData
-}
-
-impl Array {
-
-    pub fn new(data: ArrayData) -> Self {
-        Array { data }
-    }
-
-    pub fn data(&self) -> &ArrayData {
-        &self.data
-    }
-
     pub fn len(&self) -> usize {
-        match &self.data {
+        match self {
             &ArrayData::Boolean(ref v) => v.len(),
             &ArrayData::Float32(ref v) => v.len(),
             &ArrayData::Float64(ref v) => v.len(),
@@ -196,9 +178,93 @@ impl Array {
 
 }
 
+pub struct Bitmap {
+    bits: Vec<u8>
+}
+
+impl Bitmap {
+
+    pub fn new(len: usize) -> Self {
+        let n = len % 64;
+        let len = if n==0 { len } else { len + 64-len };
+        let mut v = Vec::with_capacity(len);
+        for _ in 0 .. len {
+            v.push(0);
+        }
+        Bitmap { bits: v }
+    }
+
+    pub fn len(&self) -> usize {
+        self.bits.len()
+    }
+
+    pub fn is_set(&self, i: usize) -> bool {
+        let byte_offset = i / 8;
+        self.bits[byte_offset] & ((i % 8) as u8) > 0
+    }
+
+    pub fn set(&mut self, i: usize) {
+        let byte_offset = i / 8;
+        self.bits[byte_offset] = self.bits[byte_offset] | ((i % 8) as u8);
+    }
+
+    pub fn clear(&mut self, i: usize) {
+        let byte_offset = i / 8;
+        self.bits[byte_offset] = self.bits[byte_offset] ^ ((i % 8) as u8);
+    }
+}
+
+pub struct Array {
+    null_count: i32,
+    null_bitmap: Bitmap,
+    data: ArrayData
+}
+
+impl Array {
+
+    pub fn new(data: ArrayData) -> Self {
+        let l = data.len();
+        Array { data, null_bitmap: Bitmap::new(l), null_count: 0 }
+    }
+
+    pub fn data(&self) -> &ArrayData {
+        &self.data
+    }
+
+    pub fn len(&self) -> usize {
+        self.data().len()
+    }
+
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_bitmap_length() {
+        assert_eq!(64, Bitmap::new(63).len());
+        assert_eq!(64, Bitmap::new(64).len());
+        assert_eq!(128, Bitmap::new(65).len());
+    }
+
+    #[test]
+    fn test_set_bit() {
+        let mut b = Bitmap::new(64);
+        assert_eq!(false, b.is_set(12));
+        b.set(12);
+        assert_eq!(true, b.is_set(12));
+    }
+
+    #[test]
+    fn test_clear_bit() {
+        let mut b = Bitmap::new(64);
+        assert_eq!(false, b.is_set(12));
+        b.set(12);
+        assert_eq!(true, b.is_set(12));
+        b.clear(12);
+        assert_eq!(false, b.is_set(12));
+    }
 
     #[test]
     fn test_list_char() {
