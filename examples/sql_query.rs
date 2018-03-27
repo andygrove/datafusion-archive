@@ -13,7 +13,6 @@
 // limitations under the License.
 
 extern crate datafusion;
-use datafusion::arrow::*;
 use datafusion::exec::*;
 
 /// This example shows the steps to parse, plan, and execute simple SQL in the current process

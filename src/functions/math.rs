@@ -17,7 +17,7 @@ impl ScalarFunction for SqrtFunction {
         match args[0].as_ref() {
             &Value::Column(_, ref arr)=> {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
-                match (arr.data()) {
+                match arr.data() {
                     &ArrayData::Float32(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::new(ArrayData::Float32(v.iter().map(|v| v.sqrt()).collect())))))),
                     &ArrayData::Float64(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| v.sqrt()).collect())))))),
                     &ArrayData::Int32(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect())))))),

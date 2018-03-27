@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::clone::Clone;
 use std::iter::Iterator;
 use std::rc::Rc;
 use std::str;
 use std::string::String;
-use std::cmp::{Ordering, PartialOrd};
 
 extern crate bytes;
 use self::bytes::{Bytes, BytesMut, BufMut};
@@ -114,8 +112,15 @@ pub struct ListData {
 }
 
 impl ListData {
-    fn len(&self) -> usize {
+
+    pub fn len(&self) -> usize {
         self.offsets.len()-1
+    }
+
+    pub fn slice(&self, index: usize) -> &[u8] {
+        let start = self.offsets[index] as usize;
+        let end = self.offsets[index+1] as usize;
+        &self.bytes[start..end]
     }
 }
 

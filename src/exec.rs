@@ -30,7 +30,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate tokio_core;
 
-use self::bytes::{Bytes, BytesMut, BufMut};
+use self::bytes::{BytesMut, BufMut};
 use self::futures::{Future, Stream};
 use self::hyper::Client;
 use self::tokio_core::reactor::Core;
@@ -367,19 +367,19 @@ impl Value {
         }
     }
 
-    pub fn add(&self, other: &Value) -> Rc<Value> {
+    pub fn add(&self, _other: &Value) -> Rc<Value> {
         unimplemented!()
     }
 
-    pub fn subtract(&self, other: &Value) -> Rc<Value> {
+    pub fn subtract(&self, _other: &Value) -> Rc<Value> {
         unimplemented!()
     }
 
-    pub fn multiply(&self, other: &Value) -> Rc<Value> {
+    pub fn multiply(&self, _other: &Value) -> Rc<Value> {
         unimplemented!()
     }
 
-    pub fn divide(&self, other: &Value) -> Rc<Value> {
+    pub fn divide(&self, _other: &Value) -> Rc<Value> {
         unimplemented!()
     }
 
@@ -1268,9 +1268,8 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
         &ArrayData::UInt16(ref v) => ScalarValue::UInt16(v[index]),
         &ArrayData::UInt32(ref v) => ScalarValue::UInt32(v[index]),
         &ArrayData::UInt64(ref v) => ScalarValue::UInt64(v[index]),
-        &ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
-            let slice = &bytes[offsets[index] as usize .. offsets[index + 1] as usize];
-            ScalarValue::Utf8(String::from(str::from_utf8(slice).unwrap() ))
+        &ArrayData::Utf8(ref data) => {
+            ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap() ))
         },
         &ArrayData::Struct(ref v) => {
             // v is Vec<ArrayData>
@@ -1278,8 +1277,7 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
             //            println!("get_value() complex value has {} fields", v.len());
             let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
             ScalarValue::Struct(fields)
-        },
-        _ => unimplemented!()
+        }
     };
     //  println!("get_value() index={} returned {:?}", index, v);
 

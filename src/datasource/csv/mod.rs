@@ -208,7 +208,7 @@ mod tests {
             ScalarValue::Float64(57.653484),
             ScalarValue::Float64(-3.335724)], row);
 
-        let names = batch.column(0);
+        let _names = batch.column(0);
         //println!("names: {:?}", names);
 
     }
