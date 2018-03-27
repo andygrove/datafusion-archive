@@ -154,10 +154,6 @@ impl ArrayData {
         ArrayData::Utf8(ListData { offsets, bytes: buf.freeze() })
     }
 
-//    fn eq(l: &ArrayData, b: &ArrayData) -> ArrayData {
-//
-//    }
-
     pub fn len(&self) -> usize {
         match self {
             &ArrayData::Boolean(ref v) => v.len(),
@@ -184,9 +180,9 @@ pub struct Bitmap {
 
 impl Bitmap {
 
-    pub fn new(len: usize) -> Self {
-        let n = len % 64;
-        let len = if n==0 { len } else { len + 64-len };
+    pub fn new(n: usize) -> Self {
+        let r = n % 64;
+        let len = if r==0 { n } else { n + 64-r };
         let mut v = Vec::with_capacity(len);
         for _ in 0 .. len {
             v.push(0);
@@ -215,6 +211,7 @@ impl Bitmap {
 }
 
 pub struct Array {
+    len: i32,
     null_count: i32,
     null_bitmap: Bitmap,
     data: ArrayData
@@ -223,8 +220,8 @@ pub struct Array {
 impl Array {
 
     pub fn new(data: ArrayData) -> Self {
-        let l = data.len();
-        Array { data, null_bitmap: Bitmap::new(l), null_count: 0 }
+        let len = data.len();
+        Array { len: len as i32, data, null_bitmap: Bitmap::new(len), null_count: 0 }
     }
 
     pub fn data(&self) -> &ArrayData {
@@ -232,7 +229,7 @@ impl Array {
     }
 
     pub fn len(&self) -> usize {
-        self.data().len()
+        self.len as usize
     }
 
 }
@@ -268,27 +265,32 @@ mod tests {
 
     #[test]
     fn test_list_char() {
-
         let s = vec!["this", "is", "a", "test"];
-        let mut offsets : Vec<i32> = Vec::with_capacity(s.len() + 1);
+        let a = ArrayData::from_strings(s.iter().map(|x| x.to_string()).collect());
+        assert_eq!(4, a.len());
 
-        let mut buf = BytesMut::with_capacity(64);
-        assert_eq!(0, buf.len());
+        match a {
+            ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
+                assert_eq!(11, bytes.len());
+                assert_eq!(0, offsets[0]);
+                assert_eq!(4, offsets[1]);
+                assert_eq!(6, offsets[2]);
+                assert_eq!(7, offsets[3]);
+                assert_eq!(11, offsets[4]);
+            },
+            _ => panic!()
+        }
 
-        offsets.push(0_i32);
-        s.iter().for_each(|v| {
-            buf.put(v);
-            offsets.push(buf.len() as i32);
-        });
-
-        let x: Bytes = buf.freeze();
-
-        assert_eq!(11, x.len());
-        assert_eq!(0, offsets[0]);
-        assert_eq!(4, offsets[1]);
-        assert_eq!(6, offsets[2]);
-        assert_eq!(7, offsets[3]);
-        assert_eq!(11, offsets[4]);
+        match a {
+            ArrayData::Utf8(d) => {
+                assert_eq!(4, d.len());
+                assert_eq!("this", str::from_utf8(d.slice(0)).unwrap());
+                assert_eq!("is", str::from_utf8(d.slice(1)).unwrap());
+                assert_eq!("a", str::from_utf8(d.slice(2)).unwrap());
+                assert_eq!("test", str::from_utf8(d.slice(3)).unwrap());
+            },
+            _ => panic!()
+        }
     }
 }
 
