@@ -108,11 +108,17 @@ impl Schema {
 }
 
 pub struct ListData {
-    offsets: Vec<usize>,
+    //TODO: null bitmap
+    pub offsets: Vec<i32>,
+    pub bytes: Bytes
 }
 
+impl ListData {
+    fn len(&self) -> usize {
+        self.offsets.len()-1
+    }
+}
 
-#[derive(Debug)]
 pub enum ArrayData {
     Boolean(Vec<bool>),
     Float32(Vec<f32>),
@@ -125,10 +131,7 @@ pub enum ArrayData {
     UInt16(Vec<u16>),
     UInt32(Vec<u32>),
     UInt64(Vec<u64>),
-    Utf8 {
-        offsets: Vec<i32>,
-        bytes: Bytes
-    },
+    Utf8(ListData),
     Struct(Vec<Rc<Array>>)
 }
 
@@ -136,7 +139,15 @@ pub enum ArrayData {
 impl ArrayData {
 
     pub fn from_strings(s: Vec<String>) -> Self {
-        unimplemented!()
+        let mut offsets : Vec<i32> = Vec::with_capacity(s.len() + 1);
+        let mut buf = BytesMut::with_capacity(s.len() * 32);
+        offsets.push(0_i32);
+        s.iter().for_each(|v| {
+            buf.put(v.as_bytes());
+            offsets.push(buf.len() as i32);
+        });
+
+        ArrayData::Utf8(ListData { offsets, bytes: buf.freeze() })
     }
 
 //    fn eq(l: &ArrayData, b: &ArrayData) -> ArrayData {
@@ -145,7 +156,6 @@ impl ArrayData {
 
 }
 
-#[derive(Debug)]
 pub struct Array {
     //TODO: add null bitmap
     data: ArrayData
@@ -174,7 +184,7 @@ impl Array {
             &ArrayData::UInt16(ref v) => v.len(),
             &ArrayData::UInt32(ref v) => v.len(),
             &ArrayData::UInt64(ref v) => v.len(),
-            &ArrayData::Utf8 { ref offsets, ref bytes } => offsets.len()-1,
+            &ArrayData::Utf8(ref list) => list.len(),
             &ArrayData::Struct(ref v) => v[0].as_ref().len(), // assumes all fields are same len
         }
     }

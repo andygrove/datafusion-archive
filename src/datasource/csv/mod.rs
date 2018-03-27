@@ -159,7 +159,7 @@ impl<'a> Iterator for CsvIterator<'a> {
 
                     let bytes: Bytes = buf.freeze();
 
-                    Array::new(ArrayData::Utf8 { offsets, bytes })
+                    Array::new(ArrayData::Utf8(ListData { offsets, bytes }))
                 },
                 _ => unimplemented!()
             };
