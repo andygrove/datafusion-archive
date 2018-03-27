@@ -23,12 +23,14 @@ use std::str;
 use std::string::String;
 use std::convert::*;
 
+extern crate bytes;
 extern crate futures;
 extern crate hyper;
 extern crate serde;
 extern crate serde_json;
 extern crate tokio_core;
 
+use self::bytes::{Bytes, BytesMut, BufMut};
 use self::futures::{Future, Stream};
 use self::hyper::Client;
 use self::tokio_core::reactor::Core;
@@ -36,7 +38,7 @@ use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
-use super::arrow::{Schema, DataType, Field, Array, ArrayData};
+use super::arrow::{Schema, DataType, Field, Array, ArrayData, ListData};
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
@@ -117,6 +119,9 @@ impl Batch for ColumnBatch {
     }
 }
 
+
+
+
 pub enum Value {
     Column(Rc<Field>,Rc<Array>),
     Scalar(Rc<Field>,ScalarValue)
@@ -134,7 +139,15 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
                     (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
+                    (&ArrayData::Utf8( ListData { offsets : ref l_offsets, bytes: ref l_bytes }),
+                        &ArrayData::Utf8( ListData { offsets: ref r_offsets, bytes: ref r_bytes })) => {
+                        assert_eq!(l_offsets.len(), r_offsets.len());
+                        (0 .. l_offsets.len()-1).into_iter().map(|i| {
+                            let l_string = &l_bytes[l_offsets[i] as usize .. l_offsets[i+1] as usize];
+                            let r_string = &r_bytes[r_offsets[i] as usize .. r_offsets[i+1] as usize];
+                            l_string == r_string
+                        }).collect()
+                    },
                     _ => unimplemented!()
                 };
 
@@ -150,7 +163,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a==&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a==&b).collect(),
                     (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a==&b).collect(),
-                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a==b).collect(),
+                    //(&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a==b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -172,7 +185,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
                     (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -188,7 +201,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a!=&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a!=&b).collect(),
                     (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a!=&b).collect(),
-                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a!=b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a!=b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -210,7 +223,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
                     (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -226,7 +239,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<&b).collect(),
                     (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<&b).collect(),
-                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -248,7 +261,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
                     (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -264,7 +277,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<=&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<=&b).collect(),
                     (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<=&b).collect(),
-                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<=b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<=b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -286,7 +299,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
                     (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -302,7 +315,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>&b).collect(),
                     (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>&b).collect(),
-                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -324,7 +337,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
                     (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -340,7 +353,7 @@ impl Value {
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>=&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>=&b).collect(),
                     (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>=&b).collect(),
-                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>=b).collect(),
+//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>=b).collect(),
                     _ => unimplemented!()
                 };
 
@@ -1242,7 +1255,7 @@ mod tests {
 
 
 pub fn get_value(column: &Array, index: usize) -> ScalarValue {
-//        println!("get_value() index={}", index);
+    //println!("get_value() index={}", index);
     let v = match column.data() {
         &ArrayData::Boolean(ref v) => ScalarValue::Boolean(v[index]),
         &ArrayData::Float32(ref v) => ScalarValue::Float32(v[index]),
@@ -1255,14 +1268,18 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
         &ArrayData::UInt16(ref v) => ScalarValue::UInt16(v[index]),
         &ArrayData::UInt32(ref v) => ScalarValue::UInt32(v[index]),
         &ArrayData::UInt64(ref v) => ScalarValue::UInt64(v[index]),
-        &ArrayData::Utf8(ref v) => ScalarValue::Utf8(v[index].clone()),
+        &ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
+            let slice = &bytes[offsets[index] as usize .. offsets[index + 1] as usize];
+            ScalarValue::Utf8(String::from(str::from_utf8(slice).unwrap() ))
+        },
         &ArrayData::Struct(ref v) => {
             // v is Vec<ArrayData>
             // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
             //            println!("get_value() complex value has {} fields", v.len());
             let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
             ScalarValue::Struct(fields)
-        }
+        },
+        _ => unimplemented!()
     };
     //  println!("get_value() index={} returned {:?}", index, v);
 
@@ -1280,7 +1297,20 @@ pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
                     &ArrayData::Float64(ref v) => Array::new(ArrayData::Float64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
                     &ArrayData::Int32(ref v) => Array::new(ArrayData::Int32(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
                     &ArrayData::Int64(ref v) => Array::new(ArrayData::Int64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Utf8(ref v) => Array::new(ArrayData::Utf8(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| v.clone()).collect())),
+                    &ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
+
+                        let mut new_offsets : Vec<i32> = Vec::with_capacity(offsets.len());
+                        let mut new_bytes = BytesMut::with_capacity(offsets.len() * 32);
+                        new_offsets.push(0_i32);
+                        (0 .. offsets.len()-1).into_iter().for_each(|i| {
+                            if b[i] {
+                                new_bytes.put(&bytes[offsets[i] as usize .. offsets[i+1] as usize]);
+                                new_offsets.push(new_bytes.len() as i32);
+                            }
+                        });
+
+                        Array::new(ArrayData::Utf8(ListData { offsets: new_offsets, bytes: new_bytes.freeze() }))
+                    }
                     _ => unimplemented!()
                 },
                 _ => panic!()

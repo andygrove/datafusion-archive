@@ -19,6 +19,9 @@ use std::str;
 use std::string::String;
 use std::cmp::{Ordering, PartialOrd};
 
+extern crate bytes;
+use self::bytes::{Bytes, BytesMut, BufMut};
+
 //
 // Warning! The type system is now loosely based on Apache Arrow but is not yet compatible with
 // Apache Arrow. This is a work-in-progress.
@@ -104,8 +107,18 @@ impl Schema {
 
 }
 
+pub struct ListData {
+    //TODO: null bitmap
+    pub offsets: Vec<i32>,
+    pub bytes: Bytes
+}
 
-#[derive(Debug)]
+impl ListData {
+    fn len(&self) -> usize {
+        self.offsets.len()-1
+    }
+}
+
 pub enum ArrayData {
     Boolean(Vec<bool>),
     Float32(Vec<f32>),
@@ -118,11 +131,31 @@ pub enum ArrayData {
     UInt16(Vec<u16>),
     UInt32(Vec<u32>),
     UInt64(Vec<u64>),
-    Utf8(Vec<String>), // not compatible with Arrow
+    Utf8(ListData),
     Struct(Vec<Rc<Array>>)
 }
 
-#[derive(Debug)]
+
+impl ArrayData {
+
+    pub fn from_strings(s: Vec<String>) -> Self {
+        let mut offsets : Vec<i32> = Vec::with_capacity(s.len() + 1);
+        let mut buf = BytesMut::with_capacity(s.len() * 32);
+        offsets.push(0_i32);
+        s.iter().for_each(|v| {
+            buf.put(v.as_bytes());
+            offsets.push(buf.len() as i32);
+        });
+
+        ArrayData::Utf8(ListData { offsets, bytes: buf.freeze() })
+    }
+
+//    fn eq(l: &ArrayData, b: &ArrayData) -> ArrayData {
+//
+//    }
+
+}
+
 pub struct Array {
     //TODO: add null bitmap
     data: ArrayData
@@ -151,11 +184,42 @@ impl Array {
             &ArrayData::UInt16(ref v) => v.len(),
             &ArrayData::UInt32(ref v) => v.len(),
             &ArrayData::UInt64(ref v) => v.len(),
-            &ArrayData::Utf8(ref v) => v.len(),
+            &ArrayData::Utf8(ref list) => list.len(),
             &ArrayData::Struct(ref v) => v[0].as_ref().len(), // assumes all fields are same len
         }
     }
 
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_char() {
+
+        let s = vec!["this", "is", "a", "test"];
+        let mut offsets : Vec<i32> = Vec::with_capacity(s.len() + 1);
+
+        let mut buf = BytesMut::with_capacity(64);
+        assert_eq!(0, buf.len());
+
+        offsets.push(0_i32);
+        s.iter().for_each(|v| {
+            buf.put(v);
+            offsets.push(buf.len() as i32);
+        });
+
+        let x: Bytes = buf.freeze();
+
+        assert_eq!(11, x.len());
+        assert_eq!(0, offsets[0]);
+        assert_eq!(4, offsets[1]);
+        assert_eq!(6, offsets[2]);
+        assert_eq!(7, offsets[3]);
+        assert_eq!(11, offsets[4]);
+    }
+}
+
 
 

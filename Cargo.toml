@@ -25,6 +25,7 @@ name = "console"
 path = "src/bin/console/main.rs"
 
 [dependencies]
+bytes = "0.4.6"
 byteorder = "1"
 csv = "1.0.0-beta.5"
 futures = "0.1.18"
