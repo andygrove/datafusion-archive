@@ -19,6 +19,9 @@ use std::str;
 use std::string::String;
 use std::cmp::{Ordering, PartialOrd};
 
+extern crate bytes;
+use self::bytes::{Bytes, BytesMut, BufMut};
+
 //
 // Warning! The type system is now loosely based on Apache Arrow but is not yet compatible with
 // Apache Arrow. This is a work-in-progress.
@@ -104,6 +107,10 @@ impl Schema {
 
 }
 
+pub struct ListData {
+    offsets: Vec<usize>,
+}
+
 
 #[derive(Debug)]
 pub enum ArrayData {
@@ -118,8 +125,24 @@ pub enum ArrayData {
     UInt16(Vec<u16>),
     UInt32(Vec<u32>),
     UInt64(Vec<u64>),
-    Utf8(Vec<String>), // not compatible with Arrow
+    Utf8 {
+        offsets: Vec<i32>,
+        bytes: Bytes
+    },
     Struct(Vec<Rc<Array>>)
+}
+
+
+impl ArrayData {
+
+    pub fn from_strings(s: Vec<String>) -> Self {
+        unimplemented!()
+    }
+
+//    fn eq(l: &ArrayData, b: &ArrayData) -> ArrayData {
+//
+//    }
+
 }
 
 #[derive(Debug)]
@@ -151,11 +174,42 @@ impl Array {
             &ArrayData::UInt16(ref v) => v.len(),
             &ArrayData::UInt32(ref v) => v.len(),
             &ArrayData::UInt64(ref v) => v.len(),
-            &ArrayData::Utf8(ref v) => v.len(),
+            &ArrayData::Utf8 { ref offsets, ref bytes } => offsets.len()-1,
             &ArrayData::Struct(ref v) => v[0].as_ref().len(), // assumes all fields are same len
         }
     }
 
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_char() {
+
+        let s = vec!["this", "is", "a", "test"];
+        let mut offsets : Vec<i32> = Vec::with_capacity(s.len() + 1);
+
+        let mut buf = BytesMut::with_capacity(64);
+        assert_eq!(0, buf.len());
+
+        offsets.push(0_i32);
+        s.iter().for_each(|v| {
+            buf.put(v);
+            offsets.push(buf.len() as i32);
+        });
+
+        let x: Bytes = buf.freeze();
+
+        assert_eq!(11, x.len());
+        assert_eq!(0, offsets[0]);
+        assert_eq!(4, offsets[1]);
+        assert_eq!(6, offsets[2]);
+        assert_eq!(7, offsets[3]);
+        assert_eq!(11, offsets[4]);
+    }
+}
+
 
 

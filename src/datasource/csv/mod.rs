@@ -20,6 +20,9 @@ use super::super::arrow::*;
 use super::super::exec::*;
 use super::super::rel::*;
 
+extern crate bytes;
+use self::bytes::*;
+
 extern crate csv;
 use super::super::csv::StringRecord;
 
@@ -140,11 +143,23 @@ impl<'a> Iterator for CsvIterator<'a> {
                         }).collect()))
                 },
                 DataType::Utf8 => {
-                    Array::new(ArrayData::Utf8(
-                        rows.iter().map(|row| match &row[i] {
-                            &ScalarValue::Utf8(ref v) => v.clone(),
-                            _ => panic!()
-                        }).collect()))
+
+                    let mut offsets : Vec<i32> = Vec::with_capacity(rows.len() + 1);
+                    let mut buf = BytesMut::with_capacity(rows.len() * 32);
+
+                    offsets.push(0_i32);
+
+                    rows.iter().for_each(|row| match &row[i] {
+                        &ScalarValue::Utf8(ref v) => {
+                            buf.put(v.as_bytes());
+                            offsets.push(buf.len() as i32);
+                        },
+                        _ => panic!()
+                    });
+
+                    let bytes: Bytes = buf.freeze();
+
+                    Array::new(ArrayData::Utf8 { offsets, bytes })
                 },
                 _ => unimplemented!()
             };

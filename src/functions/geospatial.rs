@@ -64,7 +64,7 @@ impl ScalarFunction for STAsText {
             &Value::Column(ref field, ref arr) => match arr.data() {
                 &ArrayData::Struct(ref fields) => match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
                     (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
-                        let array = Array::new(ArrayData::Utf8(
+                        let array = Array::new(ArrayData::from_strings(
                             lat.iter().zip(lon.iter())
                                 .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
                                 .collect()));
