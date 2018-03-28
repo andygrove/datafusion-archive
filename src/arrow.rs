@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::From;
 use std::iter::Iterator;
 use std::rc::Rc;
 use std::str;
@@ -26,14 +27,6 @@ use self::bytes::{Bytes, BytesMut, BufMut};
 //
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
-pub enum TimeUnit {
-    Seconds,
-    Milliseconds,
-    Microseconds,
-    Nanoseconds
-}
-
-#[derive(Debug,Clone,Serialize,Deserialize)]
 pub enum DataType {
     Boolean,
     Int8,
@@ -46,13 +39,7 @@ pub enum DataType {
     UInt64,
     Float32,
     Float64,
-    Timestamp(TimeUnit),
-    Time(TimeUnit),
-    Date32,
-    Date64,
     Utf8,
-    Binary,
-    List(Vec<DataType>),
     Struct(Vec<Field>)
 }
 
@@ -142,35 +129,23 @@ pub enum ArrayData {
 
 impl ArrayData {
 
-    pub fn from_strings(s: Vec<String>) -> Self {
-        let mut offsets : Vec<i32> = Vec::with_capacity(s.len() + 1);
-        let mut buf = BytesMut::with_capacity(s.len() * 32);
-        offsets.push(0_i32);
-        s.iter().for_each(|v| {
-            buf.put(v.as_bytes());
-            offsets.push(buf.len() as i32);
-        });
-
-        ArrayData::Utf8(ListData { offsets, bytes: buf.freeze() })
-    }
-
-    pub fn len(&self) -> usize {
-        match self {
-            &ArrayData::Boolean(ref v) => v.len(),
-            &ArrayData::Float32(ref v) => v.len(),
-            &ArrayData::Float64(ref v) => v.len(),
-            &ArrayData::Int8(ref v) => v.len(),
-            &ArrayData::Int16(ref v) => v.len(),
-            &ArrayData::Int32(ref v) => v.len(),
-            &ArrayData::Int64(ref v) => v.len(),
-            &ArrayData::UInt8(ref v) => v.len(),
-            &ArrayData::UInt16(ref v) => v.len(),
-            &ArrayData::UInt32(ref v) => v.len(),
-            &ArrayData::UInt64(ref v) => v.len(),
-            &ArrayData::Utf8(ref list) => list.len(),
-            &ArrayData::Struct(ref v) => v[0].as_ref().len(), // assumes all fields are same len
-        }
-    }
+//    pub fn len(&self) -> usize {
+//        match self {
+//            &ArrayData::Boolean(ref v) => v.len(),
+//            &ArrayData::Float32(ref v) => v.len(),
+//            &ArrayData::Float64(ref v) => v.len(),
+//            &ArrayData::Int8(ref v) => v.len(),
+//            &ArrayData::Int16(ref v) => v.len(),
+//            &ArrayData::Int32(ref v) => v.len(),
+//            &ArrayData::Int64(ref v) => v.len(),
+//            &ArrayData::UInt8(ref v) => v.len(),
+//            &ArrayData::UInt16(ref v) => v.len(),
+//            &ArrayData::UInt32(ref v) => v.len(),
+//            &ArrayData::UInt64(ref v) => v.len(),
+//            &ArrayData::Utf8(ref list) => list.len(),
+//            &ArrayData::Struct(ref v) => v[0].as_ref().len(), // assumes all fields are same len
+//        }
+//    }
 
 }
 
@@ -211,16 +186,15 @@ impl Bitmap {
 }
 
 pub struct Array {
-    len: i32,
-    null_count: i32,
-    null_bitmap: Bitmap,
-    data: ArrayData
+    pub len: i32,
+    pub null_count: i32,
+    pub null_bitmap: Bitmap,
+    pub data: ArrayData
 }
 
 impl Array {
 
-    pub fn new(data: ArrayData) -> Self {
-        let len = data.len();
+    pub fn new(len: usize, data: ArrayData) -> Self {
         Array { len: len as i32, data, null_bitmap: Bitmap::new(len), null_count: 0 }
     }
 
@@ -233,6 +207,61 @@ impl Array {
     }
 
 }
+
+impl From<Vec<bool>> for Array {
+    fn from(v: Vec<bool>) -> Self {
+        Array { len: v.len() as i32, null_count: 0, null_bitmap: Bitmap::new(v.len()), data: ArrayData::Boolean(v) }
+    }
+}
+
+impl From<Vec<f32>> for Array {
+    fn from(v: Vec<f32>) -> Self {
+        Array { len: v.len() as i32, null_count: 0, null_bitmap: Bitmap::new(v.len()), data: ArrayData::Float32(v) }
+    }
+}
+
+impl From<Vec<f64>> for Array {
+    fn from(v: Vec<f64>) -> Self {
+        Array { len: v.len() as i32, null_count: 0, null_bitmap: Bitmap::new(v.len()), data: ArrayData::Float64(v) }
+    }
+}
+
+impl From<Vec<i32>> for Array {
+    fn from(v: Vec<i32>) -> Self {
+        Array { len: v.len() as i32, null_count: 0, null_bitmap: Bitmap::new(v.len()), data: ArrayData::Int32(v) }
+    }
+}
+
+impl From<Vec<i64>> for Array {
+    fn from(v: Vec<i64>) -> Self {
+        Array { len: v.len() as i32, null_count: 0, null_bitmap: Bitmap::new(v.len()), data: ArrayData::Int64(v) }
+    }
+}
+
+impl From<Vec<&'static str>> for Array {
+    fn from(v: Vec<&'static str>) -> Self {
+        Array::from(v.iter().map(|s| s.to_string()).collect::<Vec<String>>())
+    }
+}
+
+impl From<Vec<String>> for Array {
+    fn from(v: Vec<String>) -> Self {
+        let mut offsets : Vec<i32> = Vec::with_capacity(v.len() + 1);
+        let mut buf = BytesMut::with_capacity(v.len() * 32);
+        offsets.push(0_i32);
+        v.iter().for_each(|s| {
+            buf.put(s.as_bytes());
+            offsets.push(buf.len() as i32);
+        });
+        Array {
+            len: v.len() as i32,
+            null_count: 0,
+            null_bitmap: Bitmap::new(v.len()),
+            data: ArrayData::Utf8(ListData { offsets, bytes: buf.freeze() })
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -264,13 +293,11 @@ mod tests {
     }
 
     #[test]
-    fn test_list_char() {
-        let s = vec!["this", "is", "a", "test"];
-        let a = ArrayData::from_strings(s.iter().map(|x| x.to_string()).collect());
+    fn test_utf8_offsets() {
+        let a = Array::from(vec!["this", "is", "a", "test"]);
         assert_eq!(4, a.len());
-
-        match a {
-            ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
+        match a.data() {
+            &ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
                 assert_eq!(11, bytes.len());
                 assert_eq!(0, offsets[0]);
                 assert_eq!(4, offsets[1]);
@@ -280,9 +307,13 @@ mod tests {
             },
             _ => panic!()
         }
+    }
 
-        match a {
-            ArrayData::Utf8(d) => {
+    #[test]
+    fn test_utf8_slices() {
+        let a = Array::from(vec!["this", "is", "a", "test"]);
+        match a.data() {
+            &ArrayData::Utf8(ref d) => {
                 assert_eq!(4, d.len());
                 assert_eq!("this", str::from_utf8(d.slice(0)).unwrap());
                 assert_eq!("is", str::from_utf8(d.slice(1)).unwrap());

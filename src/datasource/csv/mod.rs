@@ -114,33 +114,40 @@ impl<'a> Iterator for CsvIterator<'a> {
             let field = Field::new(&name, self.schema.columns[i].data_type.clone(), false);
 
             let values : Array = match self.schema.columns[i].data_type {
+                DataType::Boolean => {
+                    Array::from(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Boolean(v) => v,
+                            _ => panic!()
+                        }).collect::<Vec<bool>>())
+                },
                 DataType::Float32 => {
-                    Array::new(ArrayData::Float32(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Float32(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<f32>>())
                 },
                 DataType::Float64 => {
-                    Array::new(ArrayData::Float64(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Float64(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<f64>>())
                 },
                 DataType::Int32 => {
-                    Array::new(ArrayData::Int32(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Int32(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<i32>>())
                 },
                 DataType::Int64 => {
-                    Array::new(ArrayData::Int64(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Int64(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<i64>>())
                 },
                 DataType::Utf8 => {
 
@@ -159,7 +166,7 @@ impl<'a> Iterator for CsvIterator<'a> {
 
                     let bytes: Bytes = buf.freeze();
 
-                    Array::new(ArrayData::Utf8(ListData { offsets, bytes }))
+                    Array::new(rows.len(), ArrayData::Utf8(ListData { offsets, bytes }))
                 },
                 _ => unimplemented!()
             };

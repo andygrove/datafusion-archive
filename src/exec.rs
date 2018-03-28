@@ -38,7 +38,7 @@ use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
-use super::arrow::{Schema, DataType, Field, Array, ArrayData, ListData};
+use super::arrow::*;
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
@@ -134,7 +134,7 @@ impl Value {
     pub fn eq(&self, other: &Value) -> Rc<Value> {
         match (self, other) {
             (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
+                let bools : Vec<bool> = match (v1.data(), v2.data()) {
                     (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
@@ -153,12 +153,12 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
             (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
+                let bools: Vec<bool> = match (v1.data(), v2) {
                     (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a==&b).collect(),
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a==&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a==&b).collect(),
@@ -169,7 +169,7 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
@@ -180,7 +180,7 @@ impl Value {
     pub fn not_eq(&self, other: &Value) -> Rc<Value> {
         match (self, other) {
             (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
+                let bools : Vec<bool> = match (v1.data(), v2.data()) {
                     (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
@@ -191,12 +191,12 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
             (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
+                let bools: Vec<bool> = match (v1.data(), v2) {
                     (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a!=&b).collect(),
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a!=&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a!=&b).collect(),
@@ -207,7 +207,7 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
@@ -218,7 +218,7 @@ impl Value {
     pub fn lt(&self, other: &Value) -> Rc<Value> {
         match (self, other) {
             (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
+                let bools : Vec<bool> = match (v1.data(), v2.data()) {
                     (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
@@ -229,12 +229,12 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
             (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
+                let bools: Vec<bool> = match (v1.data(), v2) {
                     (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<&b).collect(),
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<&b).collect(),
@@ -245,7 +245,7 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
@@ -256,7 +256,7 @@ impl Value {
     pub fn lt_eq(&self, other: &Value) -> Rc<Value> {
         match (self, other) {
             (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
+                let bools: Vec<bool> = match (v1.data(), v2.data()) {
                     (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
@@ -267,12 +267,12 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
             (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
+                let bools: Vec<bool> = match (v1.data(), v2) {
                     (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<=&b).collect(),
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<=&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<=&b).collect(),
@@ -283,7 +283,7 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
@@ -294,7 +294,7 @@ impl Value {
     pub fn gt(&self, other: &Value) -> Rc<Value> {
         match (self, other) {
             (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
+                let bools: Vec<bool> = match (v1.data(), v2.data()) {
                     (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
@@ -305,12 +305,12 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
             (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
+                let bools: Vec<bool> = match (v1.data(), v2) {
                     (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>&b).collect(),
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>&b).collect(),
@@ -321,7 +321,7 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
@@ -332,7 +332,7 @@ impl Value {
     pub fn gt_eq(&self, other: &Value) -> Rc<Value> {
         match (self, other) {
             (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
+                let bools: Vec<bool> = match (v1.data(), v2.data()) {
                     (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
                     (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
                     (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
@@ -343,12 +343,12 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
             (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
+                let bools: Vec<bool> = match (v1.data(), v2) {
                     (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>=&b).collect(),
                     (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>=&b).collect(),
                     (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>=&b).collect(),
@@ -359,7 +359,7 @@ impl Value {
 
                 Rc::new(Value::Column(
                     Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
+                    Rc::new(Array::from(bools))
                 ))
 
             },
@@ -1290,24 +1290,24 @@ pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
         &Value::Column(_, ref arr) =>
             match bools.data() {
                 &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
-                    &ArrayData::Boolean(ref v) => Array::new(ArrayData::Boolean(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Float32(ref v) => Array::new(ArrayData::Float32(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Float64(ref v) => Array::new(ArrayData::Float64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Int32(ref v) => Array::new(ArrayData::Int32(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Int64(ref v) => Array::new(ArrayData::Int64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
+                    &ArrayData::Boolean(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect::<Vec<bool>>()),
+                    &ArrayData::Float32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect::<Vec<f32>>()),
+                    &ArrayData::Float64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect::<Vec<f64>>()),
+                    &ArrayData::Int32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect::<Vec<i32>>()),
+                    &ArrayData::Int64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect::<Vec<i64>>()),
                     &ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
 
-                        let mut new_offsets : Vec<i32> = Vec::with_capacity(offsets.len());
-                        let mut new_bytes = BytesMut::with_capacity(offsets.len() * 32);
+                        let num_strings = offsets.len()-1;
+                        let mut new_offsets : Vec<i32> = Vec::with_capacity(num_strings+1);
+                        let mut new_bytes = BytesMut::with_capacity(num_strings * 32);
                         new_offsets.push(0_i32);
-                        (0 .. offsets.len()-1).into_iter().for_each(|i| {
+                        (0 .. num_strings).into_iter().for_each(|i| {
                             if b[i] {
                                 new_bytes.put(&bytes[offsets[i] as usize .. offsets[i+1] as usize]);
                                 new_offsets.push(new_bytes.len() as i32);
                             }
                         });
-
-                        Array::new(ArrayData::Utf8(ListData { offsets: new_offsets, bytes: new_bytes.freeze() }))
+                        Array::new(new_offsets.len()-1, ArrayData::Utf8(ListData { offsets: new_offsets, bytes: new_bytes.freeze() }))
                     }
                     _ => unimplemented!()
                 },

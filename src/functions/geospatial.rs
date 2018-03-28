@@ -1,7 +1,8 @@
+use std::convert::From;
 use std::rc::Rc;
 
 use super::super::api::*;
-use super::super::arrow::{DataType, Field, Array, ArrayData};
+use super::super::arrow::*;
 use super::super::exec::Value;
 
 /// create a point from two doubles
@@ -23,8 +24,12 @@ impl ScalarFunction for STPointFunc {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match (arr1.data(), arr2.data()) {
                     (&ArrayData::Float64(_), &ArrayData::Float64(_)) =>
-                        Ok(Rc::new(Value::Column(field, Rc::new(Array::new(
-                            ArrayData::Struct(vec![arr1.clone(), arr2.clone()])))))),
+                        Ok(Rc::new(Value::Column(field, Rc::new(Array {
+                            len: arr1.len() as i32,
+                            null_count: 0,
+                            null_bitmap: Bitmap::new(arr1.len()),
+                            data: ArrayData::Struct(vec![arr1.clone(), arr2.clone()])
+                        })))),
                     _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
                 }
             },
@@ -64,12 +69,10 @@ impl ScalarFunction for STAsText {
             &Value::Column(ref field, ref arr) => match arr.data() {
                 &ArrayData::Struct(ref fields) => match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
                     (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
-                        let array = Array::new(ArrayData::from_strings(
-                            lat.iter().zip(lon.iter())
-                                .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
-                                .collect()));
-
-                        Ok(Rc::new(Value::Column(field.clone(), Rc::new(array))))
+                        let wkt : Vec<String> = lat.iter().zip(lon.iter())
+                            .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
+                            .collect();
+                        Ok(Rc::new(Value::Column(field.clone(), Rc::new(Array::from(wkt)))))
                     },
                     _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
                 },
