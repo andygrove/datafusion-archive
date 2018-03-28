@@ -126,29 +126,6 @@ pub enum ArrayData {
     Struct(Vec<Rc<Array>>)
 }
 
-
-impl ArrayData {
-
-//    pub fn len(&self) -> usize {
-//        match self {
-//            &ArrayData::Boolean(ref v) => v.len(),
-//            &ArrayData::Float32(ref v) => v.len(),
-//            &ArrayData::Float64(ref v) => v.len(),
-//            &ArrayData::Int8(ref v) => v.len(),
-//            &ArrayData::Int16(ref v) => v.len(),
-//            &ArrayData::Int32(ref v) => v.len(),
-//            &ArrayData::Int64(ref v) => v.len(),
-//            &ArrayData::UInt8(ref v) => v.len(),
-//            &ArrayData::UInt16(ref v) => v.len(),
-//            &ArrayData::UInt32(ref v) => v.len(),
-//            &ArrayData::UInt64(ref v) => v.len(),
-//            &ArrayData::Utf8(ref list) => list.len(),
-//            &ArrayData::Struct(ref v) => v[0].as_ref().len(), // assumes all fields are same len
-//        }
-//    }
-
-}
-
 pub struct Bitmap {
     bits: Vec<u8>
 }
@@ -171,17 +148,17 @@ impl Bitmap {
 
     pub fn is_set(&self, i: usize) -> bool {
         let byte_offset = i / 8;
-        self.bits[byte_offset] & ((i % 8) as u8) > 0
+        self.bits[byte_offset] & (1_u8 << ((i % 8) as u8)) > 0
     }
 
     pub fn set(&mut self, i: usize) {
         let byte_offset = i / 8;
-        self.bits[byte_offset] = self.bits[byte_offset] | ((i % 8) as u8);
+        self.bits[byte_offset] = self.bits[byte_offset] | (1_u8 << ((i % 8) as u8));
     }
 
     pub fn clear(&mut self, i: usize) {
         let byte_offset = i / 8;
-        self.bits[byte_offset] = self.bits[byte_offset] ^ ((i % 8) as u8);
+        self.bits[byte_offset] = self.bits[byte_offset] ^ (1_u8 << ((i % 8) as u8));
     }
 }
 
@@ -229,6 +206,22 @@ impl From<Vec<f64>> for Array {
 impl From<Vec<i32>> for Array {
     fn from(v: Vec<i32>) -> Self {
         Array { len: v.len() as i32, null_count: 0, null_bitmap: Bitmap::new(v.len()), data: ArrayData::Int32(v) }
+    }
+}
+
+impl From<Vec<Option<i32>>> for Array {
+    fn from(v: Vec<Option<i32>>) -> Self {
+        let mut null_count = 0;
+        let mut null_bitmap = Bitmap::new(v.len());
+        for i in 0..v.len() {
+            if v[i].is_none() {
+                println!("element {} is NULL", i);
+                null_count += 1;
+                null_bitmap.set(i);
+            }
+        }
+        let values : Vec<i32> = v.iter().map(|x| x.or(Some(0)).unwrap()).collect();
+        Array { len: v.len() as i32, null_count, null_bitmap, data: ArrayData::Int32(values) }
     }
 }
 
@@ -322,6 +315,17 @@ mod tests {
             },
             _ => panic!()
         }
+    }
+
+    #[test]
+    fn test_optional_i32() {
+        let a = Array::from(vec![Some(1), None, Some(2), Some(3), None]);
+        assert_eq!(5, a.len());
+        assert_eq!(false, a.null_bitmap.is_set(0));
+        assert_eq!(true, a.null_bitmap.is_set(1));
+        assert_eq!(false, a.null_bitmap.is_set(2));
+        assert_eq!(false, a.null_bitmap.is_set(3));
+        assert_eq!(true, a.null_bitmap.is_set(4));
     }
 }
 
