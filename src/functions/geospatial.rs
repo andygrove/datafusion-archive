@@ -1,8 +1,11 @@
 use std::convert::From;
 use std::rc::Rc;
 
+extern crate arrow;
+
+use self::arrow::array::*;
+use self::arrow::datatypes::*;
 use super::super::api::*;
-use super::super::arrow::*;
 use super::super::exec::Value;
 
 /// create a point from two doubles
@@ -23,13 +26,11 @@ impl ScalarFunction for STPointFunc {
             (&Value::Column(_, ref arr1), &Value::Column(_, ref arr2)) => {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match (arr1.data(), arr2.data()) {
-                    (&ArrayData::Float64(_), &ArrayData::Float64(_)) =>
-                        Ok(Rc::new(Value::Column(field, Rc::new(Array {
-                            len: arr1.len() as i32,
-                            null_count: 0,
-                            null_bitmap: Bitmap::new(arr1.len()),
-                            data: ArrayData::Struct(vec![arr1.clone(), arr2.clone()])
-                        })))),
+                    (&ArrayData::Float64(_), &ArrayData::Float64(_)) => {
+                        let nested: Vec<Rc<Array>> = vec![arr1.clone(), arr2.clone()];
+                        let new_array = Array::new(arr1.len() as i32, ArrayData::from(nested));
+                        Ok(Rc::new(Value::Column(field, Rc::new(new_array))))
+                    },
                     _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
                 }
             },

@@ -16,12 +16,13 @@ use std::io::{BufReader};
 use std::fs::File;
 use std::rc::Rc;
 
-use super::super::arrow::*;
+use super::super::arrow::array::*;
+use super::super::arrow::datatypes::*;
 use super::super::exec::*;
 use super::super::rel::*;
 
-extern crate bytes;
-use self::bytes::*;
+//extern crate bytes;
+//use self::bytes::*;
 
 extern crate csv;
 use super::super::csv::StringRecord;
@@ -150,23 +151,29 @@ impl<'a> Iterator for CsvIterator<'a> {
                         }).collect::<Vec<i64>>())
                 },
                 DataType::Utf8 => {
+                    //TODO: this can be optimized to avoid creating strings once arrow stabilizes
+                    Array::from(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Utf8(v) => v.clone(),
+                            _ => panic!()
+                        }).collect::<Vec<String>>())
 
-                    let mut offsets : Vec<i32> = Vec::with_capacity(rows.len() + 1);
-                    let mut buf = BytesMut::with_capacity(rows.len() * 32);
-
-                    offsets.push(0_i32);
-
-                    rows.iter().for_each(|row| match &row[i] {
-                        &ScalarValue::Utf8(ref v) => {
-                            buf.put(v.as_bytes());
-                            offsets.push(buf.len() as i32);
-                        },
-                        _ => panic!()
-                    });
-
-                    let bytes: Bytes = buf.freeze();
-
-                    Array::new(rows.len(), ArrayData::Utf8(ListData { offsets, bytes }))
+//                    let mut offsets : Vec<i32> = Vec::with_capacity(rows.len() + 1);
+//                    let mut buf = BytesMut::with_capacity(rows.len() * 32);
+//
+//                    offsets.push(0_i32);
+//
+//                    rows.iter().for_each(|row| match &row[i] {
+//                        &ScalarValue::Utf8(ref v) => {
+//                            buf.put(v.as_bytes());
+//                            offsets.push(buf.len() as i32);
+//                        },
+//                        _ => panic!()
+//                    });
+//
+//                    let bytes: Bytes = buf.freeze();
+//
+//                    Array::new(rows.len(), ArrayData::Utf8(ListData { offsets, bytes }))
                 },
                 _ => unimplemented!()
             };

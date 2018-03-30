@@ -14,7 +14,9 @@
 
 use std::io::Error;
 
-use super::arrow::*;
+extern crate arrow;
+use self::arrow::datatypes::*;
+
 use super::rel::*;
 use super::exec::*;
 

@@ -24,6 +24,7 @@ use std::string::String;
 use std::convert::*;
 
 extern crate bytes;
+extern crate arrow;
 extern crate futures;
 extern crate hyper;
 extern crate serde;
@@ -31,6 +32,8 @@ extern crate serde_json;
 extern crate tokio_core;
 
 use self::bytes::{BytesMut, BufMut};
+use self::arrow::array::*;
+use self::arrow::datatypes::*;
 use self::futures::{Future, Stream};
 use self::hyper::Client;
 use self::tokio_core::reactor::Core;
@@ -38,7 +41,6 @@ use self::hyper::{Method, Request};
 use self::hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
-use super::arrow::*;
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
@@ -1296,7 +1298,6 @@ pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
                     &ArrayData::Int32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect::<Vec<i32>>()),
                     &ArrayData::Int64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect::<Vec<i64>>()),
                     &ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
-
                         let num_strings = offsets.len()-1;
                         let mut new_offsets : Vec<i32> = Vec::with_capacity(num_strings+1);
                         let mut new_bytes = BytesMut::with_capacity(num_strings * 32);

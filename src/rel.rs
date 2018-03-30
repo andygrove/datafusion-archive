@@ -14,7 +14,8 @@
 
 use std::cmp::Ordering;
 
-use super::arrow::*;
+extern crate arrow;
+use self::arrow::datatypes::*;
 
 /// Value holder for all supported data types
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]

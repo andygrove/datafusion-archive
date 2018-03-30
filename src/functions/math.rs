@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
 use super::super::api::*;
-use super::super::arrow::{DataType, Field, Array, ArrayData};
+use super::super::arrow::array::*;
+use super::super::arrow::datatypes::*;
 use super::super::exec::Value;
 
 pub struct SqrtFunction {

@@ -17,7 +17,9 @@ use std::string::String;
 
 use super::sql::*;
 use super::rel::*;
-use super::arrow::*;
+
+extern crate arrow;
+use self::arrow::datatypes::*;
 
 pub struct SqlToRel {
     //default_schema: Option<String>,
