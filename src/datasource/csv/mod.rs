@@ -154,7 +154,7 @@ impl<'a> Iterator for CsvIterator<'a> {
                     //TODO: this can be optimized to avoid creating strings once arrow stabilizes
                     Array::from(
                         rows.iter().map(|row| match &row[i] {
-                            &ScalarValue::Utf8(v) => v.clone(),
+                            &ScalarValue::Utf8(ref v) => v.clone(),
                             _ => panic!()
                         }).collect::<Vec<String>>())
 

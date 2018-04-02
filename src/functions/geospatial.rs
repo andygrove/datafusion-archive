@@ -22,20 +22,21 @@ impl ScalarFunction for STPointFunc {
         if args.len() != 2 {
             return Err(Box::new("Wrong argument count for ST_Point".to_string()))
         }
-        match (args[0].as_ref(), args[1].as_ref()) {
-            (&Value::Column(_, ref arr1), &Value::Column(_, ref arr2)) => {
-                let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
-                match (arr1.data(), arr2.data()) {
-                    (&ArrayData::Float64(_), &ArrayData::Float64(_)) => {
-                        let nested: Vec<Rc<Array>> = vec![arr1.clone(), arr2.clone()];
-                        let new_array = Array::new(arr1.len() as i32, ArrayData::from(nested));
-                        Ok(Rc::new(Value::Column(field, Rc::new(new_array))))
-                    },
-                    _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
-                }
-            },
-            _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
-        }
+//        match (args[0].as_ref(), args[1].as_ref()) {
+//            (&Value::Column(_, ref arr1), &Value::Column(_, ref arr2)) => {
+//                let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
+//                match (arr1.data(), arr2.data()) {
+//                    (&ArrayData::Float64(_), &ArrayData::Float64(_)) => {
+//                        let nested: Vec<Rc<Array>> = vec![arr1.clone(), arr2.clone()];
+//                        let new_array = Array::new(arr1.len() as i32, ArrayData::from(nested));
+//                        Ok(Rc::new(Value::Column(field, Rc::new(new_array))))
+//                    },
+//                    _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
+//                }
+//            },
+//            _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
+//        }
+        unimplemented!()
     }
 
     fn args(&self) -> Vec<Field> {
@@ -66,21 +67,22 @@ impl ScalarFunction for STAsText {
         if args.len() != 1 {
             return Err(Box::new("Wrong argument count for ST_AsText".to_string()))
         }
-        match args[0].as_ref() {
-            &Value::Column(ref field, ref arr) => match arr.data() {
-                &ArrayData::Struct(ref fields) => match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
-                    (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
-                        let wkt : Vec<String> = lat.iter().zip(lon.iter())
-                            .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
-                            .collect();
-                        Ok(Rc::new(Value::Column(field.clone(), Rc::new(Array::from(wkt)))))
-                    },
-                    _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
-                },
-                _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
-            },
-            _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
-        }
+//        match args[0].as_ref() {
+//            &Value::Column(ref field, ref arr) => match arr.data() {
+//                &ArrayData::Struct(ref fields) => match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
+//                    (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
+//                        let wkt : Vec<String> = lat.iter().zip(lon.iter())
+//                            .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
+//                            .collect();
+//                        Ok(Rc::new(Value::Column(field.clone(), Rc::new(Array::from(wkt)))))
+//                    },
+//                    _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
+//                },
+//                _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
+//            },
+//            _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
+//        }
+        unimplemented!()
     }
 
     fn args(&self) -> Vec<Field> {

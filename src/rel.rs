@@ -14,11 +14,10 @@
 
 use std::cmp::Ordering;
 
-extern crate arrow;
-use self::arrow::datatypes::*;
+use arrow::datatypes::*;
 
 /// Value holder for all supported data types
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+#[derive(Debug,Clone,PartialEq)]
 pub enum ScalarValue {
     Boolean(bool),
     Float32(f32),
@@ -90,7 +89,7 @@ impl ScalarValue {
 
 }
 
-#[derive(Debug,Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone)]
 pub struct FunctionMeta {
     pub name: String,
     pub args: Vec<Field>,
@@ -118,7 +117,7 @@ impl Row for Vec<ScalarValue> {
     }
 }
 
-#[derive(Debug,Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone)]
 pub enum Operator {
     Eq,
     NotEq,
@@ -134,7 +133,7 @@ pub enum Operator {
 }
 
 /// Relation Expression
-#[derive(Debug,Clone,Serialize, Deserialize)]
+#[derive(Debug,Clone)]
 pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),
@@ -177,7 +176,7 @@ impl Expr {
 }
 
 /// Relations
-#[derive(Debug,Clone,Serialize, Deserialize)]
+#[derive(Debug,Clone)]
 pub enum LogicalPlan {
     Limit { limit: usize, input: Box<LogicalPlan>, schema: Schema },
     Projection { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
@@ -210,7 +209,6 @@ mod tests {
     use super::LogicalPlan::*;
     use super::Expr::*;
     use super::ScalarValue::*;
-    extern crate serde_json;
 
     #[test]
     fn serde() {
@@ -237,8 +235,8 @@ mod tests {
 
         };
 
-        let s = serde_json::to_string(&plan).unwrap();
-        println!("serialized: {}", s);
+//        let s = serde_json::to_string(&plan).unwrap();
+//        println!("serialized: {}", s);
     }
 
 }

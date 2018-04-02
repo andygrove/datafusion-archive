@@ -26,11 +26,11 @@ pub mod persist;
 
 extern crate arrow;
 extern crate bytes;
-extern crate serde;
-extern crate serde_json;
 
-#[macro_use]
-extern crate serde_derive;
+//extern crate serde;
+//extern crate serde_json;
+//#[macro_use]
+//extern crate serde_derive;
 
 extern crate csv;
 
