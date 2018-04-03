@@ -137,12 +137,18 @@ pub enum Value {
 macro_rules! compare_arrays_inner {
     ($V1:ident, $V2:ident, $F:expr) => {
         match ($V1.data(), $V2.data()) {
-            (&ArrayData::Float32(ref a), &ArrayData::Float32(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
-            (&ArrayData::Float64(ref a), &ArrayData::Float64(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
-            (&ArrayData::Int8(ref a), &ArrayData::Int8(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
-            (&ArrayData::Int16(ref a), &ArrayData::Int16(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
-            (&ArrayData::Int32(ref a), &ArrayData::Int32(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
-            (&ArrayData::Int64(ref a), &ArrayData::Int64(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Float32(ref a), &ArrayData::Float32(ref b)) =>
+                Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Float64(ref a), &ArrayData::Float64(ref b)) =>
+                Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int8(ref a), &ArrayData::Int8(ref b)) =>
+                Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int16(ref a), &ArrayData::Int16(ref b)) =>
+                Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int32(ref a), &ArrayData::Int32(ref b)) =>
+                Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int64(ref a), &ArrayData::Int64(ref b)) =>
+                Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
             //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
             _ => Err(ExecutionError::Custom("Unsupported types in compare_arrays_inner".to_string()))
         }
