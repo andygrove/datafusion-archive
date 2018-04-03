@@ -1,12 +1,11 @@
 use std::convert::From;
 use std::rc::Rc;
 
-extern crate arrow;
+use arrow::array::*;
+use arrow::datatypes::*;
 
-use self::arrow::array::*;
-use self::arrow::datatypes::*;
 use super::super::api::*;
-use super::super::exec::Value;
+use super::super::exec::{ExecutionError, Value};
 
 /// create a point from two doubles
 pub struct STPointFunc;
@@ -16,9 +15,9 @@ impl ScalarFunction for STPointFunc {
         "ST_Point".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, Box<String>> {
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
         if args.len() != 2 {
-            return Err(Box::new("Wrong argument count for ST_Point".to_string()));
+            return Err(ExecutionError::Custom("Wrong argument count for ST_Point".to_string()));
         }
         match (args[0].as_ref(), args[1].as_ref()) {
             (&Value::Column(_, ref arr1), &Value::Column(_, ref arr2)) => {
@@ -29,10 +28,10 @@ impl ScalarFunction for STPointFunc {
                         let new_array = Array::new(arr1.len() as usize, ArrayData::Struct(nested));
                         Ok(Rc::new(Value::Column(field, Rc::new(new_array))))
                     }
-                    _ => Err(Box::new("Unsupported type for ST_Point".to_string())),
+                    _ => Err(ExecutionError::Custom("Unsupported type for ST_Point".to_string())),
                 }
             }
-            _ => Err(Box::new("Unsupported type for ST_Point".to_string())),
+            _ => Err(ExecutionError::Custom("Unsupported type for ST_Point".to_string())),
         }
     }
 
@@ -59,9 +58,9 @@ impl ScalarFunction for STAsText {
         "ST_AsText".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, Box<String>> {
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
         if args.len() != 1 {
-            return Err(Box::new("Wrong argument count for ST_AsText".to_string()));
+            return Err(ExecutionError::Custom("Wrong argument count for ST_AsText".to_string()));
         }
         match args[0].as_ref() {
             &Value::Column(ref field, ref arr) => match arr.data() {
@@ -79,12 +78,12 @@ impl ScalarFunction for STAsText {
                                 Rc::new(Array::from(wkt)),
                             )))
                         }
-                        _ => Err(Box::new("Unsupported type for ST_AsText".to_string())),
+                        _ => Err(ExecutionError::Custom("Unsupported type for ST_AsText".to_string())),
                     }
                 }
-                _ => Err(Box::new("Unsupported type for ST_AsText".to_string())),
+                _ => Err(ExecutionError::Custom("Unsupported type for ST_AsText".to_string())),
             },
-            _ => Err(Box::new("Unsupported type for ST_AsText".to_string())),
+            _ => Err(ExecutionError::Custom("Unsupported type for ST_AsText".to_string())),
         }
     }
 

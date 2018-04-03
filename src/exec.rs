@@ -307,7 +307,7 @@ impl Value {
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Batch) -> Rc<Value>>;
+pub type CompiledExpr = Box<Fn(&Batch) -> Result<Rc<Value>, ExecutionError>>;
 
 /// Compiles a relational expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
@@ -317,14 +317,14 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                Rc::new(Value::Scalar(
+                Ok(Rc::new(Value::Scalar(
                     Rc::new(Field::new("lit", DataType::Int64, false)), //TODO: get data type from plan
                     literal_value.clone(),
-                ))
+                )))
             }))
         }
         &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
-            (*batch.column(index)).clone()
+            Ok((*batch.column(index)).clone())
         })),
         &Expr::BinaryExpr {
             ref left,
@@ -335,54 +335,54 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             let right_expr = compile_expr(ctx, right)?;
             match op {
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.eq(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.eq(&right_values)
                 })),
                 &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.not_eq(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.not_eq(&right_values)
                 })),
                 &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.lt(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.lt(&right_values)
                 })),
                 &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.lt_eq(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.lt_eq(&right_values)
                 })),
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.gt(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.gt(&right_values)
                 })),
                 &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.gt_eq(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.gt_eq(&right_values)
                 })),
                 &Operator::Plus => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.add(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.add(&right_values)
                 })),
                 &Operator::Minus => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.subtract(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.subtract(&right_values)
                 })),
                 &Operator::Divide => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.divide(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.divide(&right_values)
                 })),
                 &Operator::Multiply => Ok(Box::new(move |batch: &Batch| {
-                    let left_values = left_expr(batch);
-                    let right_values = right_expr(batch);
-                    left_values.multiply(&right_values).unwrap()
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.multiply(&right_values)
                 })),
                 _ => {
                     return Err(ExecutionError::Custom(format!(
@@ -408,10 +408,12 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             let func = ctx.load_function_impl(name.as_ref())?;
 
             Ok(Box::new(move |batch| {
-                let arg_values: Vec<Rc<Value>> =
-                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
+                let arg_values: Result<Vec<Rc<Value>>, ExecutionError> =
+                    compiled_args_ok.iter()
+                        .map(|expr| expr(batch))
+                        .collect();
 
-                func.execute(arg_values).unwrap()
+                func.execute(arg_values?)
             }))
         } //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
     }
@@ -464,7 +466,8 @@ impl SimpleRelation for FilterRelation {
             match b {
                 Ok(ref batch) => {
                     // evaluate the filter expression for every row in the batch
-                    match ((*filter_expr)(batch.as_ref())).as_ref() {
+                    let x = (*filter_expr)(batch.as_ref())?;
+                    match x.as_ref() {
                         &Value::Column(_, ref filter_eval) => {
                             let filtered_columns: Vec<Rc<Value>> = (0..batch.col_count())
                                 .map(move |column_index| {
@@ -583,12 +586,12 @@ impl SimpleRelation for ProjectRelation {
 
         let projection_iter = self.input.scan(ctx).map(move |r| match r {
             Ok(ref batch) => {
-                let projected_columns: Vec<Rc<Value>> =
+                let projected_columns: Result<Vec<Rc<Value>>, ExecutionError> =
                     project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
 
                 let projected_batch: Box<Batch> = Box::new(ColumnBatch {
                     row_count: batch.row_count(),
-                    columns: projected_columns.clone(),
+                    columns: projected_columns?.clone(),
                 });
 
                 Ok(projected_batch)

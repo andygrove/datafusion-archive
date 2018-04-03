@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use super::super::api::*;
-use super::super::exec::Value;
+use super::super::exec::{ExecutionError, Value};
 use arrow::array::*;
 use arrow::datatypes::*;
 
@@ -12,7 +12,7 @@ impl ScalarFunction for SqrtFunction {
         "sqrt".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, Box<String>> {
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
         match args[0].as_ref() {
             &Value::Column(_, ref arr) => {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
@@ -41,10 +41,10 @@ impl ScalarFunction for SqrtFunction {
                             v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
                         )),
                     ))),
-                    _ => Err(Box::new("Unsupported arg type for sqrt".to_string())),
+                    _ => Err(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())),
                 }
             }
-            _ => Err(Box::new("Unsupported arg type for sqrt".to_string())),
+            _ => Err(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())),
         }
     }
 
