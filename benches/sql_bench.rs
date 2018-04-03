@@ -3,12 +3,12 @@ extern crate criterion;
 
 use criterion::Criterion;
 
+extern crate arrow;
 extern crate datafusion;
-use datafusion::arrow::*;
+
+use arrow::datatypes::*;
 use datafusion::exec::*;
 use datafusion::rel::*;
-
-extern crate serde_json;
 
 fn sql() {
 
