@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
 use super::super::api::*;
-use super::super::arrow::{DataType, Field, Array, ArrayData};
+use arrow::array::*;
+use arrow::datatypes::*;
 use super::super::exec::Value;
 
 pub struct SqrtFunction {
@@ -18,10 +19,10 @@ impl ScalarFunction for SqrtFunction {
             &Value::Column(_, ref arr)=> {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match arr.data() {
-                    &ArrayData::Float32(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::new(ArrayData::Float32(v.iter().map(|v| v.sqrt()).collect())))))),
-                    &ArrayData::Float64(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| v.sqrt()).collect())))))),
-                    &ArrayData::Int32(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect())))))),
-                    &ArrayData::Int64(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::new(ArrayData::Float64(v.iter().map(|v| (*v as f64).sqrt()).collect())))))),
+                    &ArrayData::Float32(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::from(v.iter().map(|v| v.sqrt()).collect::<Vec<f32>>()))))),
+                    &ArrayData::Float64(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::from(v.iter().map(|v| v.sqrt()).collect::<Vec<f64>>()))))),
+                    &ArrayData::Int32(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::from(v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>()))))),
+                    &ArrayData::Int64(ref v) => Ok(Rc::new(Value::Column(field, Rc::new(Array::from(v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>()))))),
                     _ => Err(Box::new("Unsupported arg type for sqrt".to_string()))
                 }
             },

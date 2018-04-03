@@ -14,7 +14,8 @@
 
 use std::io::Error;
 
-use super::arrow::*;
+use arrow::datatypes::*;
+
 use super::rel::*;
 use super::exec::*;
 

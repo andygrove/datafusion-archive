@@ -16,12 +16,13 @@ use std::io::{BufReader};
 use std::fs::File;
 use std::rc::Rc;
 
-use super::super::arrow::*;
+use super::super::arrow::array::*;
+use super::super::arrow::datatypes::*;
 use super::super::exec::*;
 use super::super::rel::*;
 
-extern crate bytes;
-use self::bytes::*;
+//extern crate bytes;
+//use self::bytes::*;
 
 extern crate csv;
 use super::super::csv::StringRecord;
@@ -114,52 +115,65 @@ impl<'a> Iterator for CsvIterator<'a> {
             let field = Field::new(&name, self.schema.columns[i].data_type.clone(), false);
 
             let values : Array = match self.schema.columns[i].data_type {
+                DataType::Boolean => {
+                    Array::from(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Boolean(v) => v,
+                            _ => panic!()
+                        }).collect::<Vec<bool>>())
+                },
                 DataType::Float32 => {
-                    Array::new(ArrayData::Float32(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Float32(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<f32>>())
                 },
                 DataType::Float64 => {
-                    Array::new(ArrayData::Float64(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Float64(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<f64>>())
                 },
                 DataType::Int32 => {
-                    Array::new(ArrayData::Int32(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Int32(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<i32>>())
                 },
                 DataType::Int64 => {
-                    Array::new(ArrayData::Int64(
+                    Array::from(
                         rows.iter().map(|row| match &row[i] {
                             &ScalarValue::Int64(v) => v,
                             _ => panic!()
-                        }).collect()))
+                        }).collect::<Vec<i64>>())
                 },
                 DataType::Utf8 => {
+                    //TODO: this can be optimized to avoid creating strings once arrow stabilizes
+                    Array::from(
+                        rows.iter().map(|row| match &row[i] {
+                            &ScalarValue::Utf8(ref v) => v.clone(),
+                            _ => panic!()
+                        }).collect::<Vec<String>>())
 
-                    let mut offsets : Vec<i32> = Vec::with_capacity(rows.len() + 1);
-                    let mut buf = BytesMut::with_capacity(rows.len() * 32);
-
-                    offsets.push(0_i32);
-
-                    rows.iter().for_each(|row| match &row[i] {
-                        &ScalarValue::Utf8(ref v) => {
-                            buf.put(v.as_bytes());
-                            offsets.push(buf.len() as i32);
-                        },
-                        _ => panic!()
-                    });
-
-                    let bytes: Bytes = buf.freeze();
-
-                    Array::new(ArrayData::Utf8(ListData { offsets, bytes }))
+//                    let mut offsets : Vec<i32> = Vec::with_capacity(rows.len() + 1);
+//                    let mut buf = BytesMut::with_capacity(rows.len() * 32);
+//
+//                    offsets.push(0_i32);
+//
+//                    rows.iter().for_each(|row| match &row[i] {
+//                        &ScalarValue::Utf8(ref v) => {
+//                            buf.put(v.as_bytes());
+//                            offsets.push(buf.len() as i32);
+//                        },
+//                        _ => panic!()
+//                    });
+//
+//                    let bytes: Bytes = buf.freeze();
+//
+//                    Array::new(rows.len(), ArrayData::Utf8(ListData { offsets, bytes }))
                 },
                 _ => unimplemented!()
             };

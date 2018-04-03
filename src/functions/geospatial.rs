@@ -1,7 +1,11 @@
+use std::convert::From;
 use std::rc::Rc;
 
+extern crate arrow;
+
+use self::arrow::array::*;
+use self::arrow::datatypes::*;
 use super::super::api::*;
-use super::super::arrow::{DataType, Field, Array, ArrayData};
 use super::super::exec::Value;
 
 /// create a point from two doubles
@@ -22,9 +26,11 @@ impl ScalarFunction for STPointFunc {
             (&Value::Column(_, ref arr1), &Value::Column(_, ref arr2)) => {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match (arr1.data(), arr2.data()) {
-                    (&ArrayData::Float64(_), &ArrayData::Float64(_)) =>
-                        Ok(Rc::new(Value::Column(field, Rc::new(Array::new(
-                            ArrayData::Struct(vec![arr1.clone(), arr2.clone()])))))),
+                    (&ArrayData::Float64(_), &ArrayData::Float64(_)) => {
+                        let nested: Vec<Rc<Array>> = vec![arr1.clone(), arr2.clone()];
+                        let new_array = Array::new(arr1.len() as usize, ArrayData::Struct(nested));
+                        Ok(Rc::new(Value::Column(field, Rc::new(new_array))))
+                    },
                     _ => Err(Box::new("Unsupported type for ST_Point".to_string()))
                 }
             },
@@ -64,12 +70,13 @@ impl ScalarFunction for STAsText {
             &Value::Column(ref field, ref arr) => match arr.data() {
                 &ArrayData::Struct(ref fields) => match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
                     (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
-                        let array = Array::new(ArrayData::from_strings(
-                            lat.iter().zip(lon.iter())
-                                .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
-                                .collect()));
 
-                        Ok(Rc::new(Value::Column(field.clone(), Rc::new(array))))
+//                        println!("lat.len() = {}, lng.len = {}", lat.len(), lon.len());
+
+                        let wkt : Vec<String> = lat.iter().zip(lon.iter())
+                            .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
+                            .collect();
+                        Ok(Rc::new(Value::Column(field.clone(), Rc::new(Array::from(wkt)))))
                     },
                     _ => Err(Box::new("Unsupported type for ST_AsText".to_string()))
                 },

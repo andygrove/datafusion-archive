@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod api;
-pub mod arrow;
 pub mod cluster;
 pub mod dataframe;
 pub mod datasource;
@@ -25,11 +24,11 @@ pub mod sqltorel;
 pub mod parser;
 pub mod persist;
 
-extern crate serde;
-extern crate serde_json;
-
-#[macro_use]
-extern crate serde_derive;
-
+extern crate arrow;
+extern crate bytes;
 extern crate csv;
+extern crate etcd;
+extern crate futures;
+extern crate hyper;
+extern crate tokio_core;
 

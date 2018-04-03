@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate arrow;
 extern crate datafusion;
-use datafusion::arrow::*;
+use arrow::datatypes::*;
 use datafusion::exec::*;
 use datafusion::rel::*;
-
-extern crate serde_json;
 
 /// This example shows the use of the DataFrame API to define a query plan
 fn main() {

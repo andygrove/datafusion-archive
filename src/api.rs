@@ -14,7 +14,8 @@
 
 use std::rc::Rc;
 
-use super::arrow::{DataType, Field};
+//use self::arrow::array::*;
+use arrow::datatypes::*;
 use super::exec::Value;
 
 /// Scalar function. User-defined implementations will be dynamically loaded at runtime.

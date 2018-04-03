@@ -23,28 +23,22 @@ use std::str;
 use std::string::String;
 use std::convert::*;
 
-extern crate bytes;
-extern crate futures;
-extern crate hyper;
-extern crate serde;
-extern crate serde_json;
-extern crate tokio_core;
+use arrow::array::*;
+use arrow::datatypes::*;
 
-use self::bytes::{BytesMut, BufMut};
-use self::futures::{Future, Stream};
-use self::hyper::Client;
-use self::tokio_core::reactor::Core;
-use self::hyper::{Method, Request};
-use self::hyper::header::{ContentLength, ContentType};
+//use futures::{Future, Stream};
+//use hyper::Client;
+//use tokio_core::reactor::Core;
+//use hyper::{Method, Request};
+//use hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
-use super::arrow::{Schema, DataType, Field, Array, ArrayData, ListData};
 use super::datasource::csv::CsvRelation;
 use super::rel::*;
 use super::sql::ASTNode::*;
 use super::sqltorel::*;
 use super::parser::*;
-use super::cluster::*;
+//use super::cluster::*;
 use super::dataframe::*;
 use super::functions::math::*;
 use super::functions::geospatial::*;
@@ -110,7 +104,7 @@ impl Batch for ColumnBatch {
     }
 
     fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
-        //println!("row_slice() index = {}", index);
+//        println!("row_slice() row = {} of {}", index, self.row_count);
         self.columns.iter().map(|c| match c.as_ref() {
             &Value::Scalar(_, ref v) => v.clone(),
             &Value::Column(_, ref v) => get_value(v, index)
@@ -119,270 +113,132 @@ impl Batch for ColumnBatch {
     }
 }
 
-
-
-
 pub enum Value {
     Column(Rc<Field>,Rc<Array>),
     Scalar(Rc<Field>,ScalarValue)
 }
 
+//macro_rules! compare_column_to_scalar {
+//    ($TY:ident, $EXPR:expr) => {
+//        match (l, r) {
+//            (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int8(ref a), &ScalarValue::Int8(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int16(ref a), &ScalarValue::Int16(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int32(ref a), &ScalarValue::Int32(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int64(ref a), &ScalarValue::Int64(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
+//            _ => unimplemented!()
+//        };
+//
+//    }
+//}
+
+
+macro_rules! compare_arrays_inner {
+    ($V1:ident, $V2:ident, $F:expr) => {
+        match ($V1.data(), $V2.data()) {
+            (&ArrayData::Float32(ref a), &ArrayData::Float32(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Float64(ref a), &ArrayData::Float64(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int8(ref a), &ArrayData::Int8(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int16(ref a), &ArrayData::Int16(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int32(ref a), &ArrayData::Int32(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int64(ref a), &ArrayData::Int64(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
+            _ => Err(ExecutionError::Custom("Unsupported types in compare_arrays_inner".to_string()))
+        }
+    }
+}
+
+
+macro_rules! compare_arrays {
+    ($NAME:expr, $F1:ident, $V1:ident, $F2:ident, $V2:ident, $F:expr) => {
+        Ok(Rc::new(Value::Column(
+            Rc::new(Field::new($NAME, $F1.data_type.clone(), false)),
+            Rc::new(Array::from(compare_arrays_inner!($V1, $V2, $F)?))
+        )))
+    }
+}
+
+macro_rules! compare_array_with_scalar_inner {
+    ($V1:ident, $V2:ident, $F:expr) => {
+        match ($V1.data(), $V2) {
+            (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => Ok(a.iter().map(|aa| (aa,b)).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => Ok(a.iter().map(|aa| (aa,b)).map($F).collect::<Vec<bool>>()),
+            _ => Err(ExecutionError::Custom("Unsupported types in compare_array_with_scalar_inner".to_string()))
+        }
+    }
+}
+
+macro_rules! compare_array_with_scalar {
+    ($NAME:expr, $F1:ident, $V1:ident, $F2:ident, $V2:ident, $F:expr) => {
+        Ok(Rc::new(Value::Column(
+            Rc::new(Field::new($NAME, $F1.data_type.clone(), false)),
+            Rc::new(Array::from(compare_array_with_scalar_inner!($V1, $V2, $F)?))
+        )))
+    }
+}
+
 impl Value {
 
-    //TODO use macros to implement the bulk of this code
-
-    pub fn eq(&self, other: &Value) -> Rc<Value> {
+    pub fn eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
-                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a==b).collect(),
-                    (&ArrayData::Utf8( ListData { offsets : ref l_offsets, bytes: ref l_bytes }),
-                        &ArrayData::Utf8( ListData { offsets: ref r_offsets, bytes: ref r_bytes })) => {
-                        assert_eq!(l_offsets.len(), r_offsets.len());
-                        (0 .. l_offsets.len()-1).into_iter().map(|i| {
-                            let l_string = &l_bytes[l_offsets[i] as usize .. l_offsets[i+1] as usize];
-                            let r_string = &r_bytes[r_offsets[i] as usize .. r_offsets[i+1] as usize];
-                            l_string == r_string
-                        }).collect()
-                    },
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
-                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a==&b).collect(),
-                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a==&b).collect(),
-                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a==&b).collect(),
-                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a==&b).collect(),
-                    //(&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a==b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            _ => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("==", f1, v1, _f2, v2, |(aa,bb)| aa == bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v1, _f2, v2, |(aa,bb)| aa == bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa == bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
-    pub fn not_eq(&self, other: &Value) -> Rc<Value> {
+    pub fn not_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
-                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a!=b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
-                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a!=&b).collect(),
-                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a!=&b).collect(),
-                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a!=&b).collect(),
-                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a!=&b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a!=b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            _ => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("!=", f1, v1, _f2, v2, |(aa,bb)| aa != bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("!=", f1, v1, _f2, v2, |(aa,bb)| aa != bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa != bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
-    pub fn lt(&self, other: &Value) -> Rc<Value> {
+    pub fn lt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
-                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
-                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<&b).collect(),
-                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<&b).collect(),
-                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<&b).collect(),
-                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<&b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            _ => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("<", f1, v1, _f2, v2, |(aa,bb)| aa < bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("<", f1, v1, _f2, v2, |(aa,bb)| aa < bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa < bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
-    pub fn lt_eq(&self, other: &Value) -> Rc<Value> {
+    pub fn lt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
-                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a<=b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
-                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a<=&b).collect(),
-                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a<=&b).collect(),
-                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a<=&b).collect(),
-                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a<=&b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a<=b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            _ => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("<", f1, v1, _f2, v2, |(aa,bb)| aa <= bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("<", f1, v1, _f2, v2, |(aa,bb)| aa <= bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa <= bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
-    pub fn gt(&self, other: &Value) -> Rc<Value> {
+    pub fn gt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
-                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
-                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>&b).collect(),
-                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>&b).collect(),
-                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>&b).collect(),
-                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>&b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            _ => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!(">", f1, v1, _f2, v2, |(aa,bb)| aa >= bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!(">", f1, v1, _f2, v2, |(aa,bb)| aa >= bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa >= bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
-    pub fn gt_eq(&self, other: &Value) -> Rc<Value> {
+    pub fn gt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                let bools = match (v1.data(), v2.data()) {
-                    (&ArrayData::Float32(ref l), &ArrayData::Float32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                    (&ArrayData::Float64(ref l), &ArrayData::Float64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                    (&ArrayData::Int32(ref l), &ArrayData::Int32(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                    (&ArrayData::Int64(ref l), &ArrayData::Int64(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ArrayData::Utf8(ref r)) => l.iter().zip(r.iter()).map(|(a,b)| a>=b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                let bools = match (v1.data(), v2) {
-                    (&ArrayData::Float32(ref l), &ScalarValue::Float32(b)) => l.iter().map(|a| a>=&b).collect(),
-                    (&ArrayData::Float64(ref l), &ScalarValue::Float64(b)) => l.iter().map(|a| a>=&b).collect(),
-                    (&ArrayData::Int32(ref l), &ScalarValue::Int32(b)) => l.iter().map(|a| a>=&b).collect(),
-                    (&ArrayData::Int64(ref l), &ScalarValue::Int64(b)) => l.iter().map(|a| a>=&b).collect(),
-//                    (&ArrayData::Utf8(ref l), &ScalarValue::Utf8(ref b)) => l.iter().map(|a| a>=b).collect(),
-                    _ => unimplemented!()
-                };
-
-                Rc::new(Value::Column(
-                    Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                    Rc::new(Array::new(ArrayData::Boolean(bools)))
-                ))
-
-            },
-            _ => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!(">", f1, v1, _f2, v2, |(aa,bb)| aa > bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!(">", f1, v1, _f2, v2, |(aa,bb)| aa > bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa > bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
-    pub fn add(&self, _other: &Value) -> Rc<Value> {
-        unimplemented!()
-    }
-
-    pub fn subtract(&self, _other: &Value) -> Rc<Value> {
-        unimplemented!()
-    }
-
-    pub fn multiply(&self, _other: &Value) -> Rc<Value> {
-        unimplemented!()
-    }
-
-    pub fn divide(&self, _other: &Value) -> Rc<Value> {
-        unimplemented!()
-    }
-
+    pub fn add(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> { unimplemented!() }
+    pub fn subtract(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> { unimplemented!() }
+    pub fn divide(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> { unimplemented!() }
+    pub fn multiply(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> { unimplemented!() }
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
@@ -413,52 +269,52 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.eq(&right_values)
+                    left_values.eq(&right_values).unwrap()
                 })),
                 &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.not_eq(&right_values)
+                    left_values.not_eq(&right_values).unwrap()
                 })),
                 &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.lt(&right_values)
+                    left_values.lt(&right_values).unwrap()
                 })),
                 &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.lt_eq(&right_values)
+                    left_values.lt_eq(&right_values).unwrap()
                 })),
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.gt(&right_values)
+                    left_values.gt(&right_values).unwrap()
                 })),
                 &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.gt_eq(&right_values)
+                    left_values.gt_eq(&right_values).unwrap()
                 })),
                 &Operator::Plus => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.add(&right_values)
+                    left_values.add(&right_values).unwrap()
                 })),
                 &Operator::Minus => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.subtract(&right_values)
+                    left_values.subtract(&right_values).unwrap()
                 })),
                 &Operator::Divide => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.divide(&right_values)
+                    left_values.divide(&right_values).unwrap()
                 })),
                 &Operator::Multiply => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.multiply(&right_values)
+                    left_values.multiply(&right_values).unwrap()
                 })),
                 _ => return Err(ExecutionError::Custom(format!("Unsupported binary operator '{:?}'", op)))
             }
@@ -684,7 +540,7 @@ impl SimpleRelation for LimitRelation {
 }
 
 /// Execution plans are sent to worker nodes for execution
-#[derive(Debug,Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone)]
 pub enum PhysicalPlan {
     /// Run a query and return the results to the client
     Interactive { plan: Box<LogicalPlan> },
@@ -990,51 +846,56 @@ impl ExecutionContext {
         }
     }
 
-    fn execute_remote(&self, physical_plan: &PhysicalPlan, etcd: String) -> Result<ExecutionResult, ExecutionError> {
-        let workers = get_worker_list(&etcd);
-
-        match workers {
-            Ok(ref list) if list.len() > 0 => {
-                let worker_uri = format!("http://{}", list[0]);
-                match worker_uri.parse() {
-                    Ok(uri) => {
-
-                        let mut core = Core::new().unwrap();
-                        let client = Client::new(&core.handle());
-
-                        // serialize plan to JSON
-                        match serde_json::to_string(&physical_plan) {
-                            Ok(json) => {
-                                let mut req = Request::new(Method::Post, uri);
-                                req.headers_mut().set(ContentType::json());
-                                req.headers_mut().set(ContentLength(json.len() as u64));
-                                req.set_body(json);
-
-                                let post = client.request(req).and_then(|res| {
-                                    //println!("POST: {}", res.status());
-                                    res.body().concat2()
-                                });
-
-                                match core.run(post) {
-                                    Ok(result) => {
-                                        //TODO: parse result
-                                        let result = str::from_utf8(&result).unwrap();
-                                        println!("{}", result);
-                                        Ok(ExecutionResult::Unit)
-                                    }
-                                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
-                                }
-                            }
-                            Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
-                        }
-                    }
-                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
-                }
-            }
-            Ok(_) => Err(ExecutionError::Custom(format!("No workers found in cluster"))),
-            Err(e) => Err(ExecutionError::Custom(format!("Failed to find a worker node: {}", e)))
-        }
+    fn execute_remote(&self, _physical_plan: &PhysicalPlan, _etcd: String) -> Result<ExecutionResult, ExecutionError> {
+        Err(ExecutionError::Custom(format!("Remote execution needs re-implementing since moving to Arrow")))
     }
+
+//        let workers = get_worker_list(&etcd);
+//
+//        match workers {
+//            Ok(ref list) if list.len() > 0 => {
+//                let worker_uri = format!("http://{}", list[0]);
+//                match worker_uri.parse() {
+//                    Ok(uri) => {
+//
+//                        let mut core = Core::new().unwrap();
+//                        let client = Client::new(&core.handle());
+//
+//                        // serialize plan to JSON
+//                        match serde_json::to_string(&physical_plan) {
+//                            Ok(json) => {
+//                                let mut req = Request::new(Method::Post, uri);
+//                                req.headers_mut().set(ContentType::json());
+//                                req.headers_mut().set(ContentLength(json.len() as u64));
+//                                req.set_body(json);
+//
+//                                let post = client.request(req).and_then(|res| {
+//                                    //println!("POST: {}", res.status());
+//                                    res.body().concat2()
+//                                });
+//
+//                                match core.run(post) {
+//                                    Ok(result) => {
+//                                        //TODO: parse result
+//                                        let result = str::from_utf8(&result).unwrap();
+//                                        println!("{}", result);
+//                                        Ok(ExecutionResult::Unit)
+//                                    }
+//                                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+//                                }
+//                            }
+//                            Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+//                        }
+//
+//
+//                    }
+//                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+//                }
+//            }
+//            Ok(_) => Err(ExecutionError::Custom(format!("No workers found in cluster"))),
+//            Err(e) => Err(ExecutionError::Custom(format!("Failed to find a worker node: {}", e)))
+//        }
+//    }
 }
 
 pub struct DF {
@@ -1100,6 +961,69 @@ impl DataFrame for DF {
         self.plan.clone()
     }
 }
+
+pub fn get_value(column: &Array, index: usize) -> ScalarValue {
+    //println!("get_value() index={}", index);
+    let v = match column.data() {
+        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
+        &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
+        &ArrayData::Float64(ref v) => ScalarValue::Float64(*v.get(index)),
+        &ArrayData::Int8(ref v) => ScalarValue::Int8(*v.get(index)),
+        &ArrayData::Int16(ref v) => ScalarValue::Int16(*v.get(index)),
+        &ArrayData::Int32(ref v) => ScalarValue::Int32(*v.get(index)),
+        &ArrayData::Int64(ref v) => ScalarValue::Int64(*v.get(index)),
+        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(*v.get(index)),
+        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(*v.get(index)),
+        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
+        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
+        &ArrayData::Utf8(ref data) => {
+            ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap() ))
+        },
+        &ArrayData::Struct(ref v) => {
+            // v is Vec<ArrayData>
+            // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
+            //            println!("get_value() complex value has {} fields", v.len());
+            let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
+            ScalarValue::Struct(fields)
+        }
+    };
+//    println!("get_value() index={} returned {:?}", index, v);
+    v
+}
+
+pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
+    match column.as_ref() {
+        &Value::Scalar(_, _) => unimplemented!(),
+        &Value::Column(_, ref arr) =>
+            match bools.data() {
+                &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
+                    &ArrayData::Boolean(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<bool>>()),
+                    &ArrayData::Float32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<f32>>()),
+                    &ArrayData::Float64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<f64>>()),
+                    //&ArrayData::UInt8(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u8>>()),
+                    &ArrayData::UInt16(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u16>>()),
+                    &ArrayData::UInt32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u32>>()),
+                    &ArrayData::UInt64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u64>>()),
+                    &ArrayData::Int8(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i8>>()),
+                    &ArrayData::Int16(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i16>>()),
+                    &ArrayData::Int32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i32>>()),
+                    &ArrayData::Int64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i64>>()),
+                    &ArrayData::Utf8(ref v) => {
+                        let mut x : Vec<String> = Vec::with_capacity(b.len() as usize);
+                        for i in 0..b.len() as usize {
+                            if *b.get(i) {
+                                x.push(String::from_utf8(v.slice(i as usize).to_vec()).unwrap());
+                            }
+                        }
+                        Array::from(x)
+                    }
+                    _ => unimplemented!()
+                },
+                _ => panic!()
+            }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -1251,68 +1175,28 @@ mod tests {
 
         ctx
     }
-}
 
+    #[test]
+    fn sql_query_example() {
+        // create execution context
+        let mut ctx = ExecutionContext::local("./test/data".to_string());
 
-pub fn get_value(column: &Array, index: usize) -> ScalarValue {
-    //println!("get_value() index={}", index);
-    let v = match column.data() {
-        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(v[index]),
-        &ArrayData::Float32(ref v) => ScalarValue::Float32(v[index]),
-        &ArrayData::Float64(ref v) => ScalarValue::Float64(v[index]),
-        &ArrayData::Int8(ref v) => ScalarValue::Int8(v[index]),
-        &ArrayData::Int16(ref v) => ScalarValue::Int16(v[index]),
-        &ArrayData::Int32(ref v) => ScalarValue::Int32(v[index]),
-        &ArrayData::Int64(ref v) => ScalarValue::Int64(v[index]),
-        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(v[index]),
-        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(v[index]),
-        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(v[index]),
-        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(v[index]),
-        &ArrayData::Utf8(ref data) => {
-            ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap() ))
-        },
-        &ArrayData::Struct(ref v) => {
-            // v is Vec<ArrayData>
-            // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
-            //            println!("get_value() complex value has {} fields", v.len());
-            let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
-            ScalarValue::Struct(fields)
-        }
-    };
-    //  println!("get_value() index={} returned {:?}", index, v);
+        // define an external table (csv file)
+        ctx.sql("CREATE EXTERNAL TABLE uk_cities (\
+        city VARCHAR(100), \
+        lat DOUBLE, \
+        lng DOUBLE)").unwrap();
 
-    v
-}
+        // define the SQL statement
+        let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities WHERE lat < 53.0";
 
-pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
-    match column.as_ref() {
-        &Value::Scalar(_, _) => unimplemented!(),
-        &Value::Column(_, ref arr) =>
-            match bools.data() {
-                &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
-                    &ArrayData::Boolean(ref v) => Array::new(ArrayData::Boolean(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Float32(ref v) => Array::new(ArrayData::Float32(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Float64(ref v) => Array::new(ArrayData::Float64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Int32(ref v) => Array::new(ArrayData::Int32(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Int64(ref v) => Array::new(ArrayData::Int64(v.iter().zip(b.iter()).filter(|&(_, f)| *f).map(|(v, _)| *v).collect())),
-                    &ArrayData::Utf8(ListData { ref offsets, ref bytes }) => {
+        // create a data frame
+        let df1 = ctx.sql(&sql).unwrap();
 
-                        let mut new_offsets : Vec<i32> = Vec::with_capacity(offsets.len());
-                        let mut new_bytes = BytesMut::with_capacity(offsets.len() * 32);
-                        new_offsets.push(0_i32);
-                        (0 .. offsets.len()-1).into_iter().for_each(|i| {
-                            if b[i] {
-                                new_bytes.put(&bytes[offsets[i] as usize .. offsets[i+1] as usize]);
-                                new_offsets.push(new_bytes.len() as i32);
-                            }
-                        });
+        // write the results to a file
+        ctx.write(df1,"_southern_cities.csv").unwrap();
 
-                        Array::new(ArrayData::Utf8(ListData { offsets: new_offsets, bytes: new_bytes.freeze() }))
-                    }
-                    _ => unimplemented!()
-                },
-                _ => panic!()
-            }
     }
 }
+
 

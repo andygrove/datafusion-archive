@@ -25,17 +25,15 @@ extern crate etcd;
 extern crate futures;
 extern crate futures_timer;
 extern crate hyper;
-extern crate serde;
-extern crate serde_json;
 extern crate tokio_core;
 extern crate uuid;
 
 use clap::{Arg, App};
 use etcd::Client;
 use etcd::kv;
-use datafusion::exec::*;
+//use datafusion::exec::*;
 use futures::future::{ok, loop_fn, Future, Loop};
-use futures::Stream;
+//use futures::Stream;
 use hyper::{Method, StatusCode};
 use hyper::client::HttpConnector;
 use hyper::header::{ContentLength};
@@ -185,83 +183,86 @@ impl Service for Worker {
             }
             &Method::Post => { // all REST calls are POST
 
-                let data_dir = self.data_dir.clone();
+//                let data_dir = self.data_dir.clone();
+//
+//                Box::new(req.body().concat2()
+//                    .and_then(move |body| {
+//                        let json = str::from_utf8(&body).unwrap();
+//                        //println!("{}", json);
+//
+//                        println!("Received request");
+//                        //println!("Request: {}", json_str);
+//
+//                        // this is a crude POC that demonstrates the worker receiving a plan, executing it,
+//                        // and returning a result set
+//
+//                        //TODO: should stream results to client, not build a result set in memory
+//                        //TODO: decide on a more appropriate format to return than csv
+//                        //TODO: should not create a new execution context each time
+//
+//                        ok(match serde_json::from_str(&json) {
+//                            Ok(plan) => {
+//                                //println!("Plan: {:?}", plan);
+//
+//                                // create execution context
+//                                let mut ctx = ExecutionContext::local(data_dir.clone());
+//
+//                                match plan {
+//                                    PhysicalPlan::Interactive { plan } => {
+//                                        match ctx.create_execution_plan(data_dir.clone(), &plan) {
+//                                            Ok(mut exec) => {
+//                                                let it = exec.scan(&ctx);
+//                                                let mut result_set = "".to_string();
+//
+//                                                it.for_each(|t| {
+//                                                    match t {
+//                                                        Ok(batch) => {
+//                                                            for i in 0 .. batch.row_count() {
+//                                                                let s : Vec<String> = batch.row_slice(i).iter()
+//                                                                    .map(|v| v.to_string())
+//                                                                    .collect();
+//                                                                result_set += &s.join(",");
+//                                                                result_set += "\n";
+//
+//                                                            }
+//                                                        },
+//                                                        Err(e) => {
+//                                                            result_set += &format!("ERROR: {:?}", e);
+//                                                            result_set += "\n";
+//                                                        }
+//                                                    }
+//                                                });
+//
+//                                                Response::new()
+//                                                    .with_status(StatusCode::Ok)
+//                                                    .with_header(ContentLength(result_set.len() as u64))
+//                                                    .with_body(result_set)
+//                                            },
+//                                            Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
+//                                        }
+//
+//                                    },
+//                                    PhysicalPlan::Write { plan, filename } => {
+//                                        println!("Writing dataframe to {}", filename);
+//                                        let df = DF { plan: plan };
+//                                        match ctx.write(Box::new(df), &filename) {
+//                                            Ok(count) => {
+//                                                println!("Wrote {} rows to {}", count, filename);
+//                                                Response::new().with_status(StatusCode::Ok)
+//                                            },
+//                                            Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
+//                                        }
+//                                    }
+//                                    //_ => error_response(format!("Unsupported execution plan"))
+//                                }
+//
+//                            },
+//                            Err(e) => error_response(format!("Failed to parse execution plan: {:?}", e))
+//                        })
 
-                Box::new(req.body().concat2()
-                    .and_then(move |body| {
-                        let json = str::from_utf8(&body).unwrap();
-                        //println!("{}", json);
-
-                        println!("Received request");
-                        //println!("Request: {}", json_str);
-
-                        // this is a crude POC that demonstrates the worker receiving a plan, executing it,
-                        // and returning a result set
-
-                        //TODO: should stream results to client, not build a result set in memory
-                        //TODO: decide on a more appropriate format to return than csv
-                        //TODO: should not create a new execution context each time
-
-                        ok(match serde_json::from_str(&json) {
-                            Ok(plan) => {
-                                //println!("Plan: {:?}", plan);
-
-                                // create execution context
-                                let mut ctx = ExecutionContext::local(data_dir.clone());
-
-                                match plan {
-                                    PhysicalPlan::Interactive { plan } => {
-                                        match ctx.create_execution_plan(data_dir.clone(), &plan) {
-                                            Ok(mut exec) => {
-                                                let it = exec.scan(&ctx);
-                                                let mut result_set = "".to_string();
-
-                                                it.for_each(|t| {
-                                                    match t {
-                                                        Ok(batch) => {
-                                                            for i in 0 .. batch.row_count() {
-                                                                let s : Vec<String> = batch.row_slice(i).iter()
-                                                                    .map(|v| v.to_string())
-                                                                    .collect();
-                                                                result_set += &s.join(",");
-                                                                result_set += "\n";
-
-                                                            }
-                                                        },
-                                                        Err(e) => {
-                                                            result_set += &format!("ERROR: {:?}", e);
-                                                            result_set += "\n";
-                                                        }
-                                                    }
-                                                });
-
-                                                Response::new()
-                                                    .with_status(StatusCode::Ok)
-                                                    .with_header(ContentLength(result_set.len() as u64))
-                                                    .with_body(result_set)
-                                            },
-                                            Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
-                                        }
-
-                                    },
-                                    PhysicalPlan::Write { plan, filename } => {
-                                        println!("Writing dataframe to {}", filename);
-                                        let df = DF { plan: plan };
-                                        match ctx.write(Box::new(df), &filename) {
-                                            Ok(count) => {
-                                                println!("Wrote {} rows to {}", count, filename);
-                                                Response::new().with_status(StatusCode::Ok)
-                                            },
-                                            Err(e) => error_response(format!("Failed to create execution plan: {:?}", e))
-                                        }
-                                    }
-                                    //_ => error_response(format!("Unsupported execution plan"))
-                                }
-
-                            },
-                            Err(e) => error_response(format!("Failed to parse execution plan: {:?}", e))
-                        })
-                    }))
+                Box::new(futures::future::ok(
+                        error_response(format!("distributed jobs not supported at the moment"))
+                ))
 
             }
             _ => {
