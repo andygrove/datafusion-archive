@@ -118,38 +118,99 @@ impl Batch for ColumnBatch {
     }
 }
 
-
-
-
 pub enum Value {
     Column(Rc<Field>,Rc<Array>),
     Scalar(Rc<Field>,ScalarValue)
 }
 
+//macro_rules! compare_column_to_scalar {
+//    ($TY:ident, $EXPR:expr) => {
+//        match (l, r) {
+//            (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int8(ref a), &ScalarValue::Int8(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int16(ref a), &ScalarValue::Int16(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int32(ref a), &ScalarValue::Int32(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            (&ArrayData::Int64(ref a), &ScalarValue::Int64(b)) => Ok(a.iter().map(|n| n > b).collect(),
+//            //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
+//            _ => unimplemented!()
+//        };
+//
+//    }
+//}
+
+//TODO: all expression evaluation should return Result
+
+macro_rules! compare_arrays_inner {
+    ($V1:ident, $V2:ident, $F:expr) => {
+        match ($V1.data(), $V2.data()) {
+            (&ArrayData::Float32(ref a), &ArrayData::Float32(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Float64(ref a), &ArrayData::Float64(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int8(ref a), &ArrayData::Int8(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int16(ref a), &ArrayData::Int16(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int32(ref a), &ArrayData::Int32(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            (&ArrayData::Int64(ref a), &ArrayData::Int64(ref b)) => Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
+            //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
+            _ => Err(ExecutionError::Custom("Unsupported types in compare_arrays_inner".to_string()))
+        }
+    }
+}
+
+
+macro_rules! compare_arrays {
+    ($NAME:expr, $F1:ident, $V1:ident, $F2:ident, $V2:ident, $F:expr) => {
+        Ok(Rc::new(Value::Column(
+            Rc::new(Field::new($NAME, $F1.data_type.clone(), false)),
+            Rc::new(Array::from(compare_arrays_inner!($V1, $V2, $F)?))
+        )))
+    }
+}
+
 impl Value {
+
     pub fn eq(&self, other: &Value) -> Rc<Value> { unimplemented!() }
     pub fn not_eq(&self, other: &Value) -> Rc<Value> { unimplemented!() }
     pub fn lt(&self, other: &Value) -> Rc<Value> { unimplemented!() }
     pub fn lt_eq(&self, other: &Value) -> Rc<Value> { unimplemented!() }
 
-    pub fn gt(&self, other: &Value) -> Rc<Value> {
+    pub fn gt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(_, ref v2)) => {
-                unimplemented!()
-            },
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
-                match (v1.data(), v2) {
-                    (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => {
-                        let bools : Vec<bool> = a.iter().map(|n| n > b).collect();
-                        Rc::new(Value::Column(
-                            Rc::new(Field::new("eq", f1.data_type.clone(), false)),
-                            Rc::new(Array::from(bools))
-                        ))
-                    },
-                    _ => unimplemented!()
-                }
-            },
-            _ => unimplemented!()
+//            (&Value::Scalar(ref f1, ref v1), &Value::Scalar(_, ref v2)) => {
+//                Ok(Rc::new(Value::Scalar(
+//                    Rc::new(Field::new("gt", f1.data_type.clone(), false)),
+//                    ScalarValue::Boolean(v1>v2)
+//                )))
+//            },
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_arrays!(">", f1, v1, f2, v2, |(aa,bb)| aa > bb),
+    //        (&Value::Column(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => compare_array_with_scalar!(">", f1, v1, f2, v2, |(aa,bb)| aa > bb),
+//                let bools : Vec<bool> = match (v1.data(), v2) {
+//                    (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => a.iter().map(|n| n > b).collect(),
+//                    (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => a.iter().map(|n| n > b).collect(),
+//                    (&ArrayData::Int8(ref a), &ScalarValue::Int8(b)) => a.iter().map(|n| n > b).collect(),
+//                    (&ArrayData::Int16(ref a), &ScalarValue::Int16(b)) => a.iter().map(|n| n > b).collect(),
+//                    (&ArrayData::Int32(ref a), &ScalarValue::Int32(b)) => a.iter().map(|n| n > b).collect(),
+//                    (&ArrayData::Int64(ref a), &ScalarValue::Int64(b)) => a.iter().map(|n| n > b).collect(),
+//                    //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
+//                    _ => unimplemented!()
+//                };
+//                Rc::new(Value::Column(
+//                    Rc::new(Field::new("gt", f1.data_type.clone(), false)),
+//                    Rc::new(Array::from(bools))
+//                ))
+//            },
+//            (&Value::Scalar(ref f1, ref v2), &Value::Column(_, ref v1)) => {
+//                let bools : Vec<bool> = match (v1.data(), v2) {
+//                    (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => a.iter().map(|n| n > b).collect(),
+//                    (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => a.iter().map(|n| n > b).collect(),
+//                    //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
+//                    _ => unimplemented!()
+//                };
+//                Rc::new(Value::Column(
+//                    Rc::new(Field::new("gt", f1.data_type.clone(), false)),
+//                    Rc::new(Array::from(bools))
+//                ))
+//            },
+            _ => panic!()
         }
     }
 
@@ -466,7 +527,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
                     let right_values = right_expr(batch);
-                    left_values.gt(&right_values)
+                    left_values.gt(&right_values).unwrap()
                 })),
                 &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
                     let left_values = left_expr(batch);
