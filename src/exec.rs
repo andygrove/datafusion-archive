@@ -104,7 +104,7 @@ impl Batch for ColumnBatch {
     }
 
     fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
-        //println!("row_slice() index = {}", index);
+        println!("row_slice() row = {} of {}", index, self.row_count);
         self.columns.iter().map(|c| match c.as_ref() {
             &Value::Scalar(_, ref v) => v.clone(),
             &Value::Column(_, ref v) => get_value(v, index)
@@ -962,6 +962,69 @@ impl DataFrame for DF {
     }
 }
 
+pub fn get_value(column: &Array, index: usize) -> ScalarValue {
+    println!("get_value() index={}", index);
+    let v = match column.data() {
+        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
+        &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
+        &ArrayData::Float64(ref v) => ScalarValue::Float64(*v.get(index)),
+        &ArrayData::Int8(ref v) => ScalarValue::Int8(*v.get(index)),
+        &ArrayData::Int16(ref v) => ScalarValue::Int16(*v.get(index)),
+        &ArrayData::Int32(ref v) => ScalarValue::Int32(*v.get(index)),
+        &ArrayData::Int64(ref v) => ScalarValue::Int64(*v.get(index)),
+        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(*v.get(index)),
+        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(*v.get(index)),
+        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
+        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
+        &ArrayData::Utf8(ref data) => {
+            ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap() ))
+        },
+        &ArrayData::Struct(ref v) => {
+            // v is Vec<ArrayData>
+            // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
+            //            println!("get_value() complex value has {} fields", v.len());
+            let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
+            ScalarValue::Struct(fields)
+        }
+    };
+    println!("get_value() index={} returned {:?}", index, v);
+    v
+}
+
+pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
+    match column.as_ref() {
+        &Value::Scalar(_, _) => unimplemented!(),
+        &Value::Column(_, ref arr) =>
+            match bools.data() {
+                &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
+                    &ArrayData::Boolean(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<bool>>()),
+                    &ArrayData::Float32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<f32>>()),
+                    &ArrayData::Float64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<f64>>()),
+                    //&ArrayData::UInt8(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u8>>()),
+                    &ArrayData::UInt16(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u16>>()),
+                    &ArrayData::UInt32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u32>>()),
+                    &ArrayData::UInt64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u64>>()),
+                    &ArrayData::Int8(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i8>>()),
+                    &ArrayData::Int16(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i16>>()),
+                    &ArrayData::Int32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i32>>()),
+                    &ArrayData::Int64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i64>>()),
+                    &ArrayData::Utf8(ref v) => {
+                        let mut x : Vec<String> = Vec::with_capacity(b.len() as usize);
+                        for i in 0..b.len() as usize {
+                            if *b.get(i) {
+                                x.push(String::from_utf8(v.slice(i as usize).to_vec()).unwrap());
+                            }
+                        }
+                        Array::from(x)
+                    }
+                    _ => unimplemented!()
+                },
+                _ => panic!()
+            }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1112,67 +1175,28 @@ mod tests {
 
         ctx
     }
-}
 
+    #[test]
+    fn sql_query_example() {
+        // create execution context
+        let mut ctx = ExecutionContext::local("./test/data".to_string());
 
-pub fn get_value(column: &Array, index: usize) -> ScalarValue {
-    //println!("get_value() index={}", index);
-    let v = match column.data() {
-        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
-        &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
-        &ArrayData::Float64(ref v) => ScalarValue::Float64(*v.get(index)),
-        &ArrayData::Int8(ref v) => ScalarValue::Int8(*v.get(index)),
-        &ArrayData::Int16(ref v) => ScalarValue::Int16(*v.get(index)),
-        &ArrayData::Int32(ref v) => ScalarValue::Int32(*v.get(index)),
-        &ArrayData::Int64(ref v) => ScalarValue::Int64(*v.get(index)),
-        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(*v.get(index)),
-        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(*v.get(index)),
-        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
-        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
-        &ArrayData::Utf8(ref data) => {
-            ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap() ))
-        },
-        &ArrayData::Struct(ref v) => {
-            // v is Vec<ArrayData>
-            // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
-            //            println!("get_value() complex value has {} fields", v.len());
-            let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
-            ScalarValue::Struct(fields)
-        }
-    };
-    //  println!("get_value() index={} returned {:?}", index, v);
+        // define an external table (csv file)
+        ctx.sql("CREATE EXTERNAL TABLE uk_cities (\
+        city VARCHAR(100), \
+        lat DOUBLE, \
+        lng DOUBLE)").unwrap();
 
-    v
-}
+        // define the SQL statement
+        let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities WHERE lat < 53.0";
 
-pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
-    match column.as_ref() {
-        &Value::Scalar(_, _) => unimplemented!(),
-        &Value::Column(_, ref arr) =>
-            match bools.data() {
-                &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
-                    &ArrayData::Boolean(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<bool>>()),
-                    &ArrayData::Float32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<f32>>()),
-                    &ArrayData::Float64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<f64>>()),
-                    //&ArrayData::UInt8(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u8>>()),
-                    &ArrayData::UInt16(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u16>>()),
-                    &ArrayData::UInt32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u32>>()),
-                    &ArrayData::UInt64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u64>>()),
-                    &ArrayData::Int8(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i8>>()),
-                    &ArrayData::Int16(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i16>>()),
-                    &ArrayData::Int32(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i32>>()),
-                    &ArrayData::Int64(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<i64>>()),
-                    &ArrayData::Utf8(ref v) => {
-                        let mut x : Vec<String> = Vec::with_capacity(v.len() as usize);
-                        for i in 0..v.len() {
-                            x.push(String::from_utf8(v.slice(i as usize).to_vec()).unwrap());
-                        }
-                        Array::from(x)
-                    }
-                    _ => unimplemented!()
-                },
-                _ => panic!()
-            }
+        // create a data frame
+        let df1 = ctx.sql(&sql).unwrap();
+
+        // write the results to a file
+        ctx.write(df1,"_southern_cities.csv").unwrap();
+
     }
 }
+
 
