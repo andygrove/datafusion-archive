@@ -1,9 +1,8 @@
-use std::io;
 use liner::Context;
+use std::io;
 
 const DEFAULT_PROMPT: &'static str = "datafusion> ";
 const CONTINUE_PROMTP: &'static str = "> ";
-
 
 pub enum LineResult {
     Break,

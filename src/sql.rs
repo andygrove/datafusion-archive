@@ -12,17 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     SQLIdentifier(String),
-    SQLBinaryExpr { left: Box<ASTNode>, op: SQLOperator, right: Box<ASTNode> },
+    SQLBinaryExpr {
+        left: Box<ASTNode>,
+        op: SQLOperator,
+        right: Box<ASTNode>,
+    },
     SQLNested(Box<ASTNode>),
-    SQLUnary { operator: SQLOperator, rex: Box<ASTNode> },
+    SQLUnary {
+        operator: SQLOperator,
+        rex: Box<ASTNode>,
+    },
     SQLLiteralLong(i64),
     SQLLiteralDouble(f64),
-    SQLFunction { id: String, args: Vec<ASTNode> },
-    SQLOrderBy { expr: Box<ASTNode>, asc: bool },
-    SQLSelect{
+    SQLFunction {
+        id: String,
+        args: Vec<ASTNode>,
+    },
+    SQLOrderBy {
+        expr: Box<ASTNode>,
+        asc: bool,
+    },
+    SQLSelect {
         projection: Vec<ASTNode>,
         relation: Option<Box<ASTNode>>,
         selection: Option<Box<ASTNode>>,
@@ -33,18 +46,18 @@ pub enum ASTNode {
     },
     SQLCreateTable {
         name: String,
-        columns: Vec<SQLColumnDef>
-    }
+        columns: Vec<SQLColumnDef>,
+    },
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SQLColumnDef {
     pub name: String,
     pub data_type: SQLType,
-    pub allow_null: bool
+    pub allow_null: bool,
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SQLType {
     Varchar(usize),
     Float,
@@ -65,5 +78,5 @@ pub enum SQLOperator {
     GtEq,
     LtEq,
     Eq,
-    NotEq
+    NotEq,
 }

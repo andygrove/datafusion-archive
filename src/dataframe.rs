@@ -16,15 +16,15 @@ use std::io::Error;
 
 use arrow::datatypes::*;
 
-use super::rel::*;
 use super::exec::*;
+use super::rel::*;
 
 #[derive(Debug)]
 pub enum DataFrameError {
     IoError(Error),
     ExecError(ExecutionError),
     InvalidColumn(String),
-    NotImplemented
+    NotImplemented,
 }
 
 impl From<ExecutionError> for DataFrameError {
@@ -41,25 +41,22 @@ impl From<Error> for DataFrameError {
 
 /// DataFrame is an abstraction of a distributed query plan
 pub trait DataFrame {
-
     /// Change the number of partitions
-    fn repartition(&self, n: u32) -> Result<Box<DataFrame>,DataFrameError>;
+    fn repartition(&self, n: u32) -> Result<Box<DataFrame>, DataFrameError>;
 
     /// Projection
-    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>,DataFrameError>;
+    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError>;
 
     /// Selection
-    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>,DataFrameError>;
+    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError>;
 
     /// Sorting
-    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>,DataFrameError>;
+    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError>;
 
     /// Return an expression representing the specified column
-    fn col(&self, column_name: &str) -> Result<Expr,DataFrameError>;
+    fn col(&self, column_name: &str) -> Result<Expr, DataFrameError>;
 
     fn schema(&self) -> Schema;
 
     fn plan(&self) -> Box<LogicalPlan>;
-
 }
-

@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use etcd::Client as EtcdClient;
-use etcd::{kv, Response};
 use etcd::kv::KeyValueInfo;
+use etcd::{kv, Response};
 use tokio_core::reactor::Core;
 
 /// Retrieve a list of DataFusion worker endpoints from etcd
 pub fn get_worker_list(etcd_address: &str) -> Result<Vec<String>, String> {
-
     // create futures event loop
     let mut core = Core::new().unwrap();
     let handle = core.handle();
@@ -28,22 +27,21 @@ pub fn get_worker_list(etcd_address: &str) -> Result<Vec<String>, String> {
     let endpoints = &[etcd_address];
 
     match EtcdClient::new(&handle, endpoints, None) {
-        Ok(etcd) => match core.run(kv::get(&etcd, "/datafusion/workers/", kv::GetOptions::default())) {
-            Ok(Response { ref data, .. }) =>  match data {
+        Ok(etcd) => match core.run(kv::get(
+            &etcd,
+            "/datafusion/workers/",
+            kv::GetOptions::default(),
+        )) {
+            Ok(Response { ref data, .. }) => match data {
                 &KeyValueInfo { ref node, .. } => match &node.nodes {
                     &Some(ref workers) => {
-                        Ok(workers.iter()
-                            .flat_map(|w| w.value.clone())
-                            .collect())
-                    },
-                    _ => Ok(vec![])
-                }
-            }
-            Err(e) => {
-                Err(format!("Etcd request failed ({:?}): {:?}", endpoints, e))
-            }
+                        Ok(workers.iter().flat_map(|w| w.value.clone()).collect())
+                    }
+                    _ => Ok(vec![]),
+                },
+            },
+            Err(e) => Err(format!("Etcd request failed ({:?}): {:?}", endpoints, e)),
         },
-        Err(e) => Err(format!("Etcd connection failed ({:?}): {:?}", endpoints, e))
+        Err(e) => Err(format!("Etcd connection failed ({:?}): {:?}", endpoints, e)),
     }
-
 }

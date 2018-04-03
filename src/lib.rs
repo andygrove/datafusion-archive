@@ -18,11 +18,11 @@ pub mod dataframe;
 pub mod datasource;
 pub mod exec;
 pub mod functions;
+pub mod parser;
+pub mod persist;
 pub mod rel;
 pub mod sql;
 pub mod sqltorel;
-pub mod parser;
-pub mod persist;
 
 extern crate arrow;
 extern crate bytes;
@@ -31,4 +31,3 @@ extern crate etcd;
 extern crate futures;
 extern crate hyper;
 extern crate tokio_core;
-

@@ -17,7 +17,7 @@ use std::cmp::Ordering;
 use arrow::datatypes::*;
 
 /// Value holder for all supported data types
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ScalarValue {
     Boolean(bool),
     Float32(f32),
@@ -36,34 +36,30 @@ pub enum ScalarValue {
 
 impl PartialOrd for ScalarValue {
     fn partial_cmp(&self, other: &ScalarValue) -> Option<Ordering> {
-
         //TODO: implement all type coercion rules
 
         match self {
             &ScalarValue::Float64(l) => match other {
                 &ScalarValue::Float64(r) => l.partial_cmp(&r),
                 &ScalarValue::Int64(r) => l.partial_cmp(&(r as f64)),
-                _ => unimplemented!("type coercion rules missing")
+                _ => unimplemented!("type coercion rules missing"),
             },
             &ScalarValue::Int64(l) => match other {
                 &ScalarValue::Float64(r) => (l as f64).partial_cmp(&r),
                 &ScalarValue::Int64(r) => l.partial_cmp(&r),
-                _ => unimplemented!("type coercion rules missing")
+                _ => unimplemented!("type coercion rules missing"),
             },
             &ScalarValue::Utf8(ref l) => match other {
                 &ScalarValue::Utf8(ref r) => l.partial_cmp(r),
-                _ => unimplemented!("type coercion rules missing")
+                _ => unimplemented!("type coercion rules missing"),
             },
             &ScalarValue::Struct(_) => None,
-            _ => unimplemented!("type coercion rules missing")
+            _ => unimplemented!("type coercion rules missing"),
         }
-
     }
 }
 
-
 impl ScalarValue {
-
     pub fn to_string(&self) -> String {
         match self {
             &ScalarValue::Boolean(b) => b.to_string(),
@@ -79,21 +75,18 @@ impl ScalarValue {
             &ScalarValue::Float64(d) => d.to_string(),
             &ScalarValue::Utf8(ref s) => s.clone(),
             &ScalarValue::Struct(ref v) => {
-                let s : Vec<String> = v.iter()
-                    .map(|v| v.to_string())
-                    .collect();
+                let s: Vec<String> = v.iter().map(|v| v.to_string()).collect();
                 s.join(",")
             }
         }
     }
-
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct FunctionMeta {
     pub name: String,
     pub args: Vec<Field>,
-    pub return_type: DataType
+    pub return_type: DataType,
 }
 
 pub trait Row {
@@ -102,22 +95,19 @@ pub trait Row {
 }
 
 impl Row for Vec<ScalarValue> {
-
     fn get(&self, index: usize) -> &ScalarValue {
         &self[index]
     }
 
     fn to_string(&self) -> String {
-        let value_strings : Vec<String> = self.iter()
-            .map(|v| v.to_string())
-            .collect();
+        let value_strings: Vec<String> = self.iter().map(|v| v.to_string()).collect();
 
         // return comma-separated
         value_strings.join(",")
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum Operator {
     Eq,
     NotEq,
@@ -129,31 +119,34 @@ pub enum Operator {
     Minus,
     Multiply,
     Divide,
-    Modulus
+    Modulus,
 }
 
 /// Relation Expression
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),
     /// literal value
     Literal(ScalarValue),
     /// binary expression e.g. "age > 21"
-    BinaryExpr { left: Box<Expr>, op: Operator, right: Box<Expr> },
+    BinaryExpr {
+        left: Box<Expr>,
+        op: Operator,
+        right: Box<Expr>,
+    },
     /// sort expression
     Sort { expr: Box<Expr>, asc: bool },
     /// scalar function
-    ScalarFunction { name: String, args: Vec<Expr> }
+    ScalarFunction { name: String, args: Vec<Expr> },
 }
 
 impl Expr {
-
     pub fn eq(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
             left: Box::new(self.clone()),
             op: Operator::Eq,
-            right: Box::new(other.clone())
+            right: Box::new(other.clone()),
         }
     }
 
@@ -161,7 +154,7 @@ impl Expr {
         Expr::BinaryExpr {
             left: Box::new(self.clone()),
             op: Operator::Gt,
-            right: Box::new(other.clone())
+            right: Box::new(other.clone()),
         }
     }
 
@@ -169,26 +162,47 @@ impl Expr {
         Expr::BinaryExpr {
             left: Box::new(self.clone()),
             op: Operator::Lt,
-            right: Box::new(other.clone())
+            right: Box::new(other.clone()),
         }
     }
-
 }
 
 /// Relations
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum LogicalPlan {
-    Limit { limit: usize, input: Box<LogicalPlan>, schema: Schema },
-    Projection { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
-    Selection { expr: Expr, input: Box<LogicalPlan>, schema: Schema },
-    Sort { expr: Vec<Expr>, input: Box<LogicalPlan>, schema: Schema },
-    TableScan { schema_name: String, table_name: String, schema: Schema },
-    CsvFile { filename: String, schema: Schema },
-    EmptyRelation
+    Limit {
+        limit: usize,
+        input: Box<LogicalPlan>,
+        schema: Schema,
+    },
+    Projection {
+        expr: Vec<Expr>,
+        input: Box<LogicalPlan>,
+        schema: Schema,
+    },
+    Selection {
+        expr: Expr,
+        input: Box<LogicalPlan>,
+        schema: Schema,
+    },
+    Sort {
+        expr: Vec<Expr>,
+        input: Box<LogicalPlan>,
+        schema: Schema,
+    },
+    TableScan {
+        schema_name: String,
+        table_name: String,
+        schema: Schema,
+    },
+    CsvFile {
+        filename: String,
+        schema: Schema,
+    },
+    EmptyRelation,
 }
 
 impl LogicalPlan {
-
     pub fn schema(&self) -> Schema {
         match self {
             &LogicalPlan::EmptyRelation => Schema::empty(),
@@ -205,39 +219,47 @@ impl LogicalPlan {
 #[cfg(test)]
 mod tests {
 
-    use super::*;
-    use super::LogicalPlan::*;
     use super::Expr::*;
+    use super::LogicalPlan::*;
     use super::ScalarValue::*;
+    use super::*;
 
     #[test]
     fn serde() {
-
         let schema = Schema {
             columns: vec![
-                Field { name: "id".to_string(), data_type: DataType::Int32, nullable: false },
-                Field { name: "name".to_string(), data_type: DataType::Utf8, nullable: false }
-            ]
+                Field {
+                    name: "id".to_string(),
+                    data_type: DataType::Int32,
+                    nullable: false,
+                },
+                Field {
+                    name: "name".to_string(),
+                    data_type: DataType::Utf8,
+                    nullable: false,
+                },
+            ],
         };
 
-        let csv = CsvFile { filename: "test/data/people.csv".to_string(), schema: schema.clone() };
+        let csv = CsvFile {
+            filename: "test/data/people.csv".to_string(),
+            schema: schema.clone(),
+        };
 
         let filter_expr = BinaryExpr {
             left: Box::new(Column(0)),
             op: Operator::Eq,
-            right: Box::new(Literal(Int64(2)))
+            right: Box::new(Literal(Int64(2))),
         };
 
         let plan = Selection {
             expr: filter_expr,
             input: Box::new(csv),
-            schema: schema.clone()
-
+            schema: schema.clone(),
         };
 
-//        let s = serde_json::to_string(&plan).unwrap();
-//        println!("serialized: {}", s);
+        //        let s = serde_json::to_string(&plan).unwrap();
+        //        println!("serialized: {}", s);
     }
 
 }
-
