@@ -25,7 +25,8 @@ name = "console"
 path = "src/bin/console/main.rs"
 
 [dependencies]
-arrow = { git = "https://github.com/andygrove/arrow", branch = "master"}
+#arrow = { git = "https://github.com/apache/arrow/rust", branch = "master"}
+arrow = { path = "../arrow/rust" }
 bytes = "0.4"
 byteorder = "1"
 csv = "1.0.0-beta.5"
