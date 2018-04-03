@@ -25,8 +25,10 @@ name = "console"
 path = "src/bin/console/main.rs"
 
 [dependencies]
-#arrow = { git = "https://github.com/apache/arrow/rust", branch = "master"}
-arrow = { path = "../arrow/rust" }
+
+# NOTE: this depends on a fork of arrow until some PRs are merged
+arrow = { git = "https://github.com/andygrove/arrow", rev = "1bd49cd83ffb6651d05092f9fff8ef9e0df59d69" }
+
 bytes = "0.4"
 byteorder = "1"
 csv = "1.0.0-beta.5"
