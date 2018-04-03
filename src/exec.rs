@@ -104,7 +104,7 @@ impl Batch for ColumnBatch {
     }
 
     fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
-        println!("row_slice() row = {} of {}", index, self.row_count);
+//        println!("row_slice() row = {} of {}", index, self.row_count);
         self.columns.iter().map(|c| match c.as_ref() {
             &Value::Scalar(_, ref v) => v.clone(),
             &Value::Column(_, ref v) => get_value(v, index)
@@ -963,7 +963,7 @@ impl DataFrame for DF {
 }
 
 pub fn get_value(column: &Array, index: usize) -> ScalarValue {
-    println!("get_value() index={}", index);
+    //println!("get_value() index={}", index);
     let v = match column.data() {
         &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
         &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
@@ -987,7 +987,7 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
             ScalarValue::Struct(fields)
         }
     };
-    println!("get_value() index={} returned {:?}", index, v);
+//    println!("get_value() index={} returned {:?}", index, v);
     v
 }
 
