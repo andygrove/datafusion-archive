@@ -26,11 +26,9 @@ pub mod persist;
 
 extern crate arrow;
 extern crate bytes;
-
-//extern crate serde;
-//extern crate serde_json;
-//#[macro_use]
-//extern crate serde_derive;
-
 extern crate csv;
+extern crate etcd;
+extern crate futures;
+extern crate hyper;
+extern crate tokio_core;
 

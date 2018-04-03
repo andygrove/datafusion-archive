@@ -23,19 +23,14 @@ use std::str;
 use std::string::String;
 use std::convert::*;
 
-extern crate bytes;
-extern crate futures;
-extern crate hyper;
-extern crate tokio_core;
-
 use arrow::array::*;
 use arrow::datatypes::*;
 
-use self::futures::{Future, Stream};
-use self::hyper::Client;
-use self::tokio_core::reactor::Core;
-use self::hyper::{Method, Request};
-use self::hyper::header::{ContentLength, ContentType};
+//use futures::{Future, Stream};
+//use hyper::Client;
+//use tokio_core::reactor::Core;
+//use hyper::{Method, Request};
+//use hyper::header::{ContentLength, ContentType};
 
 use super::api::*;
 use super::datasource::csv::CsvRelation;
@@ -43,7 +38,7 @@ use super::rel::*;
 use super::sql::ASTNode::*;
 use super::sqltorel::*;
 use super::parser::*;
-use super::cluster::*;
+//use super::cluster::*;
 use super::dataframe::*;
 use super::functions::math::*;
 use super::functions::geospatial::*;
@@ -188,55 +183,55 @@ impl Value {
 
     pub fn eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_arrays!("==", f1, v1, f2, v2, |(aa,bb)| aa == bb),
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => compare_array_with_scalar!("==", f1, v1, f2, v2, |(aa,bb)| aa == bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, f2, v1, |(aa,bb)| aa == bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("==", f1, v1, _f2, v2, |(aa,bb)| aa == bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v1, _f2, v2, |(aa,bb)| aa == bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa == bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
     pub fn not_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_arrays!("!=", f1, v1, f2, v2, |(aa,bb)| aa != bb),
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => compare_array_with_scalar!("!=", f1, v1, f2, v2, |(aa,bb)| aa != bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, f2, v1, |(aa,bb)| aa != bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("!=", f1, v1, _f2, v2, |(aa,bb)| aa != bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("!=", f1, v1, _f2, v2, |(aa,bb)| aa != bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa != bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
     pub fn lt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_arrays!("<", f1, v1, f2, v2, |(aa,bb)| aa < bb),
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => compare_array_with_scalar!("<", f1, v1, f2, v2, |(aa,bb)| aa < bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, f2, v1, |(aa,bb)| aa < bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("<", f1, v1, _f2, v2, |(aa,bb)| aa < bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("<", f1, v1, _f2, v2, |(aa,bb)| aa < bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa < bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
     pub fn lt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_arrays!("<", f1, v1, f2, v2, |(aa,bb)| aa <= bb),
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => compare_array_with_scalar!("<", f1, v1, f2, v2, |(aa,bb)| aa <= bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, f2, v1, |(aa,bb)| aa <= bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!("<", f1, v1, _f2, v2, |(aa,bb)| aa <= bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!("<", f1, v1, _f2, v2, |(aa,bb)| aa <= bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa <= bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
     pub fn gt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_arrays!(">", f1, v1, f2, v2, |(aa,bb)| aa >= bb),
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => compare_array_with_scalar!(">", f1, v1, f2, v2, |(aa,bb)| aa >= bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, f2, v1, |(aa,bb)| aa >= bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!(">", f1, v1, _f2, v2, |(aa,bb)| aa >= bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!(">", f1, v1, _f2, v2, |(aa,bb)| aa >= bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa >= bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
     pub fn gt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_arrays!(">", f1, v1, f2, v2, |(aa,bb)| aa > bb),
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => compare_array_with_scalar!(">", f1, v1, f2, v2, |(aa,bb)| aa > bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, f2, v1, |(aa,bb)| aa > bb),
-            (&Value::Scalar(ref f1, ref v1), &Value::Scalar(ref f2, ref v2)) => unimplemented!()
+            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_arrays!(">", f1, v1, _f2, v2, |(aa,bb)| aa > bb),
+            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => compare_array_with_scalar!(">", f1, v1, _f2, v2, |(aa,bb)| aa > bb),
+            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa,bb)| aa > bb),
+            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => unimplemented!()
         }
     }
 
@@ -851,7 +846,7 @@ impl ExecutionContext {
         }
     }
 
-    fn execute_remote(&self, physical_plan: &PhysicalPlan, etcd: String) -> Result<ExecutionResult, ExecutionError> {
+    fn execute_remote(&self, _physical_plan: &PhysicalPlan, _etcd: String) -> Result<ExecutionResult, ExecutionError> {
         Err(ExecutionError::Custom(format!("Remote execution needs re-implementing since moving to Arrow")))
     }
 

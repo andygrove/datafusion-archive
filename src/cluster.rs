@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate etcd;
-extern crate tokio_core;
-
-use self::etcd::Client as EtcdClient;
-use self::etcd::{kv, Response};
-use self::etcd::kv::KeyValueInfo;
-use self::tokio_core::reactor::Core;
+use etcd::Client as EtcdClient;
+use etcd::{kv, Response};
+use etcd::kv::KeyValueInfo;
+use tokio_core::reactor::Core;
 
 /// Retrieve a list of DataFusion worker endpoints from etcd
 pub fn get_worker_list(etcd_address: &str) -> Result<Vec<String>, String> {

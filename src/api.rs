@@ -14,10 +14,8 @@
 
 use std::rc::Rc;
 
-extern crate arrow;
-
 //use self::arrow::array::*;
-use self::arrow::datatypes::*;
+use arrow::datatypes::*;
 use super::exec::Value;
 
 /// Scalar function. User-defined implementations will be dynamically loaded at runtime.
