@@ -1,7 +1,7 @@
 [package]
 name = "datafusion"
 description = "DataFusion is a SQL query parser, planner, and distributed query processing framework for Rust inspired by Apache Calcite and Apache Spark"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://datafusion.rs"
 keywords = [ "distributed", "query", "data", "processing", "sql" ]
@@ -25,12 +25,7 @@ name = "console"
 path = "src/bin/console/main.rs"
 
 [dependencies]
-
-# NOTE: this depends on a fork of arrow until some PRs are merged
-arrow = { git = "https://github.com/andygrove/arrow", branch = "datafusion" }
-
-#arrow = { path = "../arrow/rust" }
-
+arrow = { git = "https://github.com/apache/arrow", rev="708175268d498a85ef81ae7438374a2c6fb00b6c" }
 bytes = "0.4"
 byteorder = "1"
 csv = "1.0.0-beta.5"
