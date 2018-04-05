@@ -5,7 +5,7 @@ version = "0.2.3"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://datafusion.rs"
 keywords = [ "distributed", "query", "data", "processing", "sql" ]
-repository = "https://github.com/andygrove/datafusion-rs"
+repository = "https://github.com/datafusion-rs/datafusion-rs"
 license = "Apache-2.0"
 include = [
     "src/**/*.rs",
@@ -25,7 +25,7 @@ name = "console"
 path = "src/bin/console/main.rs"
 
 [dependencies]
-arrow = { git = "https://github.com/apache/arrow", rev="708175268d498a85ef81ae7438374a2c6fb00b6c" }
+datafusion-arrow = "0.1.0-nightly-20180404"
 bytes = "0.4"
 byteorder = "1"
 csv = "1.0.0-beta.5"
