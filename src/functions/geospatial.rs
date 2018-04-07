@@ -4,8 +4,7 @@ use std::rc::Rc;
 use arrow::array::*;
 use arrow::datatypes::*;
 
-use super::super::api::*;
-use super::super::exec::{ExecutionError, Value};
+use super::super::types::*;
 
 /// create a point from two doubles
 pub struct STPointFunc;
@@ -22,13 +21,13 @@ impl ScalarFunction for STPointFunc {
             ));
         }
         match (args[0].as_ref(), args[1].as_ref()) {
-            (&Value::Column(_, ref arr1), &Value::Column(_, ref arr2)) => {
+            (&Value::Column(ref arr1), &Value::Column(ref arr2)) => {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match (arr1.data(), arr2.data()) {
                     (&ArrayData::Float64(_), &ArrayData::Float64(_)) => {
                         let nested: Vec<Rc<Array>> = vec![arr1.clone(), arr2.clone()];
                         let new_array = Array::new(arr1.len() as usize, ArrayData::Struct(nested));
-                        Ok(Rc::new(Value::Column(field, Rc::new(new_array))))
+                        Ok(Rc::new(Value::Column(Rc::new(new_array))))
                     }
                     _ => Err(ExecutionError::Custom(
                         "Unsupported type for ST_Point".to_string(),
@@ -71,7 +70,7 @@ impl ScalarFunction for STAsText {
             ));
         }
         match args[0].as_ref() {
-            &Value::Column(ref field, ref arr) => match arr.data() {
+            &Value::Column(ref arr) => match arr.data() {
                 &ArrayData::Struct(ref fields) => {
                     match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
                         (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
@@ -82,7 +81,6 @@ impl ScalarFunction for STAsText {
                                 .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
                                 .collect();
                             Ok(Rc::new(Value::Column(
-                                field.clone(),
                                 Rc::new(Array::from(wkt)),
                             )))
                         }

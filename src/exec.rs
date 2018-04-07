@@ -49,31 +49,6 @@ pub enum DFConfig {
     Remote { etcd: String },
 }
 
-#[derive(Debug)]
-pub enum ExecutionError {
-    IoError(Error),
-    ParserError(ParserError),
-    Custom(String),
-}
-
-impl From<Error> for ExecutionError {
-    fn from(e: Error) -> Self {
-        ExecutionError::IoError(e)
-    }
-}
-
-impl From<String> for ExecutionError {
-    fn from(e: String) -> Self {
-        ExecutionError::Custom(e)
-    }
-}
-
-impl From<ParserError> for ExecutionError {
-    fn from(e: ParserError) -> Self {
-        ExecutionError::ParserError(e)
-    }
-}
-
 pub trait Batch {
     fn col_count(&self) -> usize;
     fn row_count(&self) -> usize;

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use super::super::api::*;
-use super::super::exec::{ExecutionError, Value};
+use super::super::types::*;
+
 use arrow::array::*;
 use arrow::datatypes::*;
 
@@ -14,29 +14,25 @@ impl ScalarFunction for SqrtFunction {
 
     fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
         match args[0].as_ref() {
-            &Value::Column(_, ref arr) => {
+            &Value::Column(ref arr) => {
                 let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match arr.data() {
                     &ArrayData::Float32(ref v) => Ok(Rc::new(Value::Column(
-                        field,
                         Rc::new(Array::from(
                             v.iter().map(|v| v.sqrt()).collect::<Vec<f32>>(),
                         )),
                     ))),
                     &ArrayData::Float64(ref v) => Ok(Rc::new(Value::Column(
-                        field,
                         Rc::new(Array::from(
                             v.iter().map(|v| v.sqrt()).collect::<Vec<f64>>(),
                         )),
                     ))),
                     &ArrayData::Int32(ref v) => Ok(Rc::new(Value::Column(
-                        field,
                         Rc::new(Array::from(
                             v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
                         )),
                     ))),
                     &ArrayData::Int64(ref v) => Ok(Rc::new(Value::Column(
-                        field,
                         Rc::new(Array::from(
                             v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
                         )),

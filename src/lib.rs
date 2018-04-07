@@ -22,12 +22,11 @@ extern crate parquet;
 //extern crate hyper;
 //extern crate tokio_core;
 
-//pub mod api;
 //pub mod cluster;
 pub mod dataframe;
 pub mod datasource;
 //pub mod exec;
-//pub mod functions;
+pub mod functions;
 pub mod sqlast;
 pub mod sqlparser;
 pub mod sqlcompiler;

@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Error;
 use std::rc::Rc;
 
 use arrow::array::Array;
+use arrow::datatypes::{DataType, Field};
+
+use super::sqlparser::ParserError;
 
 /// Value holder for all supported data types
 #[derive(Debug, Clone, PartialEq)]
@@ -38,3 +42,37 @@ pub enum Value {
     Column(Rc<Array>),
     Scalar(Rc<ScalarValue>),
 }
+
+/// Scalar function. User-defined implementations will be dynamically loaded at runtime.
+pub trait ScalarFunction {
+    fn name(&self) -> String;
+    fn args(&self) -> Vec<Field>;
+    fn return_type(&self) -> DataType;
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError>;
+}
+
+#[derive(Debug)]
+pub enum ExecutionError {
+    IoError(Error),
+    ParserError(ParserError),
+    Custom(String),
+}
+
+impl From<Error> for ExecutionError {
+    fn from(e: Error) -> Self {
+        ExecutionError::IoError(e)
+    }
+}
+
+impl From<String> for ExecutionError {
+    fn from(e: String) -> Self {
+        ExecutionError::Custom(e)
+    }
+}
+
+impl From<ParserError> for ExecutionError {
+    fn from(e: ParserError) -> Self {
+        ExecutionError::ParserError(e)
+    }
+}
+
