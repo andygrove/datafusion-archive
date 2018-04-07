@@ -765,12 +765,12 @@ impl ExecutionContext {
         &self,
         filename: &str,
         schema: &Schema,
-    ) -> Result<Box<DataFrame>, ExecutionError> {
+    ) -> Result<Rc<DataFrame>, ExecutionError> {
         let plan = LogicalPlan::CsvFile {
             filename: filename.to_string(),
             schema: Rc::new(schema.clone()),
         };
-        Ok(Box::new(DF {
+        Ok(Rc::new(DF {
             ctx: self.clone(),
             plan: Rc::new(plan),
         }))
@@ -1491,12 +1491,21 @@ mod tests {
         let mut ctx = ExecutionContext::local();
 
         // define an external table (csv file)
-        ctx.sql(
-            "CREATE EXTERNAL TABLE uk_cities (\
-             city VARCHAR(100), \
-             lat DOUBLE, \
-             lng DOUBLE)",
-        ).unwrap();
+//        ctx.sql(
+//            "CREATE EXTERNAL TABLE uk_cities (\
+//             city VARCHAR(100), \
+//             lat DOUBLE, \
+//             lng DOUBLE)",
+//        ).unwrap();
+
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false),
+        ]);
+
+        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema).unwrap();
+        ctx.register("uk_cities", df);
 
         // define the SQL statement
         let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities WHERE lat < 53.0";
