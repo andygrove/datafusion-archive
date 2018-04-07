@@ -393,7 +393,6 @@ pub trait SimpleRelation {
 
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
-
 }
 
 struct DataSourceRelation {
@@ -430,9 +429,7 @@ impl SimpleRelation for FilterRelation {
                             let filtered_columns: Vec<Rc<Value>> = (0..batch.num_columns())
                                 .map(move |column_index| {
                                     let column = batch.column(column_index);
-                                    Rc::new(Value::Column(
-                                        Rc::new(filter(column, &filter_eval)),
-                                    ))
+                                    Rc::new(Value::Column(Rc::new(filter(column, &filter_eval))))
                                 })
                                 .collect();
 
@@ -453,7 +450,7 @@ impl SimpleRelation for FilterRelation {
                             let filtered_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
                                 row_count,
                                 data: filtered_columns,
-                                schema: schema.clone()
+                                schema: schema.clone(),
                             });
 
                             Ok(filtered_batch)
@@ -467,7 +464,7 @@ impl SimpleRelation for FilterRelation {
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
-        unimplemented!()
+        &self.schema
     }
 }
 
@@ -1445,6 +1442,8 @@ mod tests {
     #[test]
     fn test_chaining_functions() {
         let mut ctx = create_context();
+        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_function(Rc::new(STAsText {}));
 
         ctx.register_function(Rc::new(STPointFunc {}));
 
@@ -1488,6 +1487,8 @@ mod tests {
     fn sql_query_example() {
         // create execution context
         let mut ctx = ExecutionContext::local();
+        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_function(Rc::new(STAsText {}));
 
         // define an external table (csv file)
         //        ctx.sql(
