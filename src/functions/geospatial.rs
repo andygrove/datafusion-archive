@@ -80,9 +80,7 @@ impl ScalarFunction for STAsText {
                                 .zip(lon.iter())
                                 .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
                                 .collect();
-                            Ok(Rc::new(Value::Column(
-                                Rc::new(Array::from(wkt)),
-                            )))
+                            Ok(Rc::new(Value::Column(Rc::new(Array::from(wkt)))))
                         }
                         _ => Err(ExecutionError::Custom(
                             "Unsupported type for ST_AsText".to_string(),

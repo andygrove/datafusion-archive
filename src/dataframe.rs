@@ -41,7 +41,6 @@ impl From<Error> for DataFrameError {
 
 /// DataFrame is an abstraction of a logical plan and a schema
 pub trait DataFrame {
-
     /// Projection
     fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
 

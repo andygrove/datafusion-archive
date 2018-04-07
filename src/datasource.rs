@@ -65,7 +65,7 @@ trait DataSource {
 }
 
 struct DataSourceIterator {
-    ds: Box<DataSource>
+    ds: Box<DataSource>,
 }
 
 impl Iterator for DataSourceIterator {
@@ -215,7 +215,6 @@ pub struct ParquetFile {
 }
 
 impl ParquetFile {
-
     fn open(file: File) -> Self {
         ParquetFile {
             reader: SerializedFileReader::new(file).unwrap(),
@@ -225,8 +224,13 @@ impl ParquetFile {
 
     fn to_arrow(t: &Type) -> Field {
         match t {
-            Type::PrimitiveType { basic_info, physical_type, type_length, scale, precision } => {
-
+            Type::PrimitiveType {
+                basic_info,
+                physical_type,
+                type_length,
+                scale,
+                precision,
+            } => {
                 println!("basic_info: {:?}", basic_info);
 
                 let arrow_type = match basic_info.logical_type() {
@@ -242,9 +246,7 @@ impl ParquetFile {
                     _ => {
                         println!("Unsupported parquet type {}", basic_info.logical_type());
                         DataType::Int32 //TODO
-                    }
-
-                    //TODO
+                    } //TODO
                     /*
                     NONE,
                     MAP,
@@ -266,16 +268,16 @@ impl ParquetFile {
                 Field {
                     name: basic_info.name().to_string(),
                     data_type: arrow_type,
-                    nullable: false }
-
-            },
-            Type::GroupType { basic_info, fields } => {
-                Field {
-                    name:basic_info.name().to_string(),
-                    data_type: DataType::Struct(fields.iter().map(|f| ParquetFile::to_arrow(f)).collect()),
-                    nullable: false
+                    nullable: false,
                 }
             }
+            Type::GroupType { basic_info, fields } => Field {
+                name: basic_info.name().to_string(),
+                data_type: DataType::Struct(
+                    fields.iter().map(|f| ParquetFile::to_arrow(f)).collect(),
+                ),
+                nullable: false,
+            },
         }
 
         /*
@@ -290,13 +292,11 @@ pub enum Type {
   }
 }
 */
-
     }
 }
 
 impl DataSource for ParquetFile {
     fn next(&mut self) -> Option<Box<RecordBatch>> {
-
         let metadata = self.reader.metadata();
 
         let file_type = ParquetFile::to_arrow(metadata.file_metadata().schema());
@@ -337,7 +337,7 @@ impl DataSource for ParquetFile {
 
         let schema = match file_type.data_type {
             DataType::Struct(fields) => Schema::new(fields),
-            _ => panic!()
+            _ => panic!(),
         };
 
         Some(Box::new(DefaultRecordBatch {

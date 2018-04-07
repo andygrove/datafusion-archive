@@ -159,7 +159,7 @@ pub enum LogicalPlan {
         schema: Rc<Schema>,
     },
     EmptyRelation {
-        schema: Rc<Schema>
+        schema: Rc<Schema>,
     },
 }
 

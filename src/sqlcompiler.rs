@@ -49,7 +49,9 @@ impl SqlToRel {
                 // parse the input relation so we have access to the row type
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
-                    &None => Rc::new(LogicalPlan::EmptyRelation { schema: Rc::new(Schema::empty()) }),
+                    &None => Rc::new(LogicalPlan::EmptyRelation {
+                        schema: Rc::new(Schema::empty()),
+                    }),
                 };
 
                 let input_schema = input.schema();
