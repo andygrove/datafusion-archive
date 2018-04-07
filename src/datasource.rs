@@ -35,13 +35,14 @@ pub trait RecordBatch {
     fn num_columns(&self) -> usize;
     fn num_rows(&self) -> usize;
     fn column(&self, index: usize) -> &Value;
-    fn columns(&self) -> &Vec<Value>;
+    fn columns(&self) -> &Vec<Rc<Value>>;
 }
 
-struct DefaultRecordBatch {
-    schema: Rc<Schema>,
-    data: Vec<Value>,
-    row_count: usize,
+//TODO: remove pub from fields
+pub struct DefaultRecordBatch {
+    pub schema: Rc<Schema>,
+    pub data: Vec<Rc<Value>>,
+    pub row_count: usize,
 }
 
 impl RecordBatch for DefaultRecordBatch {
@@ -61,7 +62,7 @@ impl RecordBatch for DefaultRecordBatch {
         &self.data[index]
     }
 
-    fn columns(&self) -> &Vec<Value> {
+    fn columns(&self) -> &Vec<Rc<Value>> {
         &self.data
     }
 }
@@ -139,7 +140,7 @@ impl DataSource for CsvFile {
             }
         }
 
-        let mut columns: Vec<Value> = Vec::with_capacity(self.schema.columns.len());
+        let mut columns: Vec<Rc<Value>> = Vec::with_capacity(self.schema.columns.len());
 
         for i in 0..self.schema.columns.len() {
             let array: Array = match self.schema.columns[i].data_type {
@@ -214,7 +215,7 @@ impl DataSource for CsvFile {
                 _ => unimplemented!(),
             };
 
-            columns.push(Value::Column(Rc::new(array)));
+            columns.push(Rc::new(Value::Column(Rc::new(array))));
         }
 
         Some(Ok(Rc::new(DefaultRecordBatch {
@@ -265,7 +266,7 @@ impl ParquetFile {
                 scale,
                 precision,
             } => {
-             //   println!("basic_info: {:?}", basic_info);
+                println!("basic_info: {:?}", basic_info);
 
                 let arrow_type = match basic_info.logical_type() {
                     LogicalType::UINT_8 => DataType::UInt8,
@@ -278,7 +279,7 @@ impl ParquetFile {
                     LogicalType::INT_64 => DataType::Int64,
                     LogicalType::UTF8 => DataType::Utf8,
                     _ => {
-                    //    println!("Unsupported parquet type {}", basic_info.logical_type());
+                        println!("Unsupported parquet type {}", basic_info.logical_type());
                         DataType::Int32 //TODO
                     } //TODO
                     /*
@@ -340,12 +341,19 @@ impl DataSource for ParquetFile {
 
                     let batch_size = 1024; // for intital testing
 
-                    let mut arrays: Vec<Value> = Vec::with_capacity(row_group_reader.num_columns());
+                    let mut arrays: Vec<Rc<Value>> = Vec::with_capacity(row_group_reader.num_columns());
                     let mut row_count = 0;
 
                     for i in 0..row_group_reader.num_columns() {
                         let array: Option<Array> = match row_group_reader.get_column_reader(i) {
-                            //TODO: support all column types
+//                            //TODO: support all column types
+//                            Ok(ColumnReader::ByteArrayColumnReader(ref mut r)) => {
+//
+//                                r.read_batch()
+//
+//
+//                                unimplemented!()
+//                            }
                             Ok(ColumnReader::Int32ColumnReader(ref mut r)) => {
                                 let mut builder: Builder<i32> = Builder::with_capacity(batch_size);
                                 match r.read_batch(batch_size, None, None, unsafe {
@@ -366,7 +374,7 @@ impl DataSource for ParquetFile {
                         };
 
                         if let Some(a) = array {
-                            arrays.push(Value::Column(Rc::new(a)));
+                            arrays.push(Rc::new(Value::Column(Rc::new(a))));
                         }
                     }
 

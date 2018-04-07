@@ -21,7 +21,7 @@ use datafusion::logical::*;
 
 /// This example shows the use of the DataFrame API to define a query plan
 fn main() {
-    let ctx = ExecutionContext::local("./test/data".to_string());
+    let ctx = ExecutionContext::local(  );
 
     let df = ctx.load_parquet("test/data/alltypes_plain.parquet").unwrap();
     println!("schema: {}", df.schema().to_string());

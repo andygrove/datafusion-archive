@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::convert::*;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::BufWriter;
+use std::io::{BufWriter, Error};
 use std::iter::Iterator;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -41,71 +41,59 @@ use super::types::*;
 use super::sqlast::ASTNode::*;
 use super::sqlcompiler::*;
 //use super::cluster::*;
-use super::dataframe::*;
 use super::functions::geospatial::*;
 use super::functions::math::*;
 
 #[derive(Debug, Clone)]
 pub enum DFConfig {
-    Local { data_dir: String },
+    Local,
     Remote { etcd: String },
 }
 
-pub trait Batch {
-    fn col_count(&self) -> usize;
-    fn row_count(&self) -> usize;
-    fn column(&self, index: usize) -> &Rc<Value>;
-
-    /// copy values into a row (EXPENSIVE)
-    fn row_slice(&self, index: usize) -> Vec<ScalarValue>;
+#[derive(Debug)]
+pub enum DataFrameError {
+    IoError(Error),
+    ExecError(ExecutionError),
+    InvalidColumn(String),
+    NotImplemented,
 }
 
-pub struct ColumnBatch {
-    pub row_count: usize,
-    pub columns: Vec<Rc<Value>>,
-}
-
-impl Batch for ColumnBatch {
-    fn col_count(&self) -> usize {
-        self.columns.len()
-    }
-
-    fn row_count(&self) -> usize {
-        self.row_count
-    }
-
-    fn column(&self, index: usize) -> &Rc<Value> {
-        &self.columns[index]
-    }
-
-    fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
-//        //        println!("row_slice() row = {} of {}", index, self.row_count);
-//        self.columns
-//            .iter()
-//            .map(|c| match c.as_ref() {
-//                &Value::Scalar(v) => v.clone(),
-//                &Value::Column(v) => get_value(&v, index),
-//            })
-//            .collect()
-        unimplemented!()
+impl From<ExecutionError> for DataFrameError {
+    fn from(e: ExecutionError) -> Self {
+        DataFrameError::ExecError(e)
     }
 }
 
-//macro_rules! compare_column_to_scalar {
-//    ($TY:ident, $EXPR:expr) => {
-//        match (l, r) {
-//            (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int8(ref a), &ScalarValue::Int8(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int16(ref a), &ScalarValue::Int16(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int32(ref a), &ScalarValue::Int32(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int64(ref a), &ScalarValue::Int64(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
-//            _ => unimplemented!()
-//        };
-//
-//    }
-//}
+impl From<Error> for DataFrameError {
+    fn from(e: Error) -> Self {
+        DataFrameError::IoError(e)
+    }
+}
+
+/// DataFrame is an abstraction of a logical plan and a schema
+pub trait DataFrame {
+    /// Projection
+    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
+
+    /// Selection
+    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>, DataFrameError>;
+
+    /// Sorting
+    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
+
+    /// Return an expression representing the specified column
+    fn col(&self, column_name: &str) -> Result<Expr, DataFrameError>;
+
+    fn schema(&self) -> &Rc<Schema>;
+
+    fn plan(&self) -> &Rc<LogicalPlan>;
+
+    /// show N rows (useful for debugging)
+    fn show(&self, count: usize);
+
+
+    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>, ExecutionError>;
+}
 
 macro_rules! compare_arrays_inner {
     ($V1:ident, $V2:ident, $F:expr) => {
@@ -278,7 +266,7 @@ impl Value {
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Batch) -> Result<Rc<Value>, ExecutionError>>;
+pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Rc<Value>, ExecutionError>>;
 
 /// Compiles a relational expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
@@ -292,7 +280,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             }))
         }
         &Expr::Column(index) => Ok(Box::new(
-            move |batch: &Batch| Ok((*batch.column(index)).clone()),
+            move |batch: &RecordBatch| Ok(Rc::new((*batch.column(index)).clone())),
         )),
         &Expr::BinaryExpr {
             ref left,
@@ -302,52 +290,52 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             let left_expr = compile_expr(ctx, left)?;
             let right_expr = compile_expr(ctx, right)?;
             match op {
-                &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Eq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.eq(&right_values)
                 })),
-                &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::NotEq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.not_eq(&right_values)
                 })),
-                &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Lt => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.lt(&right_values)
                 })),
-                &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::LtEq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.lt_eq(&right_values)
                 })),
-                &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Gt => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.gt(&right_values)
                 })),
-                &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::GtEq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.gt_eq(&right_values)
                 })),
-                &Operator::Plus => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Plus => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.add(&right_values)
                 })),
-                &Operator::Minus => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Minus => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.subtract(&right_values)
                 })),
-                &Operator::Divide => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Divide => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.divide(&right_values)
                 })),
-                &Operator::Multiply => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Multiply => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.multiply(&right_values)
@@ -387,12 +375,13 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
 pub struct FilterRelation {
     schema: Rc<Schema>,
-    input: Rc<SimpleRelation>,
+    input: Box<SimpleRelation>,
     expr: CompiledExpr,
 }
+
 pub struct ProjectRelation {
     schema: Rc<Schema>,
-    input: Rc<SimpleRelation>,
+    input: Box<SimpleRelation>,
     expr: Vec<CompiledExpr>,
 }
 
@@ -405,73 +394,101 @@ pub struct ProjectRelation {
 
 pub struct LimitRelation {
     schema: Rc<Schema>,
-    input: Rc<SimpleRelation>,
+    input: Box<SimpleRelation>,
     limit: usize,
 }
 
 /// trait for all relations (a relation is essentially just an iterator over rows with
 /// a known schema)
 pub trait SimpleRelation {
+
     /// scan all records in this relation
-    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>>;
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a>;
+
     /// get the schema for this relation
-    fn schema(&self) -> &Rc<Schema>;
+    fn schema<'a>(&'a self) -> &'a Schema;
+
+
+//    /// scan all records in this relation
+//    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>>;
+//    /// get the schema for this relation
+//    fn schema(&self) -> Rc<Schema>;
 }
 
 struct DataSourceRelation {
+    schema: Schema,
     ds: Rc<RefCell<DataSource>>
-}
-
-impl SimpleRelation for DataFrame {
-    fn scan(&self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>>> {
-        unimplemented!()
-    }
-
-    fn schema(&self) -> &Rc<Schema> {
-        unimplemented!()
-    }
 }
 
 impl SimpleRelation for DataSourceRelation {
 
-    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
         Box::new(DataSourceIterator::new(self.ds.clone()))
     }
 
-    fn schema(&self) -> &Rc<Schema> {
-        unimplemented!()
+//    fn schema(&self) -> Rc<Schema> {
+//        self.ds.borrow().schema().clone()
+//    }
+
+    fn schema<'a>(&'a self) -> &'a Schema {
+        &self.schema
     }
 }
 
 impl SimpleRelation for FilterRelation {
-
-    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
         unimplemented!()
     }
 
-    fn schema(&self) -> &Rc<Schema> {
+    fn schema<'a>(&'a self) -> &'a Schema {
         unimplemented!()
     }
 }
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
-        unimplemented!()
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+
+        let project_expr = &self.expr;
+
+        let projection_iter = self.input.scan()
+            .map(move |r| match r {
+            Ok(ref batch) => {
+
+                let projected_columns: Result<Vec<Rc<Value>>, ExecutionError> =
+                    project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
+
+                let projected_batch : Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
+                    schema: Rc::new(Schema::empty()), //TODO
+                    data: projected_columns?,
+                    row_count: batch.num_rows(),
+                });
+
+                Ok(projected_batch)
+//                let projected_batch: Box<RecordBatch> = Box::new(ColumnBatch {
+//                    row_count: batch.row_count(),
+//                    columns: projected_columns?.clone(),
+//                });
+//
+//                Ok(projected_batch)
+            }
+            Err(_) => r,
+        });
+
+        Box::new(projection_iter)
     }
 
-    fn schema(&self) -> &Rc<Schema> {
+    fn schema<'a>(&'a self) -> &'a Schema {
         unimplemented!()
     }
 }
 
 impl SimpleRelation for LimitRelation {
-
-    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
         unimplemented!()
     }
 
-    fn schema(&self) -> &Rc<Schema> {
+    fn schema<'a>(&'a self) -> &'a Schema {
         unimplemented!()
     }
 }
@@ -480,7 +497,7 @@ impl SimpleRelation for LimitRelation {
 //    fn scan<'a>(
 //        &'a mut self,
 //        ctx: &'a ExecutionContext,
-//    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a> {
+//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
 //        let filter_expr = &self.expr;
 //
 //        Box::new(self.input.scan(ctx).map(move |b| {
@@ -514,7 +531,7 @@ impl SimpleRelation for LimitRelation {
 //                                Some(n) => n,
 //                            };
 //
-//                            let filtered_batch: Box<Batch> = Box::new(ColumnBatch {
+//                            let filtered_batch: Box<RecordBatch> = Box::new(ColumnBatch {
 //                                row_count,
 //                                columns: filtered_columns,
 //                            });
@@ -538,7 +555,7 @@ impl SimpleRelation for LimitRelation {
 //
 //    // this needs rewriting completely
 //
-//    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+//    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<RecordBatch>, ExecutionError>> + 'a> {
 //
 ////        // collect entire relation into memory (obviously not scalable!)
 ////        let batches = self.input.scan(ctx);
@@ -584,7 +601,7 @@ impl SimpleRelation for LimitRelation {
 ////        });
 ////
 ////        // now turn back into columnar!
-////        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
+////        let result_batch : Box<RecordBatch> = Box::new(ColumnBatch::from_rows(rows));
 ////        let result_it = vec![Ok(result_batch)].into_iter();
 ////
 ////
@@ -602,25 +619,7 @@ impl SimpleRelation for LimitRelation {
 //    fn scan<'a>(
 //        &'a mut self,
 //        ctx: &'a ExecutionContext,
-//    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a> {
-//        let project_expr = &self.expr;
-//
-//        let projection_iter = self.input.scan(ctx).map(move |r| match r {
-//            Ok(ref batch) => {
-//                let projected_columns: Result<Vec<Rc<Value>>, ExecutionError> =
-//                    project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
-//
-//                let projected_batch: Box<Batch> = Box::new(ColumnBatch {
-//                    row_count: batch.row_count(),
-//                    columns: projected_columns?.clone(),
-//                });
-//
-//                Ok(projected_batch)
-//            }
-//            Err(_) => r,
-//        });
-//
-//        Box::new(projection_iter)
+//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
 //    }
 //
 //    fn schema<'a>(&'a self) -> &'a Schema {
@@ -632,7 +631,7 @@ impl SimpleRelation for LimitRelation {
 //    fn scan<'a>(
 //        &'a mut self,
 //        ctx: &'a ExecutionContext,
-//    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a> {
+//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
 //        Box::new(self.input.scan(ctx).take(self.limit))
 //    }
 //
@@ -672,12 +671,12 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn local(data_dir: String) -> Self {
+    pub fn local() -> Self {
         ExecutionContext {
             schemas: Rc::new(RefCell::new(HashMap::new())),
             functions: Rc::new(RefCell::new(HashMap::new())),
             tables: Rc::new(RefCell::new(HashMap::new())),
-            config: Rc::new(DFConfig::Local { data_dir }),
+            config: Rc::new(DFConfig::Local),
         }
     }
 
@@ -793,9 +792,8 @@ impl ExecutionContext {
 
     pub fn create_execution_plan(
         &self,
-        data_dir: String,
         plan: &LogicalPlan,
-    ) -> Result<Rc<SimpleRelation>, ExecutionError> {
+    ) -> Result<Box<SimpleRelation>, ExecutionError> {
 
         println!("Logical plan: {:?}", plan);
 
@@ -816,14 +814,19 @@ impl ExecutionContext {
                 match self.tables.borrow().get(table_name) {
                     Some(df) => {
                         println!("Found registered DataFrame: {}", table_name);
-
-                        //TODO need to figure this out
-
-//                        let foo : Rc<SimpleRelation> = df.clone() as Rc<SimpleRelation>;
+                        df.create_execution_plan()
 //
-//                        Ok(foo.clone())
-
-                        unimplemented!()
+//                        //TODO need to figure this out
+//
+////                        let foo : Rc<SimpleRelation> = df.clone() as Rc<SimpleRelation>;
+////
+////                        Ok(foo.clone())
+//
+//                        let file = File::open(filename)?;
+//                        let ds = Rc::new(RefCell::new(ParquetFile::open(file))) as Rc<RefCell<DataSource>>;
+//                        Ok(Rc::new(DataSourceRelation { ds }))
+//
+//                        unimplemented!()
 
                     }
                     _ => Err(ExecutionError::Custom(format!("No registered table {}", table_name)))
@@ -843,7 +846,7 @@ impl ExecutionContext {
             } => {
                 let file = File::open(filename)?;
                 let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone()))) as Rc<RefCell<DataSource>>;
-                Ok(Rc::new(DataSourceRelation { ds }))
+                Ok(Box::new(DataSourceRelation { schema: schema.as_ref().clone(), ds }))
             }
 
             LogicalPlan::ParquetFile {
@@ -852,7 +855,7 @@ impl ExecutionContext {
             } => {
                 let file = File::open(filename)?;
                 let ds = Rc::new(RefCell::new(ParquetFile::open(file))) as Rc<RefCell<DataSource>>;
-                Ok(Rc::new(DataSourceRelation { ds }))
+                Ok(Box::new(DataSourceRelation { schema: schema.as_ref().clone(), ds }))
             }
 
             LogicalPlan::Selection {
@@ -860,14 +863,14 @@ impl ExecutionContext {
                 ref input,
                 ref schema,
             } => {
-                let input_rel = self.create_execution_plan(data_dir, input)?;
+                let input_rel = self.create_execution_plan(input)?;
 
                 let rel = FilterRelation {
                     input: input_rel,
                     expr: compile_expr(&self, expr)?,
                     schema: schema.clone(),
                 };
-                Ok(Rc::new(rel))
+                Ok(Box::new(rel))
             }
 
             LogicalPlan::Projection {
@@ -875,7 +878,7 @@ impl ExecutionContext {
                 ref input,
                 ..
             } => {
-                let input_rel = self.create_execution_plan(data_dir, &input)?;
+                let input_rel = self.create_execution_plan(&input)?;
                 let input_schema = input_rel.schema().clone();
 
                 //TODO: seems to be duplicate of sql_to_rel code
@@ -906,7 +909,7 @@ impl ExecutionContext {
                     schema: Rc::new(project_schema),
                 };
 
-                Ok(Rc::new(rel))
+                Ok(Box::new(rel))
             }
 
             //            LogicalPlan::Sort { ref expr, ref input, ref schema } => {
@@ -937,13 +940,13 @@ impl ExecutionContext {
                 ref schema,
                 ..
             } => {
-                let input_rel = self.create_execution_plan(data_dir, input)?;
+                let input_rel = self.create_execution_plan(input)?;
                 let rel = LimitRelation {
                     input: input_rel,
                     limit: limit,
                     schema: schema.clone(),
                 };
-                Ok(Rc::new(rel))
+                Ok(Box::new(rel))
             }
         }
     }
@@ -1002,9 +1005,9 @@ impl ExecutionContext {
     pub fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
         println!("execute()");
         match &self.config.as_ref() {
-            &DFConfig::Local { ref data_dir } => {
+            &DFConfig::Local => {
                 //TODO error handling
-                match self.execute_local(physical_plan, data_dir.clone()) {
+                match self.execute_local(physical_plan) {
                     Ok(r) => Ok(r),
                     Err(e) => Err(ExecutionError::Custom(format!("execution failed: {:?}", e)))
                 }
@@ -1016,7 +1019,6 @@ impl ExecutionContext {
     fn execute_local(
         &self,
         physical_plan: &PhysicalPlan,
-        data_dir: String,
     ) -> Result<ExecutionResult, ExecutionError> {
 
         println!("execute_local()");
@@ -1036,7 +1038,7 @@ impl ExecutionContext {
 
                 let mut writer = BufWriter::with_capacity(8 * 1024 * 1024, file);
 
-                let mut execution_plan = self.create_execution_plan(data_dir, plan)?;
+                let mut execution_plan = self.create_execution_plan(plan)?;
 
                 // implement execution here for now but should be a common method for processing a plan
                 let it = execution_plan.scan();
@@ -1067,7 +1069,7 @@ impl ExecutionContext {
                 ref count,
             } => {
 
-                let mut execution_plan = self.create_execution_plan(data_dir, plan)?;
+                let mut execution_plan = self.create_execution_plan(plan)?;
 
                 // implement execution here for now but should be a common method for processing a plan
                 let it = execution_plan.scan().take(*count);
@@ -1215,6 +1217,10 @@ impl DataFrame for DF {
 
     fn show(&self, count: usize) {
         self.ctx.show(self,count).unwrap();
+    }
+
+    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>, ExecutionError> {
+        self.ctx.create_execution_plan(&self.plan)
     }
 }
 
@@ -1472,7 +1478,7 @@ mod tests {
 
     fn create_context() -> ExecutionContext {
         // create execution context
-        let mut ctx = ExecutionContext::local("./test/data".to_string());
+        let mut ctx = ExecutionContext::local();
 
         // define schemas for test data
         ctx.define_schema(
@@ -1498,7 +1504,7 @@ mod tests {
     #[test]
     fn sql_query_example() {
         // create execution context
-        let mut ctx = ExecutionContext::local("./test/data".to_string());
+        let mut ctx = ExecutionContext::local();
 
         // define an external table (csv file)
         ctx.sql(
@@ -1523,7 +1529,7 @@ mod tests {
 fn row_slice(batch: &Rc<RecordBatch>, index: usize) -> Vec<Rc<ScalarValue>> {
     batch.columns()
         .iter()
-        .map(|c| match c {
+        .map(|c| match c.as_ref() {
             &Value::Scalar(ref v) => v.clone(),
             &Value::Column(ref v) => Rc::new(get_value(v, index)),
         })

@@ -38,6 +38,7 @@ pub enum ScalarValue {
     Struct(Vec<ScalarValue>),
 }
 
+#[derive(Clone)]
 pub enum Value {
     Column(Rc<Array>),
     Scalar(Rc<ScalarValue>),
