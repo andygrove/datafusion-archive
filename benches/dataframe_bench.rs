@@ -23,9 +23,9 @@ extern crate datafusion;
 
 use arrow::datatypes::*;
 use datafusion::exec::*;
-use datafusion::logical ::*;
-use datafusion::types ::*;
 use datafusion::functions::geospatial::*;
+use datafusion::logical::*;
+use datafusion::types::*;
 
 fn dataframe() {
     // create execution context

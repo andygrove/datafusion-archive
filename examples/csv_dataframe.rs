@@ -19,9 +19,9 @@ extern crate datafusion;
 
 use arrow::datatypes::*;
 use datafusion::exec::*;
-use datafusion::logical ::*;
-use datafusion::types ::*;
 use datafusion::functions::geospatial::*;
+use datafusion::logical::*;
+use datafusion::types::*;
 
 /// This example shows the use of the DataFrame API to define a query plan
 fn main() {
