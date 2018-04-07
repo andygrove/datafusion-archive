@@ -477,6 +477,9 @@ mod tests {
         let mut parquet = ParquetFile::open(file);
         parquet.set_batch_size(2);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(parquet)));
-        it.for_each(|record_batch| println!("new batch"));
+        it.for_each(|record_batch| match record_batch {
+            Ok(b) => println!("new batch with {} rows", b.num_rows()),
+            _ => println!("error"),
+        });
     }
 }

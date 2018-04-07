@@ -655,7 +655,8 @@ pub enum ExecutionResult {
 #[derive(Clone)]
 pub struct ExecutionContext {
     schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
-    functions: Rc<RefCell<HashMap<String, FunctionMeta>>>,
+    function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
+    functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
     config: Rc<DFConfig>,
     tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
 }
@@ -664,19 +665,21 @@ impl ExecutionContext {
     pub fn local() -> Self {
         ExecutionContext {
             schemas: Rc::new(RefCell::new(HashMap::new())),
+            function_meta: Rc::new(RefCell::new(HashMap::new())),
             functions: Rc::new(RefCell::new(HashMap::new())),
             tables: Rc::new(RefCell::new(HashMap::new())),
             config: Rc::new(DFConfig::Local),
         }
     }
 
-    pub fn remote(etcd: String) -> Self {
-        ExecutionContext {
-            schemas: Rc::new(RefCell::new(HashMap::new())),
-            functions: Rc::new(RefCell::new(HashMap::new())),
-            tables: Rc::new(RefCell::new(HashMap::new())),
-            config: Rc::new(DFConfig::Remote { etcd: etcd }),
-        }
+    pub fn remote(_etcd: String) -> Self {
+        unimplemented!("this feature is disabled at the moment")
+        //        ExecutionContext {
+        //            schemas: Rc::new(RefCell::new(HashMap::new())),
+        //            function_meta: Rc::new(RefCell::new(HashMap::new())),
+        //            tables: Rc::new(RefCell::new(HashMap::new())),
+        //            config: Rc::new(DFConfig::Remote { etcd: etcd }),
+        //        }
     }
 
     pub fn define_schema(&mut self, name: &str, schema: &Schema) {
@@ -685,16 +688,20 @@ impl ExecutionContext {
             .insert(name.to_string(), Rc::new(schema.clone()));
     }
 
-    pub fn define_function(&mut self, func: &ScalarFunction) {
+    pub fn register_function(&mut self, func: Rc<ScalarFunction>) {
         let fm = FunctionMeta {
             name: func.name(),
             args: func.args(),
             return_type: func.return_type(),
         };
 
+        self.function_meta
+            .borrow_mut()
+            .insert(func.name().to_lowercase(), fm);
+
         self.functions
             .borrow_mut()
-            .insert(fm.name.to_lowercase(), fm);
+            .insert(func.name().to_lowercase(), func.clone());
     }
 
     pub fn create_logical_plan(&self, sql: &str) -> Result<Rc<LogicalPlan>, ExecutionError> {
@@ -943,14 +950,9 @@ impl ExecutionContext {
     fn load_function_impl(
         &self,
         function_name: &str,
-    ) -> Result<Box<ScalarFunction>, ExecutionError> {
-        //TODO: this is a huge hack since the functions have already been registered with the
-        // execution context ... I need to implement this so it dynamically loads the functions
-
-        match function_name.to_lowercase().as_ref() {
-            "sqrt" => Ok(Box::new(SqrtFunction {})),
-            "st_point" => Ok(Box::new(STPointFunc {})),
-            "st_astext" => Ok(Box::new(STAsText {})),
+    ) -> Result<Rc<ScalarFunction>, ExecutionError> {
+        match self.functions.borrow().get(&function_name.to_lowercase()) {
+            Some(f) => Ok(f.clone()),
             _ => Err(ExecutionError::Custom(format!(
                 "Unknown function {}",
                 function_name
@@ -1337,9 +1339,11 @@ mod tests {
     fn test_sqrt() {
         let mut ctx = create_context();
 
-        ctx.define_function(&SqrtFunction {});
+        ctx.register_function(Rc::new(SqrtFunction {}));
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
+
+        println!("Logical plan: {:?}", df.plan());
 
         ctx.write_csv(df, "_sqrt_out.csv").unwrap();
 
@@ -1350,7 +1354,7 @@ mod tests {
     fn test_sql_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
@@ -1364,7 +1368,7 @@ mod tests {
     fn test_df_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1397,7 +1401,7 @@ mod tests {
     fn test_filter() {
         let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1450,7 +1454,7 @@ mod tests {
     fn test_chaining_functions() {
         let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
@@ -1464,23 +1468,26 @@ mod tests {
         // create execution context
         let mut ctx = ExecutionContext::local();
 
-        // define schemas for test data
-        ctx.define_schema(
-            "people",
+        let people = ctx.load_csv(
+            "./test/data/people.csv",
             &Schema::new(vec![
                 Field::new("id", DataType::Int32, false),
                 Field::new("name", DataType::Utf8, false),
             ]),
-        );
+        ).unwrap();
 
-        ctx.define_schema(
-            "uk_cities",
+        ctx.register("people", people);
+
+        let uk_cities = ctx.load_csv(
+            "./test/data/uk_cities.csv",
             &Schema::new(vec![
                 Field::new("city", DataType::Utf8, false),
                 Field::new("lat", DataType::Float64, false),
                 Field::new("lng", DataType::Float64, false),
             ]),
-        );
+        ).unwrap();
+
+        ctx.register("uk_cities", uk_cities);
 
         ctx
     }
@@ -1491,12 +1498,12 @@ mod tests {
         let mut ctx = ExecutionContext::local();
 
         // define an external table (csv file)
-//        ctx.sql(
-//            "CREATE EXTERNAL TABLE uk_cities (\
-//             city VARCHAR(100), \
-//             lat DOUBLE, \
-//             lng DOUBLE)",
-//        ).unwrap();
+        //        ctx.sql(
+        //            "CREATE EXTERNAL TABLE uk_cities (\
+        //             city VARCHAR(100), \
+        //             lat DOUBLE, \
+        //             lng DOUBLE)",
+        //        ).unwrap();
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
