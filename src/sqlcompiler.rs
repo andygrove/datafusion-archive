@@ -13,26 +13,28 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::string::String;
 
-use super::rel::*;
-use super::sql::*;
+use super::logical::*;
+use super::sqlast::*;
+use super::types::*;
 
 use arrow::datatypes::*;
 
 pub struct SqlToRel {
     //default_schema: Option<String>,
-    schemas: HashMap<String, Schema>,
+    schemas: HashMap<String, Rc<Schema>>,
 }
 
 impl SqlToRel {
-    pub fn new(schemas: HashMap<String, Schema>) -> Self {
+    pub fn new(schemas: HashMap<String, Rc<Schema>>) -> Self {
         SqlToRel {
             /*default_schema: None,*/ schemas,
         }
     }
 
-    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Box<LogicalPlan>, String> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rc<LogicalPlan>, String> {
         match sql {
             &ASTNode::SQLSelect {
                 ref projection,
@@ -47,7 +49,7 @@ impl SqlToRel {
                 // parse the input relation so we have access to the row type
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
-                    &None => Box::new(LogicalPlan::EmptyRelation),
+                    &None => Rc::new(LogicalPlan::EmptyRelation { schema: Rc::new(Schema::empty()) }),
                 };
 
                 let input_schema = input.schema();
@@ -57,7 +59,7 @@ impl SqlToRel {
                     .map(|e| self.sql_to_rex(&e, &input_schema))
                     .collect::<Result<Vec<Expr>, String>>()?;
 
-                let projection_schema = Schema {
+                let projection_schema = Rc::new(Schema {
                     columns: expr.iter()
                         .map(|e| match e {
                             &Expr::Column(i) => input_schema.columns[i].clone(),
@@ -69,25 +71,25 @@ impl SqlToRel {
                             _ => unimplemented!(),
                         })
                         .collect(),
-                };
+                });
 
                 let selection_plan = match selection {
                     &Some(ref filter_expr) => {
                         let selection_rel = LogicalPlan::Selection {
                             expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
-                            input: input,
+                            input: input.clone(),
                             schema: input_schema.clone(),
                         };
 
                         LogicalPlan::Projection {
                             expr: expr,
-                            input: Box::new(selection_rel),
+                            input: Rc::new(selection_rel),
                             schema: projection_schema.clone(),
                         }
                     }
                     _ => LogicalPlan::Projection {
                         expr: expr,
-                        input: input,
+                        input: input.clone(),
                         schema: projection_schema.clone(),
                     },
                 };
@@ -110,8 +112,8 @@ impl SqlToRel {
 
                         LogicalPlan::Sort {
                             expr: order_by_rex?,
-                            input: Box::new(selection_plan),
-                            schema: input_schema,
+                            input: Rc::new(selection_plan.clone()),
+                            schema: input_schema.clone(),
                         }
                     }
                     _ => selection_plan,
@@ -125,18 +127,18 @@ impl SqlToRel {
                         };
                         LogicalPlan::Limit {
                             limit: limit_count as usize,
-                            schema: order_by_plan.schema(),
-                            input: Box::new(order_by_plan),
+                            schema: order_by_plan.schema().clone(),
+                            input: Rc::new(order_by_plan),
                         }
                     }
                     _ => order_by_plan,
                 };
 
-                Ok(Box::new(limit_plan))
+                Ok(Rc::new(limit_plan))
             }
 
             &ASTNode::SQLIdentifier(ref id) => match self.schemas.get(id) {
-                Some(schema) => Ok(Box::new(LogicalPlan::TableScan {
+                Some(schema) => Ok(Rc::new(LogicalPlan::TableScan {
                     schema_name: String::from("default"),
                     table_name: id.clone(),
                     schema: schema.clone(),
@@ -183,14 +185,14 @@ impl SqlToRel {
                     &SQLOperator::Modulus => Operator::Modulus,
                 };
                 Ok(Expr::BinaryExpr {
-                    left: Box::new(self.sql_to_rex(&left, &schema)?),
+                    left: Rc::new(self.sql_to_rex(&left, &schema)?),
                     op: operator,
-                    right: Box::new(self.sql_to_rex(&right, &schema)?),
+                    right: Rc::new(self.sql_to_rex(&right, &schema)?),
                 })
             }
 
             &ASTNode::SQLOrderBy { ref expr, asc } => Ok(Expr::Sort {
-                expr: Box::new(self.sql_to_rex(&expr, &schema)?),
+                expr: Rc::new(self.sql_to_rex(&expr, &schema)?),
                 asc,
             }),
 

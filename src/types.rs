@@ -15,7 +15,6 @@
 use std::rc::Rc;
 
 use arrow::array::Array;
-use arrow::datatypes::Field;
 
 /// Value holder for all supported data types
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +35,6 @@ pub enum ScalarValue {
 }
 
 pub enum Value {
-    Column(Rc<Field>, Rc<Array>),
-    Scalar(Rc<Field>, ScalarValue),
+    Column(Rc<Array>),
+    Scalar(Rc<ScalarValue>),
 }

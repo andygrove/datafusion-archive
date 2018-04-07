@@ -12,36 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//use std::cmp::Ordering;
+use std::rc::Rc;
 
 use super::types::*;
 
 use arrow::datatypes::*;
-
-//impl PartialOrd for ScalarValue {
-//    fn partial_cmp(&self, other: &ScalarValue) -> Option<Ordering> {
-//        //TODO: implement all type coercion rules
-//
-//        match self {
-//            &ScalarValue::Float64(l) => match other {
-//                &ScalarValue::Float64(r) => l.partial_cmp(&r),
-//                &ScalarValue::Int64(r) => l.partial_cmp(&(r as f64)),
-//                _ => unimplemented!("type coercion rules missing"),
-//            },
-//            &ScalarValue::Int64(l) => match other {
-//                &ScalarValue::Float64(r) => (l as f64).partial_cmp(&r),
-//                &ScalarValue::Int64(r) => l.partial_cmp(&r),
-//                _ => unimplemented!("type coercion rules missing"),
-//            },
-//            &ScalarValue::Utf8(ref l) => match other {
-//                &ScalarValue::Utf8(ref r) => l.partial_cmp(r),
-//                _ => unimplemented!("type coercion rules missing"),
-//            },
-//            &ScalarValue::Struct(_) => None,
-//            _ => unimplemented!("type coercion rules missing"),
-//        }
-//    }
-//}
 
 impl ScalarValue {
     pub fn to_string(&self) -> String {
@@ -115,12 +90,12 @@ pub enum Expr {
     Literal(ScalarValue),
     /// binary expression e.g. "age > 21"
     BinaryExpr {
-        left: Box<Expr>,
+        left: Rc<Expr>,
         op: Operator,
-        right: Box<Expr>,
+        right: Rc<Expr>,
     },
     /// sort expression
-    Sort { expr: Box<Expr>, asc: bool },
+    Sort { expr: Rc<Expr>, asc: bool },
     /// scalar function
     ScalarFunction { name: String, args: Vec<Expr> },
 }
@@ -128,25 +103,25 @@ pub enum Expr {
 impl Expr {
     pub fn eq(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
-            left: Box::new(self.clone()),
+            left: Rc::new(self.clone()),
             op: Operator::Eq,
-            right: Box::new(other.clone()),
+            right: Rc::new(other.clone()),
         }
     }
 
     pub fn gt(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
-            left: Box::new(self.clone()),
+            left: Rc::new(self.clone()),
             op: Operator::Gt,
-            right: Box::new(other.clone()),
+            right: Rc::new(other.clone()),
         }
     }
 
     pub fn lt(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
-            left: Box::new(self.clone()),
+            left: Rc::new(self.clone()),
             op: Operator::Lt,
-            right: Box::new(other.clone()),
+            right: Rc::new(other.clone()),
         }
     }
 }
@@ -156,94 +131,96 @@ impl Expr {
 pub enum LogicalPlan {
     Limit {
         limit: usize,
-        input: Box<LogicalPlan>,
-        schema: Schema,
+        input: Rc<LogicalPlan>,
+        schema: Rc<Schema>,
     },
     Projection {
         expr: Vec<Expr>,
-        input: Box<LogicalPlan>,
-        schema: Schema,
+        input: Rc<LogicalPlan>,
+        schema: Rc<Schema>,
     },
     Selection {
         expr: Expr,
-        input: Box<LogicalPlan>,
-        schema: Schema,
+        input: Rc<LogicalPlan>,
+        schema: Rc<Schema>,
     },
     Sort {
         expr: Vec<Expr>,
-        input: Box<LogicalPlan>,
-        schema: Schema,
+        input: Rc<LogicalPlan>,
+        schema: Rc<Schema>,
     },
     TableScan {
         schema_name: String,
         table_name: String,
-        schema: Schema,
+        schema: Rc<Schema>,
     },
     CsvFile {
         filename: String,
-        schema: Schema,
+        schema: Rc<Schema>,
     },
-    EmptyRelation,
+    EmptyRelation {
+        schema: Rc<Schema>
+    },
 }
 
 impl LogicalPlan {
-    pub fn schema(&self) -> Schema {
+    pub fn schema(&self) -> &Rc<Schema> {
         match self {
-            &LogicalPlan::EmptyRelation => Schema::empty(),
-            &LogicalPlan::TableScan { ref schema, .. } => schema.clone(),
-            &LogicalPlan::CsvFile { ref schema, .. } => schema.clone(),
-            &LogicalPlan::Projection { ref schema, .. } => schema.clone(),
-            &LogicalPlan::Selection { ref schema, .. } => schema.clone(),
-            &LogicalPlan::Sort { ref schema, .. } => schema.clone(),
-            &LogicalPlan::Limit { ref schema, .. } => schema.clone(),
+            LogicalPlan::EmptyRelation { schema } => schema,
+            LogicalPlan::TableScan { schema, .. } => schema,
+            LogicalPlan::CsvFile { schema, .. } => schema,
+            LogicalPlan::Projection { schema, .. } => schema,
+            LogicalPlan::Selection { schema, .. } => schema,
+            LogicalPlan::Sort { schema, .. } => schema,
+            LogicalPlan::Limit { schema, .. } => schema,
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-
-    use super::Expr::*;
-    use super::LogicalPlan::*;
-    use super::ScalarValue::*;
-    use super::*;
-
-    #[test]
-    fn serde() {
-        let schema = Schema {
-            columns: vec![
-                Field {
-                    name: "id".to_string(),
-                    data_type: DataType::Int32,
-                    nullable: false,
-                },
-                Field {
-                    name: "name".to_string(),
-                    data_type: DataType::Utf8,
-                    nullable: false,
-                },
-            ],
-        };
-
-        let csv = CsvFile {
-            filename: "test/data/people.csv".to_string(),
-            schema: schema.clone(),
-        };
-
-        let filter_expr = BinaryExpr {
-            left: Box::new(Column(0)),
-            op: Operator::Eq,
-            right: Box::new(Literal(Int64(2))),
-        };
-
-        let _ = Selection {
-            expr: filter_expr,
-            input: Box::new(csv),
-            schema: schema.clone(),
-        };
-
-        //        let s = serde_json::to_string(&plan).unwrap();
-        //        println!("serialized: {}", s);
-    }
-
-}
+//#[cfg(test)]
+//mod tests {
+//
+//    use super::Expr::*;
+//    use super::LogicalPlan::*;
+//    use super::ScalarValue::*;
+//    use super::*;
+//
+//    #[test]
+//    fn serde() {
+//        let schema = Schema {
+//            columns: vec![
+//                Field {
+//                    name: "id".to_string(),
+//                    data_type: DataType::Int32,
+//                    nullable: false,
+//                },
+//                Field {
+//                    name: "name".to_string(),
+//                    data_type: DataType::Utf8,
+//                    nullable: false,
+//                },
+//            ],
+//        };
+//
+//        let csv = CsvFile {
+//            filename: "test/data/people.csv".to_string(),
+//            schema: schema.clone(),
+//        };
+//
+//        let filter_expr = BinaryExpr {
+//            left: Rc::new(Column(0)),
+//            op: Operator::Eq,
+//            right: Rc::new(Literal(Int64(2))),
+//        };
+//
+//        let _ = Selection {
+//            expr: filter_expr,
+//            input: Rc::new(csv),
+//            schema: schema.clone(),
+//        };
+//
+//        //        let s = serde_json::to_string(&plan).unwrap();
+//        //        println!("serialized: {}", s);
+//    }
+//
+//}

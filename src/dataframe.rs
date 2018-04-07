@@ -13,25 +13,25 @@
 // limitations under the License.
 
 use std::io::Error;
+use std::rc::Rc;
 
 use arrow::datatypes::*;
 
-use super::exec::*;
-use super::rel::*;
+use super::logical::*;
 
 #[derive(Debug)]
 pub enum DataFrameError {
     IoError(Error),
-    ExecError(ExecutionError),
+    //ExecError(ExecutionError),
     InvalidColumn(String),
     NotImplemented,
 }
 
-impl From<ExecutionError> for DataFrameError {
-    fn from(e: ExecutionError) -> Self {
-        DataFrameError::ExecError(e)
-    }
-}
+//impl From<ExecutionError> for DataFrameError {
+//    fn from(e: ExecutionError) -> Self {
+//        DataFrameError::ExecError(e)
+//    }
+//}
 
 impl From<Error> for DataFrameError {
     fn from(e: Error) -> Self {
@@ -39,24 +39,24 @@ impl From<Error> for DataFrameError {
     }
 }
 
-/// DataFrame is an abstraction of a distributed query plan
+/// DataFrame is an abstraction of a logical plan and a schema
 pub trait DataFrame {
-    /// Change the number of partitions
-    fn repartition(&self, n: u32) -> Result<Box<DataFrame>, DataFrameError>;
 
     /// Projection
-    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError>;
+    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
 
     /// Selection
-    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError>;
+    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>, DataFrameError>;
 
     /// Sorting
-    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError>;
+    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
+
+    //fn aggregate(&self, )
 
     /// Return an expression representing the specified column
     fn col(&self, column_name: &str) -> Result<Expr, DataFrameError>;
 
-    fn schema(&self) -> Schema;
+    fn schema(&self) -> &Rc<Schema>;
 
-    fn plan(&self) -> Box<LogicalPlan>;
+    fn plan(&self) -> &Rc<LogicalPlan>;
 }

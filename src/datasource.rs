@@ -64,6 +64,18 @@ trait DataSource {
     fn next(&mut self) -> Option<Box<RecordBatch>>;
 }
 
+struct DataSourceIterator {
+    ds: Box<DataSource>
+}
+
+impl Iterator for DataSourceIterator {
+    type Item = Box<RecordBatch>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.ds.next()
+    }
+}
+
 pub struct CsvFile {
     schema: Rc<Schema>,
     record_iter: StringRecordsIntoIter<BufReader<File>>,
