@@ -394,10 +394,6 @@ pub trait SimpleRelation {
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
 
-    //    /// scan all records in this relation
-    //    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>>;
-    //    /// get the schema for this relation
-    //    fn schema(&self) -> Rc<Schema>;
 }
 
 struct DataSourceRelation {
@@ -412,10 +408,6 @@ impl SimpleRelation for DataSourceRelation {
         Box::new(DataSourceIterator::new(self.ds.clone()))
     }
 
-    //    fn schema(&self) -> Rc<Schema> {
-    //        self.ds.borrow().schema().clone()
-    //    }
-
     fn schema<'a>(&'a self) -> &'a Schema {
         &self.schema
     }
@@ -425,7 +417,53 @@ impl SimpleRelation for FilterRelation {
     fn scan<'a>(
         &'a mut self,
     ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
-        unimplemented!()
+        let filter_expr = &self.expr;
+        let schema = self.schema.clone();
+
+        Box::new(self.input.scan().map(move |b| {
+            match b {
+                Ok(ref batch) => {
+                    // evaluate the filter expression for every row in the batch
+                    let x = (*filter_expr)(batch.as_ref())?;
+                    match x.as_ref() {
+                        &Value::Column(ref filter_eval) => {
+                            let filtered_columns: Vec<Rc<Value>> = (0..batch.num_columns())
+                                .map(move |column_index| {
+                                    let column = batch.column(column_index);
+                                    Rc::new(Value::Column(
+                                        Rc::new(filter(column, &filter_eval)),
+                                    ))
+                                })
+                                .collect();
+
+                            let row_count_opt: Option<usize> = filtered_columns
+                                .iter()
+                                .map(|c| match c.as_ref() {
+                                    &Value::Scalar(_) => 1,
+                                    &Value::Column(ref v) => v.len(),
+                                })
+                                .max();
+
+                            //TODO: should ge able to something like `row_count_opt.or_else(0)` ?
+                            let row_count = match row_count_opt {
+                                None => 0,
+                                Some(n) => n,
+                            };
+
+                            let filtered_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
+                                row_count,
+                                data: filtered_columns,
+                                schema: schema.clone()
+                            });
+
+                            Ok(filtered_batch)
+                        }
+                        _ => panic!(),
+                    }
+                }
+                _ => panic!(),
+            }
+        }))
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -486,52 +524,6 @@ impl SimpleRelation for LimitRelation {
 //        &'a mut self,
 //        ctx: &'a ExecutionContext,
 //    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
-//        let filter_expr = &self.expr;
-//
-//        Box::new(self.input.scan(ctx).map(move |b| {
-//            match b {
-//                Ok(ref batch) => {
-//                    // evaluate the filter expression for every row in the batch
-//                    let x = (*filter_expr)(batch.as_ref())?;
-//                    match x.as_ref() {
-//                        &Value::Column(_, ref filter_eval) => {
-//                            let filtered_columns: Vec<Rc<Value>> = (0..batch.col_count())
-//                                .map(move |column_index| {
-//                                    let column = batch.column(column_index);
-//                                    Rc::new(Value::Column(
-//                                        Rc::new(Field::new("filter", DataType::Int64, false)), //TODO: use correct type
-//                                        Rc::new(filter(column, &filter_eval)),
-//                                    ))
-//                                })
-//                                .collect();
-//
-//                            let row_count_opt: Option<usize> = filtered_columns
-//                                .iter()
-//                                .map(|c| match c.as_ref() {
-//                                    &Value::Scalar(_, _) => 1,
-//                                    &Value::Column(_, ref v) => v.len(),
-//                                })
-//                                .max();
-//
-//                            //TODO: should ge able to something like `row_count_opt.or_else(0)` ?
-//                            let row_count = match row_count_opt {
-//                                None => 0,
-//                                Some(n) => n,
-//                            };
-//
-//                            let filtered_batch: Box<RecordBatch> = Box::new(ColumnBatch {
-//                                row_count,
-//                                columns: filtered_columns,
-//                            });
-//
-//                            Ok(filtered_batch)
-//                        }
-//                        _ => panic!(),
-//                    }
-//                }
-//                _ => panic!(),
-//            }
-//        }))
 //    }
 //
 //    fn schema<'a>(&'a self) -> &'a Schema {
@@ -1239,8 +1231,8 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
     v
 }
 
-pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
-    match column.as_ref() {
+pub fn filter(column: &Value, bools: &Array) -> Array {
+    match column {
         &Value::Scalar(_) => unimplemented!(),
         &Value::Column(ref arr) => match bools.data() {
             &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
