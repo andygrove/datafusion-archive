@@ -249,6 +249,7 @@ impl ParquetFile {
             _ => panic!(),
         };
 
+        println!("Parquet schema: {:?}", schema);
 
         ParquetFile {
             reader: reader,
@@ -347,15 +348,27 @@ impl DataSource for ParquetFile {
                     for i in 0..row_group_reader.num_columns() {
                         let array: Option<Array> = match row_group_reader.get_column_reader(i) {
 //                            //TODO: support all column types
-//                            Ok(ColumnReader::ByteArrayColumnReader(ref mut r)) => {
-//
-//                                r.read_batch()
-//
-//
-//                                unimplemented!()
-//                            }
+                            Ok(ColumnReader::ByteArrayColumnReader(ref mut r)) => {
+                                //unimplemented!("parquet Utf8 not supported")
+
+                                // placeholder
+                                Some(Array::from(vec!["TBD"]))
+                            }
                             Ok(ColumnReader::Int32ColumnReader(ref mut r)) => {
                                 let mut builder: Builder<i32> = Builder::with_capacity(batch_size);
+                                match r.read_batch(batch_size, None, None, unsafe {
+                                    builder.slice_mut(0, batch_size)
+                                }) {
+                                    Ok((count, _)) => {
+                                        row_count = count;
+                                        builder.set_len(count);
+                                        Some(Array::from(builder.finish()))
+                                    }
+                                    _ => panic!("error"),
+                                }
+                            }
+                            Ok(ColumnReader::FloatColumnReader(ref mut r)) => {
+                                let mut builder: Builder<f32> = Builder::with_capacity(batch_size);
                                 match r.read_batch(batch_size, None, None, unsafe {
                                     builder.slice_mut(0, batch_size)
                                 }) {
