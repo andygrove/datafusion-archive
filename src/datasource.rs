@@ -22,8 +22,10 @@ use arrow::datatypes::*;
 
 use csv;
 use csv::*;
+use parquet::basic::LogicalType;
 use parquet::column::reader::*;
 use parquet::file::reader::*;
+use parquet::schema::types::*;
 
 use super::types::*;
 
@@ -201,16 +203,92 @@ pub struct ParquetFile {
 }
 
 impl ParquetFile {
+
     fn open(file: File) -> Self {
         ParquetFile {
             reader: SerializedFileReader::new(file).unwrap(),
             row_index: 0,
         }
     }
+
+    fn to_arrow(t: &Type) -> Field {
+        match t {
+            Type::PrimitiveType { basic_info, physical_type, type_length, scale, precision } => {
+
+                println!("basic_info: {:?}", basic_info);
+
+                let arrow_type = match basic_info.logical_type() {
+                    LogicalType::UINT_8 => DataType::UInt8,
+                    LogicalType::UINT_16 => DataType::UInt16,
+                    LogicalType::UINT_32 => DataType::UInt32,
+                    LogicalType::UINT_64 => DataType::UInt64,
+                    LogicalType::INT_8 => DataType::Int8,
+                    LogicalType::INT_16 => DataType::Int16,
+                    LogicalType::INT_32 => DataType::Int32,
+                    LogicalType::INT_64 => DataType::Int64,
+                    LogicalType::UTF8 => DataType::Utf8,
+                    _ => {
+                        println!("Unsupported parquet type {}", basic_info.logical_type());
+                        DataType::Int32 //TODO
+                    }
+
+                    //TODO
+                    /*
+                    NONE,
+                    MAP,
+                    MAP_KEY_VALUE,
+                    LIST,
+                    ENUM,
+                    DECIMAL,
+                    DATE,
+                    TIME_MILLIS,
+                    TIME_MICROS,
+                    TIMESTAMP_MILLIS,
+                    TIMESTAMP_MICROS,
+                    JSON,
+                    BSON,
+                    INTERVAL
+                    */
+                };
+
+                Field {
+                    name: basic_info.name().to_string(),
+                    data_type: arrow_type,
+                    nullable: false }
+
+            },
+            Type::GroupType { basic_info, fields } => {
+                Field {
+                    name:basic_info.name().to_string(),
+                    data_type: DataType::Struct(fields.iter().map(|f| ParquetFile::to_arrow(f)).collect()),
+                    nullable: false
+                }
+            }
+        }
+
+        /*
+        #[derive(Debug, PartialEq)]
+pub enum Type {
+  PrimitiveType {
+    basic_info: BasicTypeInfo, physical_type: PhysicalType,
+    type_length: i32, scale: i32, precision: i32
+  },
+  GroupType {
+    basic_info: BasicTypeInfo, fields: Vec<TypePtr>
+  }
+}
+*/
+
+    }
 }
 
 impl DataSource for ParquetFile {
     fn next(&mut self) -> Option<Box<RecordBatch>> {
+
+        let metadata = self.reader.metadata();
+
+        let file_type = ParquetFile::to_arrow(metadata.file_metadata().schema());
+
         let row_group_reader = self.reader.get_row_group(self.row_index).unwrap();
 
         let batch_size = 1024;
@@ -245,8 +323,13 @@ impl DataSource for ParquetFile {
             }
         }
 
+        let schema = match file_type.data_type {
+            DataType::Struct(fields) => Schema::new(fields),
+            _ => panic!()
+        };
+
         Some(Box::new(DefaultRecordBatch {
-            schema: Rc::new(Schema::empty()),
+            schema: Rc::new(schema),
             data: arrays,
             row_count,
         }))
@@ -278,6 +361,7 @@ mod tests {
         let file = File::open("test/data/alltypes_plain.parquet").unwrap();
         let mut parquet = ParquetFile::open(file);
         let batch = parquet.next().unwrap();
+        println!("Schema: {:?}", batch.schema());
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
     }
 }
