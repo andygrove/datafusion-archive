@@ -12,22 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod api;
-pub mod cluster;
-pub mod dataframe;
-pub mod datasource;
-pub mod exec;
-pub mod functions;
-pub mod parser;
-pub mod persist;
-pub mod rel;
-pub mod sql;
-pub mod sqltorel;
-
 extern crate arrow;
 extern crate bytes;
 extern crate csv;
-extern crate etcd;
-extern crate futures;
-extern crate hyper;
-extern crate tokio_core;
+extern crate parquet;
+
+//extern crate etcd;
+//extern crate futures;
+//extern crate hyper;
+//extern crate tokio_core;
+
+//pub mod api;
+//pub mod cluster;
+//pub mod dataframe;
+//pub mod datasource;
+//pub mod exec;
+//pub mod functions;
+//pub mod parser;
+pub mod datasource;
+//pub mod persist;
+//pub mod rel;
+//pub mod sql;
+//pub mod sqltorel;
+

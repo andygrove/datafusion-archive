@@ -16,16 +16,12 @@ use std::fs::File;
 use std::io::BufReader;
 use std::rc::Rc;
 
-use super::super::arrow::array::*;
-use super::super::arrow::datatypes::*;
-use super::super::exec::*;
-use super::super::rel::*;
+use arrow::array::*;
+use arrow::datatypes::*;
+use exec::*;
+use rel::*;
 
-//extern crate bytes;
-//use self::bytes::*;
-
-extern crate csv;
-use super::super::csv::StringRecord;
+use csv::StringRecord;
 
 /// Represents a csv file with a known schema
 pub struct CsvRelation {
@@ -47,8 +43,8 @@ impl SimpleRelation for CsvRelation {
     fn scan<'a>(
         &'a mut self,
         _ctx: &'a ExecutionContext,
-    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a> {
-        let batch_iter: Box<Iterator<Item = Result<Box<Batch>, ExecutionError>>> =
+    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
+        let batch_iter: Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>>> =
             Box::new(CsvIterator {
                 schema: &self.schema,
                 iter: &mut self.iter,
@@ -89,7 +85,7 @@ impl<'a> CsvIterator<'a> {
 }
 
 impl<'a> Iterator for CsvIterator<'a> {
-    type Item = Result<Box<Batch>, ExecutionError>;
+    type Item = Result<Box<RecordBatch>, ExecutionError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         //println!("CsvIterator::next()");
@@ -226,7 +222,7 @@ mod tests {
             iter: &mut foo,
         };
 
-        let batch: Box<Batch> = it.next().unwrap().unwrap();
+        let batch: Box<RecordBatch> = it.next().unwrap().unwrap();
 
         assert_eq!(3, batch.col_count());
         assert_eq!(37, batch.row_count());
