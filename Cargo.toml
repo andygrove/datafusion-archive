@@ -43,12 +43,12 @@ parquet = "0.1.0"
 #uuid = { version = "0.6.0-beta", features = ["v5"] }
 #liner = "0.4.3"
 
-#[dev-dependencies]
-#criterion = "0.2.0"
-#
-#[[bench]]
-#name = "dataframe_bench"
-#harness = false
+[dev-dependencies]
+criterion = "0.2.0"
+
+[[bench]]
+name = "dataframe_bench"
+harness = false
 #
 #[[bench]]
 #name = "sql_bench"

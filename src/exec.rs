@@ -339,7 +339,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             compile_expr(ctx, expr)
         }
         &Expr::ScalarFunction { ref name, ref args } => {
-            //println!("Executing function {}", name);
+            ////println!("Executing function {}", name);
 
             // evaluate the arguments to the function
             let compiled_args: Result<Vec<CompiledExpr>, ExecutionError> =
@@ -705,7 +705,7 @@ impl ExecutionContext {
     }
 
     pub fn register(&mut self, table_name: &str, df: Rc<DataFrame>) {
-        println!("Registering table {}", table_name);
+        //println!("Registering table {}", table_name);
         self.tables
             .borrow_mut()
             .insert(table_name.to_string(), df.clone());
@@ -717,7 +717,7 @@ impl ExecutionContext {
     }
 
     pub fn sql(&mut self, sql: &str) -> Result<Rc<DataFrame>, ExecutionError> {
-        println!("sql() {}", sql);
+        //println!("sql() {}", sql);
 
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
@@ -797,7 +797,7 @@ impl ExecutionContext {
         &self,
         plan: &LogicalPlan,
     ) -> Result<Box<SimpleRelation>, ExecutionError> {
-        println!("Logical plan: {:?}", plan);
+        //println!("Logical plan: {:?}", plan);
 
         match *plan {
             LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::Custom(String::from(
@@ -807,7 +807,7 @@ impl ExecutionContext {
             LogicalPlan::Sort { .. } => unimplemented!(),
 
             LogicalPlan::TableScan { ref table_name, .. } => {
-                println!("TableScan: {}", table_name);
+                //println!("TableScan: {}", table_name);
                 match self.tables.borrow().get(table_name) {
                     Some(df) => df.create_execution_plan(),
                     _ => Err(ExecutionError::Custom(format!(
@@ -957,7 +957,7 @@ impl ExecutionContext {
     }
 
     pub fn show(&self, df: &DataFrame, count: usize) -> Result<usize, DataFrameError> {
-        println!("show()");
+        //println!("show()");
         let physical_plan = PhysicalPlan::Show {
             plan: df.plan().clone(),
             count,
@@ -982,7 +982,7 @@ impl ExecutionContext {
     }
 
     pub fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
-        println!("execute()");
+        //println!("execute()");
         match &self.config.as_ref() {
             &DFConfig::Local => {
                 //TODO error handling
@@ -999,7 +999,7 @@ impl ExecutionContext {
         &self,
         physical_plan: &PhysicalPlan,
     ) -> Result<ExecutionResult, ExecutionError> {
-        println!("execute_local()");
+        //println!("execute_local()");
 
         match physical_plan {
             &PhysicalPlan::Interactive { .. } => {
@@ -1010,7 +1010,7 @@ impl ExecutionContext {
                 ref filename,
             } => {
                 // create output file
-                // println!("Writing csv to {}", filename);
+                // //println!("Writing csv to {}", filename);
                 let file = File::create(filename)?;
 
                 let mut writer = BufWriter::with_capacity(8 * 1024 * 1024, file);
@@ -1023,7 +1023,7 @@ impl ExecutionContext {
                 it.for_each(|t| {
                     match t {
                         Ok(ref batch) => {
-                            //println!("Processing batch of {} rows", batch.row_count());
+                            ////println!("Processing batch of {} rows", batch.row_count());
                             for i in 0..batch.num_rows() {
                                 let row = row_slice(batch, i);
                                 let csv = row.into_iter()
@@ -1052,14 +1052,14 @@ impl ExecutionContext {
                 it.for_each(|t| {
                     match t {
                         Ok(ref batch) => {
-                            //println!("Processing batch of {} rows", batch.row_count());
+                            ////println!("Processing batch of {} rows", batch.row_count());
                             for i in 0..batch.num_rows() {
                                 let row = row_slice(batch, i);
                                 let csv = row.into_iter()
                                     .map(|v| v.to_string())
                                     .collect::<Vec<String>>()
                                     .join(",");
-                                println!("{}", csv);
+                                //println!("{}", csv);
                             }
                         }
                         Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
@@ -1101,7 +1101,7 @@ impl ExecutionContext {
     //                                req.set_body(json);
     //
     //                                let post = client.request(req).and_then(|res| {
-    //                                    //println!("POST: {}", res.status());
+    //                                    ////println!("POST: {}", res.status());
     //                                    res.body().concat2()
     //                                });
     //
@@ -1109,7 +1109,7 @@ impl ExecutionContext {
     //                                    Ok(result) => {
     //                                        //TODO: parse result
     //                                        let result = str::from_utf8(&result).unwrap();
-    //                                        println!("{}", result);
+    //                                        //println!("{}", result);
     //                                        Ok(ExecutionResult::Unit)
     //                                    }
     //                                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
@@ -1200,7 +1200,7 @@ impl DataFrame for DF {
 }
 
 pub fn get_value(column: &Array, index: usize) -> ScalarValue {
-    //println!("get_value() index={}", index);
+    ////println!("get_value() index={}", index);
     let v = match column.data() {
         &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
         &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
@@ -1219,12 +1219,12 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
         &ArrayData::Struct(ref v) => {
             // v is Vec<ArrayData>
             // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
-            //            println!("get_value() complex value has {} fields", v.len());
+            //            //println!("get_value() complex value has {} fields", v.len());
             let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
             ScalarValue::Struct(fields)
         }
     };
-    //    println!("get_value() index={} returned {:?}", index, v);
+    //    //println!("get_value() index={} returned {:?}", index, v);
     v
 }
 
@@ -1332,7 +1332,7 @@ mod tests {
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
-        println!("Logical plan: {:?}", df.plan());
+        //println!("Logical plan: {:?}", df.plan());
 
         ctx.write_csv(df, "_sqrt_out.csv").unwrap();
 
