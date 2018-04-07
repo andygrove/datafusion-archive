@@ -58,4 +58,7 @@ pub trait DataFrame {
 
     fn plan(&self) -> &Rc<LogicalPlan>;
 
+    /// show N rows (useful for debugging)
+    fn show(&self, count: usize);
+
 }

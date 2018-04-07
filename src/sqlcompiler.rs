@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::cell::RefCell;
 use std::string::String;
 
 use super::logical::*;
@@ -24,11 +25,11 @@ use arrow::datatypes::*;
 
 pub struct SqlToRel {
     //default_schema: Option<String>,
-    schemas: HashMap<String, Rc<Schema>>,
+    schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
 }
 
 impl SqlToRel {
-    pub fn new(schemas: HashMap<String, Rc<Schema>>) -> Self {
+    pub fn new(schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>) -> Self {
         SqlToRel {
             /*default_schema: None,*/ schemas,
         }
@@ -139,7 +140,7 @@ impl SqlToRel {
                 Ok(Rc::new(limit_plan))
             }
 
-            &ASTNode::SQLIdentifier(ref id) => match self.schemas.get(id) {
+            &ASTNode::SQLIdentifier(ref id) => match self.schemas.borrow().get(id) {
                 Some(schema) => Ok(Rc::new(LogicalPlan::TableScan {
                     schema_name: String::from("default"),
                     table_name: id.clone(),

@@ -26,6 +26,7 @@ fn main() {
     let df = ctx.load_parquet("test/data/alltypes_plain.parquet").unwrap();
     println!("schema: {}", df.schema().to_string());
 
-    ctx.write_csv(df, "test.csv");
+    // show the first 10 rows
+    df.show(10);
 
 }

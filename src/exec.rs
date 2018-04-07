@@ -422,6 +422,16 @@ struct DataSourceRelation {
     ds: Rc<RefCell<DataSource>>
 }
 
+impl SimpleRelation for DataFrame {
+    fn scan(&self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>>> {
+        unimplemented!()
+    }
+
+    fn schema(&self) -> &Rc<Schema> {
+        unimplemented!()
+    }
+}
+
 impl SimpleRelation for DataSourceRelation {
 
     fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
@@ -641,6 +651,10 @@ pub enum PhysicalPlan {
         plan: Rc<LogicalPlan>,
         filename: String,
     },
+    Show {
+        plan: Rc<LogicalPlan>,
+        count: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -649,32 +663,35 @@ pub enum ExecutionResult {
     Count(usize),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ExecutionContext {
-    schemas: HashMap<String, Rc<Schema>>,
-    functions: HashMap<String, FunctionMeta>,
-    config: DFConfig,
+    schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
+    functions: Rc<RefCell<HashMap<String, FunctionMeta>>>,
+    config: Rc<DFConfig>,
+    tables: Rc<RefCell<HashMap<String,Rc<DataFrame>>>>
 }
 
 impl ExecutionContext {
     pub fn local(data_dir: String) -> Self {
         ExecutionContext {
-            schemas: HashMap::new(),
-            functions: HashMap::new(),
-            config: DFConfig::Local { data_dir },
+            schemas: Rc::new(RefCell::new(HashMap::new())),
+            functions: Rc::new(RefCell::new(HashMap::new())),
+            tables: Rc::new(RefCell::new(HashMap::new())),
+            config: Rc::new(DFConfig::Local { data_dir }),
         }
     }
 
     pub fn remote(etcd: String) -> Self {
         ExecutionContext {
-            schemas: HashMap::new(),
-            functions: HashMap::new(),
-            config: DFConfig::Remote { etcd: etcd },
+            schemas: Rc::new(RefCell::new(HashMap::new())),
+            functions: Rc::new(RefCell::new(HashMap::new())),
+            tables: Rc::new(RefCell::new(HashMap::new())),
+            config: Rc::new(DFConfig::Remote { etcd: etcd }),
         }
     }
 
     pub fn define_schema(&mut self, name: &str, schema: &Schema) {
-        self.schemas.insert(name.to_string(), Rc::new(schema.clone()));
+        self.schemas.borrow_mut().insert(name.to_string(), Rc::new(schema.clone()));
     }
 
     pub fn define_function(&mut self, func: &ScalarFunction) {
@@ -684,7 +701,7 @@ impl ExecutionContext {
             return_type: func.return_type(),
         };
 
-        self.functions.insert(fm.name.to_lowercase(), fm);
+        self.functions.borrow_mut().insert(fm.name.to_lowercase(), fm);
     }
 
     pub fn create_logical_plan(&self, sql: &str) -> Result<Rc<LogicalPlan>, ExecutionError> {
@@ -698,7 +715,18 @@ impl ExecutionContext {
         Ok(query_planner.sql_to_rel(&ast)?)
     }
 
+    pub fn register(&mut self, table_name: &str, df: Rc<DataFrame>) {
+        println!("Registering table {}", table_name);
+        self.tables.borrow_mut().insert(table_name.to_string(), df.clone());
+
+        // temp hack
+        self.schemas.borrow_mut().insert(table_name.to_string(), df.schema().clone());
+    }
+
     pub fn sql(&mut self, sql: &str) -> Result<Rc<DataFrame>, ExecutionError> {
+
+        println!("sql() {}", sql);
+
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
 
@@ -713,6 +741,7 @@ impl ExecutionContext {
 
                 //TODO: not sure what to return here
                 Ok(Rc::new(DF {
+                    ctx: self.clone(),
                     plan: Rc::new(LogicalPlan::EmptyRelation { schema: Rc::new(Schema::empty())}),
                 }))
             }
@@ -724,7 +753,7 @@ impl ExecutionContext {
                 let plan = query_planner.sql_to_rel(&ast)?;
 
                 // return the DataFrame
-                Ok(Rc::new(DF { plan: plan }))
+                Ok(Rc::new(DF { ctx: self.clone(), plan: plan }))
             }
         }
     }
@@ -737,6 +766,7 @@ impl ExecutionContext {
             schema: Rc::new(schema.clone()),
         };
         Ok(Box::new(DF {
+            ctx: self.clone(),
             plan: Rc::new(plan),
         }))
     }
@@ -752,12 +782,13 @@ impl ExecutionContext {
             schema: p.schema().clone()
         };
         Ok(Rc::new(DF {
+            ctx: self.clone(),
             plan: Rc::new(plan),
         }))
     }
 
     pub fn register_table(&mut self, name: String, schema: Schema) {
-        self.schemas.insert(name, Rc::new(schema.clone()));
+        self.schemas.borrow_mut().insert(name, Rc::new(schema.clone()));
     }
 
     pub fn create_execution_plan(
@@ -765,6 +796,9 @@ impl ExecutionContext {
         data_dir: String,
         plan: &LogicalPlan,
     ) -> Result<Rc<SimpleRelation>, ExecutionError> {
+
+        println!("Logical plan: {:?}", plan);
+
         match *plan {
             LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::Custom(String::from(
                 "empty relation is not implemented yet",
@@ -777,12 +811,30 @@ impl ExecutionContext {
                 ref schema,
                 ..
             } => {
-                // for now, tables are csv files
-                let filename = format!("{}/{}.csv", data_dir, table_name);
-                //println!("Reading {}", filename);
-                let file = File::open(filename)?;
-                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone()))) as Rc<RefCell<DataSource>>;
-                Ok(Rc::new(DataSourceRelation { ds }))
+
+                println!("TableScan: {}", table_name);
+                match self.tables.borrow().get(table_name) {
+                    Some(df) => {
+                        println!("Found registered DataFrame: {}", table_name);
+
+                        //TODO need to figure this out
+
+//                        let foo : Rc<SimpleRelation> = df.clone() as Rc<SimpleRelation>;
+//
+//                        Ok(foo.clone())
+
+                        unimplemented!()
+
+                    }
+                    _ => Err(ExecutionError::Custom(format!("No registered table {}", table_name)))
+                }
+
+//                // for now, tables are csv files
+//                let filename = format!("{}/{}.csv", data_dir, table_name);
+//                //println!("Reading {}", filename);
+//                let file = File::open(filename)?;
+//                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone()))) as Rc<RefCell<DataSource>>;
+//                Ok(Rc::new(DataSourceRelation { ds }))
             }
 
             LogicalPlan::CsvFile {
@@ -922,6 +974,19 @@ impl ExecutionContext {
         }
     }
 
+    pub fn show(&self, df: &DataFrame, count: usize) -> Result<usize, DataFrameError> {
+        println!("show()");
+        let physical_plan = PhysicalPlan::Show {
+            plan: df.plan().clone(),
+            count
+        };
+
+        match self.execute(&physical_plan)? {
+            ExecutionResult::Count(count) => Ok(count),
+            _ => Err(DataFrameError::NotImplemented), //TODO better error
+        }
+    }
+
     pub fn write_csv(&self, df: Rc<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
         let physical_plan = PhysicalPlan::Write {
             plan: df.plan().clone(),
@@ -934,24 +999,15 @@ impl ExecutionContext {
         }
     }
 
-    //    pub fn collect(&self, df: Box<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
-    //
-    //        let physical_plan = PhysicalPlan::Write {
-    //            plan: df.plan().clone(),
-    //            filename: filename.to_string()
-    //        };
-    //
-    //        match self.execute(&physical_plan)? {
-    //            ExecutionResult::Count(count) => Ok(count),
-    //            _ => Err(DataFrameError::NotImplemented) //TODO better error
-    //        }
-    //
-    //    }
-
     pub fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
-        match &self.config {
+        println!("execute()");
+        match &self.config.as_ref() {
             &DFConfig::Local { ref data_dir } => {
-                self.execute_local(physical_plan, data_dir.clone())
+                //TODO error handling
+                match self.execute_local(physical_plan, data_dir.clone()) {
+                    Ok(r) => Ok(r),
+                    Err(e) => Err(ExecutionError::Custom(format!("execution failed: {:?}", e)))
+                }
             }
             &DFConfig::Remote { ref etcd } => self.execute_remote(physical_plan, etcd.clone()),
         }
@@ -962,6 +1018,9 @@ impl ExecutionContext {
         physical_plan: &PhysicalPlan,
         data_dir: String,
     ) -> Result<ExecutionResult, ExecutionError> {
+
+        println!("execute_local()");
+
         match physical_plan {
             &PhysicalPlan::Interactive { .. } => {
                 Err(ExecutionError::Custom(format!("not implemented")))
@@ -1002,6 +1061,34 @@ impl ExecutionContext {
                 });
 
                 Ok(ExecutionResult::Count(count))
+            }
+            &PhysicalPlan::Show {
+                ref plan,
+                ref count,
+            } => {
+
+                let mut execution_plan = self.create_execution_plan(data_dir, plan)?;
+
+                // implement execution here for now but should be a common method for processing a plan
+                let it = execution_plan.scan().take(*count);
+                it.for_each(|t| {
+                    match t {
+                        Ok(ref batch) => {
+                            //println!("Processing batch of {} rows", batch.row_count());
+                            for i in 0..batch.num_rows() {
+                                let row = row_slice(batch,i);
+                                let csv = row.into_iter()
+                                    .map(|v| v.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(",");
+                                println!("{}", csv);
+                            }
+                        }
+                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
+                    }
+                });
+
+                Ok(ExecutionResult::Count(*count))
             }
         }
     }
@@ -1065,7 +1152,19 @@ impl ExecutionContext {
 }
 
 pub struct DF {
+    ctx: ExecutionContext,
     pub plan: Rc<LogicalPlan>,
+}
+
+impl DF {
+
+    pub fn new(ctx: ExecutionContext, plan: Rc<LogicalPlan>) -> Self {
+        DF { ctx, plan }
+    }
+
+    pub fn with_plan(&self, plan: Rc<LogicalPlan>) -> Self {
+        DF::new(self.ctx.clone(), plan)
+    }
 }
 
 impl DataFrame for DF {
@@ -1076,9 +1175,7 @@ impl DataFrame for DF {
             schema: self.plan.schema().clone(),
         };
 
-        Ok(Rc::new(DF {
-            plan: Rc::new(plan),
-        }))
+        Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
     fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError> {
@@ -1088,9 +1185,7 @@ impl DataFrame for DF {
             schema: self.plan.schema().clone(),
         };
 
-        Ok(Rc::new(DF {
-            plan: Rc::new(plan),
-        }))
+        Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
     fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>, DataFrameError> {
@@ -1100,9 +1195,7 @@ impl DataFrame for DF {
             schema: self.plan.schema().clone(),
         };
 
-        Ok(Rc::new(DF {
-            plan: Rc::new(plan),
-        }))
+        Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
     fn col(&self, column_name: &str) -> Result<Expr, DataFrameError> {
@@ -1118,6 +1211,10 @@ impl DataFrame for DF {
 
     fn plan(&self) -> &Rc<LogicalPlan> {
         &self.plan
+    }
+
+    fn show(&self, count: usize) {
+        self.ctx.show(self,count).unwrap();
     }
 }
 

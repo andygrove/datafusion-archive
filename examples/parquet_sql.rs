@@ -20,9 +20,15 @@ fn main() {
     // create execution context
     let mut ctx = ExecutionContext::local("./test/data".to_string());
 
+    let df = ctx.load_parquet("test/data/alltypes_plain.parquet").unwrap();
+
+    ctx.register("all_types_plain", df);
+
     // define the SQL statement
-    let sql = "SELECT * FROM all_types_plain.parquet";
+    let sql = "SELECT int_col FROM all_types_plain";
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();
+
+    df.show(10);
 }

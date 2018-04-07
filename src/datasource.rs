@@ -111,7 +111,7 @@ impl DataSource for CsvFile {
 
     fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>> {
 
-        let batch_size = 2; // for intital testing
+        let batch_size = 1024; // for intital testing
 
         let mut rows: Vec<Vec<ScalarValue>> = Vec::with_capacity(batch_size);
 
@@ -265,7 +265,7 @@ impl ParquetFile {
                 scale,
                 precision,
             } => {
-                println!("basic_info: {:?}", basic_info);
+             //   println!("basic_info: {:?}", basic_info);
 
                 let arrow_type = match basic_info.logical_type() {
                     LogicalType::UINT_8 => DataType::UInt8,
@@ -278,7 +278,7 @@ impl ParquetFile {
                     LogicalType::INT_64 => DataType::Int64,
                     LogicalType::UTF8 => DataType::Utf8,
                     _ => {
-                        println!("Unsupported parquet type {}", basic_info.logical_type());
+                    //    println!("Unsupported parquet type {}", basic_info.logical_type());
                         DataType::Int32 //TODO
                     } //TODO
                     /*
@@ -338,7 +338,7 @@ impl DataSource for ParquetFile {
                 Ok(row_group_reader) => {
                     self.row_index += 1;
 
-                    let batch_size = 2; // for intital testing
+                    let batch_size = 1024; // for intital testing
 
                     let mut arrays: Vec<Value> = Vec::with_capacity(row_group_reader.num_columns());
                     let mut row_count = 0;
