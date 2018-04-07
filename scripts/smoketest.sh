@@ -14,12 +14,13 @@ trap cleanup EXIT
 
 # run tests
 cargo test
-cargo run --example sql_query
-cargo run --example dataframe
+cargo run --example csv_sql
+cargo run --example csv_dataframe
+cargo run --example parquet_sql
+cargo run --example parquet_dataframe
 
 # run benchmarks
 cargo bench
-
 
 ## NOTE that distributed queries are broken since moving to Arrow ... will be be fixed later
 

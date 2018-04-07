@@ -1059,7 +1059,7 @@ impl ExecutionContext {
                                     .map(|v| v.to_string())
                                     .collect::<Vec<String>>()
                                     .join(",");
-                                //println!("{}", csv);
+                                println!("{}", csv);
                             }
                         }
                         Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
