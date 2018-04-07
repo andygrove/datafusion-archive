@@ -323,9 +323,9 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                 )))
             }))
         }
-        &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
-            Ok((*batch.column(index)).clone())
-        })),
+        &Expr::Column(index) => Ok(Box::new(
+            move |batch: &Batch| Ok((*batch.column(index)).clone()),
+        )),
         &Expr::BinaryExpr {
             ref left,
             ref op,
@@ -409,9 +409,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             Ok(Box::new(move |batch| {
                 let arg_values: Result<Vec<Rc<Value>>, ExecutionError> =
-                    compiled_args_ok.iter()
-                        .map(|expr| expr(batch))
-                        .collect();
+                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
 
                 func.execute(arg_values?)
             }))

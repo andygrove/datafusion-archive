@@ -43,89 +43,89 @@ extern crate datafusion;
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() {
-//    let matches = App::new("DataFusion Worker Node")
-//        .version(VERSION)
-//        .arg(
-//            Arg::with_name("ETCD")
-//                .help("etcd endpoints")
-//                .long("etcd")
-//                .value_name("URL")
-//                .required(true)
-//                .takes_value(true),
-//        )
-//        .arg(
-//            Arg::with_name("BIND")
-//                .long("bind")
-//                .help("IP address and port to bind to")
-//                .default_value("0.0.0.0:8080")
-//                .takes_value(true),
-//        )
-//        .arg(
-//            Arg::with_name("DATADIR")
-//                .long("data_dir")
-//                .help("Location of data files")
-//                .required(true)
-//                .takes_value(true),
-//        )
-//        .arg(
-//            Arg::with_name("WEBROOT")
-//                .long("webroot")
-//                .help("Location of HTML files")
-//                .default_value("./src/bin/worker/")
-//                .takes_value(true),
-//        )
-//        .get_matches();
-//
-//    let uuid = Uuid::new_v5(&uuid::NAMESPACE_DNS, "datafusion");
-//
-//    let bind_addr_str = matches.value_of("BIND").unwrap().to_string();
-//    let bind_addr = bind_addr_str.parse().unwrap();
-//
-//    let www_root = matches.value_of("WEBROOT").unwrap().to_string();
-//    let data_dir = matches.value_of("DATADIR").unwrap().to_string();
-//
-//    let etcd_endpoints = matches.value_of("ETCD").unwrap();
-//
-//    // create futures event loop
-//    let mut core = Core::new().unwrap();
-//    let handle = core.handle();
-//
-//    println!(
-//        "Worker {} listening on {} and serving content from {}",
-//        uuid, bind_addr, www_root
-//    );
-//
-//    thread::spawn(move || {
-//        let server = Http::new()
-//            .bind(&bind_addr, move || {
-//                Ok(Worker {
-//                    www_root: www_root.clone(),
-//                    data_dir: data_dir.clone(),
-//                })
-//            })
-//            .unwrap();
-//        server.run().unwrap();
-//    });
-//
-//    // start a loop to register with etcd every 5 seconds with a ttl of 10 seconds
-//    match Client::new(&handle, &[etcd_endpoints], None) {
-//        Ok(etcd) => {
-//            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
-//                client.register().and_then(|(client, done)| {
-//                    if done {
-//                        Ok(Loop::Break(client))
-//                    } else {
-//                        Ok(Loop::Continue(client))
-//                    }
-//                })
-//            });
-//            match core.run(heartbeat_loop) {
-//                Ok(_) => println!("Heartbeat loop finished"),
-//                Err(e) => println!("Heartbeat loop failed: {:?}", e),
-//            }
-//        }
-//        Err(e) => println!("Failed to connect to etcd: {:?}", e),
-//    }
+    //    let matches = App::new("DataFusion Worker Node")
+    //        .version(VERSION)
+    //        .arg(
+    //            Arg::with_name("ETCD")
+    //                .help("etcd endpoints")
+    //                .long("etcd")
+    //                .value_name("URL")
+    //                .required(true)
+    //                .takes_value(true),
+    //        )
+    //        .arg(
+    //            Arg::with_name("BIND")
+    //                .long("bind")
+    //                .help("IP address and port to bind to")
+    //                .default_value("0.0.0.0:8080")
+    //                .takes_value(true),
+    //        )
+    //        .arg(
+    //            Arg::with_name("DATADIR")
+    //                .long("data_dir")
+    //                .help("Location of data files")
+    //                .required(true)
+    //                .takes_value(true),
+    //        )
+    //        .arg(
+    //            Arg::with_name("WEBROOT")
+    //                .long("webroot")
+    //                .help("Location of HTML files")
+    //                .default_value("./src/bin/worker/")
+    //                .takes_value(true),
+    //        )
+    //        .get_matches();
+    //
+    //    let uuid = Uuid::new_v5(&uuid::NAMESPACE_DNS, "datafusion");
+    //
+    //    let bind_addr_str = matches.value_of("BIND").unwrap().to_string();
+    //    let bind_addr = bind_addr_str.parse().unwrap();
+    //
+    //    let www_root = matches.value_of("WEBROOT").unwrap().to_string();
+    //    let data_dir = matches.value_of("DATADIR").unwrap().to_string();
+    //
+    //    let etcd_endpoints = matches.value_of("ETCD").unwrap();
+    //
+    //    // create futures event loop
+    //    let mut core = Core::new().unwrap();
+    //    let handle = core.handle();
+    //
+    //    println!(
+    //        "Worker {} listening on {} and serving content from {}",
+    //        uuid, bind_addr, www_root
+    //    );
+    //
+    //    thread::spawn(move || {
+    //        let server = Http::new()
+    //            .bind(&bind_addr, move || {
+    //                Ok(Worker {
+    //                    www_root: www_root.clone(),
+    //                    data_dir: data_dir.clone(),
+    //                })
+    //            })
+    //            .unwrap();
+    //        server.run().unwrap();
+    //    });
+    //
+    //    // start a loop to register with etcd every 5 seconds with a ttl of 10 seconds
+    //    match Client::new(&handle, &[etcd_endpoints], None) {
+    //        Ok(etcd) => {
+    //            let heartbeat_loop = loop_fn(Membership::new(etcd, uuid, bind_addr_str), |client| {
+    //                client.register().and_then(|(client, done)| {
+    //                    if done {
+    //                        Ok(Loop::Break(client))
+    //                    } else {
+    //                        Ok(Loop::Continue(client))
+    //                    }
+    //                })
+    //            });
+    //            match core.run(heartbeat_loop) {
+    //                Ok(_) => println!("Heartbeat loop finished"),
+    //                Err(e) => println!("Heartbeat loop failed: {:?}", e),
+    //            }
+    //        }
+    //        Err(e) => println!("Failed to connect to etcd: {:?}", e),
+    //    }
 }
 
 ///// Worker struct to store state

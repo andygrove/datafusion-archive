@@ -20,58 +20,58 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 fn main() {
     println!("DataFusion Console");
 
-//    let cmdline = App::new("DataFusion Console")
-//        .version(VERSION)
-//        .arg(
-//            Arg::with_name("ETCD")
-//                .help("etcd endpoints")
-//                .short("e")
-//                .long("etcd")
-//                .value_name("URL")
-//                .required(true)
-//                .takes_value(true),
-//        )
-//        .arg(
-//            Arg::with_name("SCRIPT")
-//                .help("SQL script to run")
-//                .short("s")
-//                .long("script")
-//                .required(false)
-//                .takes_value(true),
-//        )
-//        .get_matches();
-//
+    //    let cmdline = App::new("DataFusion Console")
+    //        .version(VERSION)
+    //        .arg(
+    //            Arg::with_name("ETCD")
+    //                .help("etcd endpoints")
+    //                .short("e")
+    //                .long("etcd")
+    //                .value_name("URL")
+    //                .required(true)
+    //                .takes_value(true),
+    //        )
+    //        .arg(
+    //            Arg::with_name("SCRIPT")
+    //                .help("SQL script to run")
+    //                .short("s")
+    //                .long("script")
+    //                .required(false)
+    //                .takes_value(true),
+    //        )
+    //        .get_matches();
+    //
     // parse args
-//    let etcd_endpoints = cmdline.value_of("ETCD").unwrap();
-//    let mut console = Console::new(etcd_endpoints.to_string());
-//
-//    match cmdline.value_of("SCRIPT") {
-//        Some(filename) => match File::open(filename) {
-//            Ok(f) => {
-//                let mut reader = BufReader::new(&f);
-//                for line in reader.lines() {
-//                    match line {
-//                        Ok(cmd) => console.execute(&cmd),
-//                        Err(e) => println!("Error: {}", e),
-//                    }
-//                }
-//            }
-//            Err(e) => println!("Could not open file {}: {}", filename, e),
-//        },
-//        None => {
-//            let mut reader = linereader::LineReader::new();
-//            loop {
-//                let result = reader.read_lines();
-//                match result {
-//                    Some(line) => match line {
-//                        linereader::LineResult::Break => break,
-//                        linereader::LineResult::Input(command) => console.execute(&command),
-//                    },
-//                    None => (),
-//                }
-//            }
-//        }
-//    }
+    //    let etcd_endpoints = cmdline.value_of("ETCD").unwrap();
+    //    let mut console = Console::new(etcd_endpoints.to_string());
+    //
+    //    match cmdline.value_of("SCRIPT") {
+    //        Some(filename) => match File::open(filename) {
+    //            Ok(f) => {
+    //                let mut reader = BufReader::new(&f);
+    //                for line in reader.lines() {
+    //                    match line {
+    //                        Ok(cmd) => console.execute(&cmd),
+    //                        Err(e) => println!("Error: {}", e),
+    //                    }
+    //                }
+    //            }
+    //            Err(e) => println!("Could not open file {}: {}", filename, e),
+    //        },
+    //        None => {
+    //            let mut reader = linereader::LineReader::new();
+    //            loop {
+    //                let result = reader.read_lines();
+    //                match result {
+    //                    Some(line) => match line {
+    //                        linereader::LineResult::Break => break,
+    //                        linereader::LineResult::Input(command) => console.execute(&command),
+    //                    },
+    //                    None => (),
+    //                }
+    //            }
+    //        }
+    //    }
 }
 
 ///// Interactive SQL console

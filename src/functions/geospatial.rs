@@ -17,7 +17,9 @@ impl ScalarFunction for STPointFunc {
 
     fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
         if args.len() != 2 {
-            return Err(ExecutionError::Custom("Wrong argument count for ST_Point".to_string()));
+            return Err(ExecutionError::Custom(
+                "Wrong argument count for ST_Point".to_string(),
+            ));
         }
         match (args[0].as_ref(), args[1].as_ref()) {
             (&Value::Column(_, ref arr1), &Value::Column(_, ref arr2)) => {
@@ -28,10 +30,14 @@ impl ScalarFunction for STPointFunc {
                         let new_array = Array::new(arr1.len() as usize, ArrayData::Struct(nested));
                         Ok(Rc::new(Value::Column(field, Rc::new(new_array))))
                     }
-                    _ => Err(ExecutionError::Custom("Unsupported type for ST_Point".to_string())),
+                    _ => Err(ExecutionError::Custom(
+                        "Unsupported type for ST_Point".to_string(),
+                    )),
                 }
             }
-            _ => Err(ExecutionError::Custom("Unsupported type for ST_Point".to_string())),
+            _ => Err(ExecutionError::Custom(
+                "Unsupported type for ST_Point".to_string(),
+            )),
         }
     }
 
@@ -60,7 +66,9 @@ impl ScalarFunction for STAsText {
 
     fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
         if args.len() != 1 {
-            return Err(ExecutionError::Custom("Wrong argument count for ST_AsText".to_string()));
+            return Err(ExecutionError::Custom(
+                "Wrong argument count for ST_AsText".to_string(),
+            ));
         }
         match args[0].as_ref() {
             &Value::Column(ref field, ref arr) => match arr.data() {
@@ -78,12 +86,18 @@ impl ScalarFunction for STAsText {
                                 Rc::new(Array::from(wkt)),
                             )))
                         }
-                        _ => Err(ExecutionError::Custom("Unsupported type for ST_AsText".to_string())),
+                        _ => Err(ExecutionError::Custom(
+                            "Unsupported type for ST_AsText".to_string(),
+                        )),
                     }
                 }
-                _ => Err(ExecutionError::Custom("Unsupported type for ST_AsText".to_string())),
+                _ => Err(ExecutionError::Custom(
+                    "Unsupported type for ST_AsText".to_string(),
+                )),
             },
-            _ => Err(ExecutionError::Custom("Unsupported type for ST_AsText".to_string())),
+            _ => Err(ExecutionError::Custom(
+                "Unsupported type for ST_AsText".to_string(),
+            )),
         }
     }
 

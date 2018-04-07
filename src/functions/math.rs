@@ -41,10 +41,14 @@ impl ScalarFunction for SqrtFunction {
                             v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
                         )),
                     ))),
-                    _ => Err(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())),
+                    _ => Err(ExecutionError::Custom(
+                        "Unsupported arg type for sqrt".to_string(),
+                    )),
                 }
             }
-            _ => Err(ExecutionError::Custom("Unsupported arg type for sqrt".to_string())),
+            _ => Err(ExecutionError::Custom(
+                "Unsupported arg type for sqrt".to_string(),
+            )),
         }
     }
 

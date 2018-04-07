@@ -12,26 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate arrow;
-extern crate bytes;
-extern crate csv;
-extern crate parquet;
+use std::rc::Rc;
 
-//extern crate etcd;
-//extern crate futures;
-//extern crate hyper;
-//extern crate tokio_core;
+use arrow::array::Array;
+use arrow::datatypes::Field;
 
-//pub mod api;
-//pub mod cluster;
-//pub mod dataframe;
-//pub mod datasource;
-//pub mod exec;
-//pub mod functions;
-//pub mod parser;
-pub mod datasource;
-//pub mod persist;
-pub mod logical;
-pub mod types;
-//pub mod sql;
-//pub mod sqltorel;
+/// Value holder for all supported data types
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScalarValue {
+    Boolean(bool),
+    Float32(f32),
+    Float64(f64),
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
+    Utf8(String),
+    Struct(Vec<ScalarValue>),
+}
+
+pub enum Value {
+    Column(Rc<Field>, Rc<Array>),
+    Scalar(Rc<Field>, ScalarValue),
+}

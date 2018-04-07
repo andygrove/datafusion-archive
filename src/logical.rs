@@ -12,52 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
+//use std::cmp::Ordering;
+
+use super::types::*;
 
 use arrow::datatypes::*;
 
-/// Value holder for all supported data types
-#[derive(Debug, Clone, PartialEq)]
-pub enum ScalarValue {
-    Boolean(bool),
-    Float32(f32),
-    Float64(f64),
-    Int8(i8),
-    Int16(i16),
-    Int32(i32),
-    Int64(i64),
-    UInt8(u8),
-    UInt16(u16),
-    UInt32(u32),
-    UInt64(u64),
-    Utf8(String),
-    Struct(Vec<ScalarValue>),
-}
-
-impl PartialOrd for ScalarValue {
-    fn partial_cmp(&self, other: &ScalarValue) -> Option<Ordering> {
-        //TODO: implement all type coercion rules
-
-        match self {
-            &ScalarValue::Float64(l) => match other {
-                &ScalarValue::Float64(r) => l.partial_cmp(&r),
-                &ScalarValue::Int64(r) => l.partial_cmp(&(r as f64)),
-                _ => unimplemented!("type coercion rules missing"),
-            },
-            &ScalarValue::Int64(l) => match other {
-                &ScalarValue::Float64(r) => (l as f64).partial_cmp(&r),
-                &ScalarValue::Int64(r) => l.partial_cmp(&r),
-                _ => unimplemented!("type coercion rules missing"),
-            },
-            &ScalarValue::Utf8(ref l) => match other {
-                &ScalarValue::Utf8(ref r) => l.partial_cmp(r),
-                _ => unimplemented!("type coercion rules missing"),
-            },
-            &ScalarValue::Struct(_) => None,
-            _ => unimplemented!("type coercion rules missing"),
-        }
-    }
-}
+//impl PartialOrd for ScalarValue {
+//    fn partial_cmp(&self, other: &ScalarValue) -> Option<Ordering> {
+//        //TODO: implement all type coercion rules
+//
+//        match self {
+//            &ScalarValue::Float64(l) => match other {
+//                &ScalarValue::Float64(r) => l.partial_cmp(&r),
+//                &ScalarValue::Int64(r) => l.partial_cmp(&(r as f64)),
+//                _ => unimplemented!("type coercion rules missing"),
+//            },
+//            &ScalarValue::Int64(l) => match other {
+//                &ScalarValue::Float64(r) => (l as f64).partial_cmp(&r),
+//                &ScalarValue::Int64(r) => l.partial_cmp(&r),
+//                _ => unimplemented!("type coercion rules missing"),
+//            },
+//            &ScalarValue::Utf8(ref l) => match other {
+//                &ScalarValue::Utf8(ref r) => l.partial_cmp(r),
+//                _ => unimplemented!("type coercion rules missing"),
+//            },
+//            &ScalarValue::Struct(_) => None,
+//            _ => unimplemented!("type coercion rules missing"),
+//        }
+//    }
+//}
 
 impl ScalarValue {
     pub fn to_string(&self) -> String {
@@ -252,7 +236,7 @@ mod tests {
             right: Box::new(Literal(Int64(2))),
         };
 
-        let plan = Selection {
+        let _ = Selection {
             expr: filter_expr,
             input: Box::new(csv),
             schema: schema.clone(),
