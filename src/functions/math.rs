@@ -15,7 +15,6 @@ impl ScalarFunction for SqrtFunction {
     fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
         match args[0].as_ref() {
             &Value::Column(ref arr) => {
-                let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match arr.data() {
                     &ArrayData::Float32(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
                         v.iter().map(|v| v.sqrt()).collect::<Vec<f32>>(),

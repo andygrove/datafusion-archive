@@ -25,7 +25,7 @@ extern crate parquet;
 //pub mod cluster;
 pub mod dataframe;
 pub mod datasource;
-//pub mod exec;
+pub mod exec;
 pub mod functions;
 pub mod sqlast;
 pub mod sqlcompiler;

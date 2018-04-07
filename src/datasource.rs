@@ -29,16 +29,16 @@ use parquet::schema::types::*;
 
 use super::types::*;
 
-trait RecordBatch {
+pub trait RecordBatch {
     fn schema(&self) -> &Rc<Schema>;
     fn num_columns(&self) -> usize;
     fn num_rows(&self) -> usize;
-    fn column(&self, index: usize) -> &Rc<Array>;
+    fn column(&self, index: usize) -> &Value;
 }
 
 struct DefaultRecordBatch {
     schema: Rc<Schema>,
-    data: Vec<Rc<Array>>,
+    data: Vec<Value>,
     row_count: usize,
 }
 
@@ -55,16 +55,16 @@ impl RecordBatch for DefaultRecordBatch {
         self.row_count
     }
 
-    fn column(&self, index: usize) -> &Rc<Array> {
+    fn column(&self, index: usize) -> &Value {
         &self.data[index]
     }
 }
 
-trait DataSource {
+pub trait DataSource {
     fn next(&mut self) -> Option<Box<RecordBatch>>;
 }
 
-struct DataSourceIterator {
+pub struct DataSourceIterator {
     ds: Box<DataSource>,
 }
 
@@ -82,7 +82,7 @@ pub struct CsvFile {
 }
 
 impl CsvFile {
-    fn open(file: File, schema: Rc<Schema>) -> Self {
+    pub fn open(file: File, schema: Rc<Schema>) -> Self {
         let buf_reader = BufReader::with_capacity(8 * 1024 * 1024, file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
@@ -123,10 +123,10 @@ impl DataSource for CsvFile {
             }
         }
 
-        let mut columns: Vec<Rc<Array>> = Vec::with_capacity(self.schema.columns.len());
+        let mut columns: Vec<Value> = Vec::with_capacity(self.schema.columns.len());
 
         for i in 0..self.schema.columns.len() {
-            let values: Array = match self.schema.columns[i].data_type {
+            let array: Array = match self.schema.columns[i].data_type {
                 DataType::Boolean => Array::from(
                     rows.iter()
                         .map(|row| match &row[i] {
@@ -198,7 +198,7 @@ impl DataSource for CsvFile {
                 _ => unimplemented!(),
             };
 
-            columns.push(Rc::new(values));
+            columns.push(Value::Column(Rc::new(array)));
         }
 
         Some(Box::new(DefaultRecordBatch {
@@ -305,7 +305,7 @@ impl DataSource for ParquetFile {
 
         let batch_size = 1024;
 
-        let mut arrays: Vec<Rc<Array>> = Vec::with_capacity(row_group_reader.num_columns());
+        let mut arrays: Vec<Value> = Vec::with_capacity(row_group_reader.num_columns());
         let mut row_count = 0;
 
         for i in 0..row_group_reader.num_columns() {
@@ -331,7 +331,7 @@ impl DataSource for ParquetFile {
             };
 
             if let Some(a) = array {
-                arrays.push(Rc::new(a));
+                arrays.push(Value::Column(Rc::new(a)));
             }
         }
 

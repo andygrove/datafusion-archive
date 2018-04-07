@@ -18,20 +18,21 @@ use std::rc::Rc;
 use arrow::datatypes::*;
 
 use super::logical::*;
+use super::types::*;
 
 #[derive(Debug)]
 pub enum DataFrameError {
     IoError(Error),
-    //ExecError(ExecutionError),
+    ExecError(ExecutionError),
     InvalidColumn(String),
     NotImplemented,
 }
 
-//impl From<ExecutionError> for DataFrameError {
-//    fn from(e: ExecutionError) -> Self {
-//        DataFrameError::ExecError(e)
-//    }
-//}
+impl From<ExecutionError> for DataFrameError {
+    fn from(e: ExecutionError) -> Self {
+        DataFrameError::ExecError(e)
+    }
+}
 
 impl From<Error> for DataFrameError {
     fn from(e: Error) -> Self {
@@ -49,8 +50,6 @@ pub trait DataFrame {
 
     /// Sorting
     fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
-
-    //fn aggregate(&self, )
 
     /// Return an expression representing the specified column
     fn col(&self, column_name: &str) -> Result<Expr, DataFrameError>;

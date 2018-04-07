@@ -22,7 +22,6 @@ impl ScalarFunction for STPointFunc {
         }
         match (args[0].as_ref(), args[1].as_ref()) {
             (&Value::Column(ref arr1), &Value::Column(ref arr2)) => {
-                let field = Rc::new(Field::new(&self.name(), self.return_type(), false));
                 match (arr1.data(), arr2.data()) {
                     (&ArrayData::Float64(_), &ArrayData::Float64(_)) => {
                         let nested: Vec<Rc<Array>> = vec![arr1.clone(), arr2.clone()];
