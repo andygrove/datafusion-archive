@@ -30,7 +30,7 @@ fn sql() {
     let df1 = ctx.sql(&sql).unwrap();
 
     // write the results to a file
-    ctx.write(df1, "_southern_cities.csv").unwrap();
+    ctx.write_csv(df1, "_southern_cities.csv").unwrap();
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

@@ -1,0 +1,31 @@
+// Copyright 2018 Grove Enterprises LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+extern crate arrow;
+extern crate datafusion;
+
+use arrow::datatypes::*;
+use datafusion::exec::*;
+use datafusion::logical::*;
+
+/// This example shows the use of the DataFrame API to define a query plan
+fn main() {
+    let ctx = ExecutionContext::local("./test/data".to_string());
+
+    let df = ctx.load_parquet("test/data/alltypes_plain.parquet").unwrap();
+    println!("schema: {}", df.schema().to_string());
+
+    ctx.write_csv(df, "test.csv");
+
+}

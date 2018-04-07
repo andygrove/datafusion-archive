@@ -22,7 +22,7 @@ fn dataframe() {
     ]);
 
     // open a CSV file as a dataframe
-    let df1 = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+    let df1 = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
 
     // filter on lat > 52.0
     let lat = df1.col("lat").unwrap();
@@ -39,7 +39,7 @@ fn dataframe() {
     let df3 = df2.select(vec![st_point]).unwrap();
 
     // write the results to a file
-    ctx.write(df3, "_northern_cities.csv").unwrap();
+    ctx.write_csv(df3, "_northern_cities.csv").unwrap();
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

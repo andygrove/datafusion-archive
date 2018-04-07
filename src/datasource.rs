@@ -14,6 +14,7 @@
 
 use std::fs::File;
 use std::io::BufReader;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use arrow::array::*;
@@ -21,7 +22,7 @@ use arrow::builder::*;
 use arrow::datatypes::*;
 
 use csv;
-use csv::*;
+use csv::StringRecordsIntoIter;
 use parquet::basic::LogicalType;
 use parquet::column::reader::*;
 use parquet::file::reader::*;
@@ -34,6 +35,7 @@ pub trait RecordBatch {
     fn num_columns(&self) -> usize;
     fn num_rows(&self) -> usize;
     fn column(&self, index: usize) -> &Value;
+    fn columns(&self) -> &Vec<Value>;
 }
 
 struct DefaultRecordBatch {
@@ -58,21 +60,32 @@ impl RecordBatch for DefaultRecordBatch {
     fn column(&self, index: usize) -> &Value {
         &self.data[index]
     }
+
+    fn columns(&self) -> &Vec<Value> {
+        &self.data
+    }
 }
 
 pub trait DataSource {
-    fn next(&mut self) -> Option<Box<RecordBatch>>;
+    fn schema(&self) -> &Rc<Schema>;
+    fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>>;
 }
 
 pub struct DataSourceIterator {
-    ds: Box<DataSource>,
+    pub ds: Rc<RefCell<DataSource>>,
+}
+
+impl DataSourceIterator {
+    pub fn new(ds: Rc<RefCell<DataSource>>) -> Self {
+        DataSourceIterator { ds }
+    }
 }
 
 impl Iterator for DataSourceIterator {
-    type Item = Box<RecordBatch>;
+    type Item = Result<Rc<RecordBatch>, ExecutionError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ds.next()
+        self.ds.borrow_mut().next()
     }
 }
 
@@ -94,8 +107,11 @@ impl CsvFile {
 }
 
 impl DataSource for CsvFile {
-    fn next(&mut self) -> Option<Box<RecordBatch>> {
-        let batch_size = 10;
+
+
+    fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>> {
+
+        let batch_size = 2; // for intital testing
 
         let mut rows: Vec<Vec<ScalarValue>> = Vec::with_capacity(batch_size);
 
@@ -201,24 +217,42 @@ impl DataSource for CsvFile {
             columns.push(Value::Column(Rc::new(array)));
         }
 
-        Some(Box::new(DefaultRecordBatch {
+        Some(Ok(Rc::new(DefaultRecordBatch {
             schema: self.schema.clone(),
             data: columns,
             row_count: rows.len(),
-        }) as Box<RecordBatch>)
+        })))
+    }
+
+    fn schema(&self) -> &Rc<Schema> {
+        &self.schema
     }
 }
 
 pub struct ParquetFile {
     reader: SerializedFileReader,
     row_index: usize,
+    schema: Rc<Schema>
 }
 
 impl ParquetFile {
-    fn open(file: File) -> Self {
+    pub fn open(file: File) -> Self {
+        let reader = SerializedFileReader::new(file).unwrap();
+
+        let metadata = reader.metadata();
+        let file_type = ParquetFile::to_arrow(metadata.file_metadata().schema());
+
+        //TODO error handling
+        let schema = match file_type.data_type {
+            DataType::Struct(fields) => Schema::new(fields),
+            _ => panic!(),
+        };
+
+
         ParquetFile {
-            reader: SerializedFileReader::new(file).unwrap(),
+            reader: reader,
             row_index: 0,
+            schema: Rc::new(schema)
         }
     }
 
@@ -296,55 +330,60 @@ pub enum Type {
 }
 
 impl DataSource for ParquetFile {
-    fn next(&mut self) -> Option<Box<RecordBatch>> {
-        let metadata = self.reader.metadata();
+    fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>> {
 
-        let file_type = ParquetFile::to_arrow(metadata.file_metadata().schema());
+        if self.row_index < self.reader.num_row_groups() {
+            match self.reader.get_row_group(self.row_index) {
+                Err(_) => Some(Err(ExecutionError::Custom(format!("parquet reader error")))),
+                Ok(row_group_reader) => {
+                    self.row_index += 1;
 
-        let row_group_reader = self.reader.get_row_group(self.row_index).unwrap();
+                    let batch_size = 2; // for intital testing
 
-        let batch_size = 1024;
+                    let mut arrays: Vec<Value> = Vec::with_capacity(row_group_reader.num_columns());
+                    let mut row_count = 0;
 
-        let mut arrays: Vec<Value> = Vec::with_capacity(row_group_reader.num_columns());
-        let mut row_count = 0;
+                    for i in 0..row_group_reader.num_columns() {
+                        let array: Option<Array> = match row_group_reader.get_column_reader(i) {
+                            //TODO: support all column types
+                            Ok(ColumnReader::Int32ColumnReader(ref mut r)) => {
+                                let mut builder: Builder<i32> = Builder::with_capacity(batch_size);
+                                match r.read_batch(batch_size, None, None, unsafe {
+                                    builder.slice_mut(0, batch_size)
+                                }) {
+                                    Ok((count, _)) => {
+                                        row_count = count;
+                                        builder.set_len(count);
+                                        Some(Array::from(builder.finish()))
+                                    }
+                                    _ => panic!("error"),
+                                }
+                            }
+                            _ => {
+                                println!("column type not supported");
+                                None
+                            }
+                        };
 
-        for i in 0..row_group_reader.num_columns() {
-            let array: Option<Array> = match row_group_reader.get_column_reader(i) {
-                //TODO: support all column types
-                Ok(ColumnReader::Int32ColumnReader(ref mut r)) => {
-                    let mut builder: Builder<i32> = Builder::with_capacity(batch_size);
-                    match r.read_batch(batch_size, None, None, unsafe {
-                        builder.slice_mut(0, batch_size)
-                    }) {
-                        Ok((count, _)) => {
-                            row_count = count;
-                            builder.set_len(count);
-                            Some(Array::from(builder.finish()))
+                        if let Some(a) = array {
+                            arrays.push(Value::Column(Rc::new(a)));
                         }
-                        _ => panic!("error"),
                     }
-                }
-                _ => {
-                    println!("column type not supported");
-                    None
-                }
-            };
 
-            if let Some(a) = array {
-                arrays.push(Value::Column(Rc::new(a)));
+                    Some(Ok(Rc::new(DefaultRecordBatch {
+                        schema: self.schema.clone(),
+                        data: arrays,
+                        row_count,
+                    })))
+                }
             }
+        } else {
+            None
         }
+    }
 
-        let schema = match file_type.data_type {
-            DataType::Struct(fields) => Schema::new(fields),
-            _ => panic!(),
-        };
-
-        Some(Box::new(DefaultRecordBatch {
-            schema: Rc::new(schema),
-            data: arrays,
-            row_count,
-        }))
+    fn schema(&self) -> &Rc<Schema> {
+        &self.schema
     }
 }
 
@@ -364,7 +403,7 @@ mod tests {
         let file = File::open("test/data/uk_cities.csv").unwrap();
 
         let mut csv = CsvFile::open(file, Rc::new(schema));
-        let batch = csv.next().unwrap();
+        let batch = csv.next().unwrap().unwrap();
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
     }
 
@@ -372,8 +411,16 @@ mod tests {
     fn test_parquet() {
         let file = File::open("test/data/alltypes_plain.parquet").unwrap();
         let mut parquet = ParquetFile::open(file);
-        let batch = parquet.next().unwrap();
+        let batch = parquet.next().unwrap().unwrap();
         println!("Schema: {:?}", batch.schema());
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
+    }
+
+    #[test]
+    fn test_parquet_iterator() {
+        let file = File::open("test/data/alltypes_plain.parquet").unwrap();
+        let mut parquet = ParquetFile::open(file);
+        let it = DataSourceIterator::new(Rc::new(RefCell::new(parquet)));
+        it.for_each(|record_batch| println!("new batch"));
     }
 }

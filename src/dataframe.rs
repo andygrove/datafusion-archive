@@ -57,4 +57,5 @@ pub trait DataFrame {
     fn schema(&self) -> &Rc<Schema>;
 
     fn plan(&self) -> &Rc<LogicalPlan>;
+
 }

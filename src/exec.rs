@@ -17,14 +17,16 @@ use std::collections::HashMap;
 use std::convert::*;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::{BufWriter, Error};
+use std::io::BufWriter;
 use std::iter::Iterator;
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::str;
 use std::string::String;
 
 use arrow::array::*;
 use arrow::datatypes::*;
+
 
 //use futures::{Future, Stream};
 //use hyper::Client;
@@ -417,13 +419,13 @@ pub trait SimpleRelation {
 }
 
 struct DataSourceRelation {
-    ds: Box<DataSource>
+    ds: Rc<RefCell<DataSource>>
 }
 
 impl SimpleRelation for DataSourceRelation {
 
-    fn scan(&self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>>> {
-        unimplemented!()
+    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
+        Box::new(DataSourceIterator::new(self.ds.clone()))
     }
 
     fn schema(&self) -> &Rc<Schema> {
@@ -433,7 +435,7 @@ impl SimpleRelation for DataSourceRelation {
 
 impl SimpleRelation for FilterRelation {
 
-    fn scan(&self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>>> {
+    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
         unimplemented!()
     }
 
@@ -444,7 +446,7 @@ impl SimpleRelation for FilterRelation {
 
 impl SimpleRelation for ProjectRelation {
 
-    fn scan(&self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>>> {
+    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
         unimplemented!()
     }
 
@@ -455,7 +457,7 @@ impl SimpleRelation for ProjectRelation {
 
 impl SimpleRelation for LimitRelation {
 
-    fn scan(&self) -> Box<Iterator<Item=Result<Rc<RecordBatch>, ExecutionError>>> {
+    fn scan(&self) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>>> {
         unimplemented!()
     }
 
@@ -729,12 +731,27 @@ impl ExecutionContext {
 
     /// Open a CSV file
     ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
-    pub fn load(&self, filename: &str, schema: &Schema) -> Result<Box<DataFrame>, ExecutionError> {
+    pub fn load_csv(&self, filename: &str, schema: &Schema) -> Result<Box<DataFrame>, ExecutionError> {
         let plan = LogicalPlan::CsvFile {
             filename: filename.to_string(),
             schema: Rc::new(schema.clone()),
         };
         Ok(Box::new(DF {
+            plan: Rc::new(plan),
+        }))
+    }
+
+    pub fn load_parquet(&self, filename: &str) -> Result<Rc<DataFrame>, ExecutionError> {
+
+        //TODO: can only get schema by assuming file is local and opening it - need catalog!!
+        let file = File::open(filename)?;
+        let p = ParquetFile::open(file);
+
+        let plan = LogicalPlan::ParquetFile {
+            filename: filename.to_string(),
+            schema: p.schema().clone()
+        };
+        Ok(Rc::new(DF {
             plan: Rc::new(plan),
         }))
     }
@@ -753,6 +770,8 @@ impl ExecutionContext {
                 "empty relation is not implemented yet",
             ))),
 
+            LogicalPlan::Sort { .. } => unimplemented!(),
+
             LogicalPlan::TableScan {
                 ref table_name,
                 ref schema,
@@ -762,9 +781,8 @@ impl ExecutionContext {
                 let filename = format!("{}/{}.csv", data_dir, table_name);
                 //println!("Reading {}", filename);
                 let file = File::open(filename)?;
-                let csv : Box<DataSource> = Box::new(CsvFile::open(file, schema.clone())) as Box<DataSource>;
-                let rel = DataSourceRelation { ds: csv };
-                Ok(Rc::new(rel))
+                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone()))) as Rc<RefCell<DataSource>>;
+                Ok(Rc::new(DataSourceRelation { ds }))
             }
 
             LogicalPlan::CsvFile {
@@ -772,9 +790,17 @@ impl ExecutionContext {
                 ref schema,
             } => {
                 let file = File::open(filename)?;
-                let csv : Box<DataSource> = Box::new(CsvFile::open(file, schema.clone())) as Box<DataSource>;
-                let rel = DataSourceRelation { ds: csv };
-                Ok(Rc::new(rel))
+                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone()))) as Rc<RefCell<DataSource>>;
+                Ok(Rc::new(DataSourceRelation { ds }))
+            }
+
+            LogicalPlan::ParquetFile {
+                ref filename,
+                ref schema,
+            } => {
+                let file = File::open(filename)?;
+                let ds = Rc::new(RefCell::new(ParquetFile::open(file))) as Rc<RefCell<DataSource>>;
+                Ok(Rc::new(DataSourceRelation { ds }))
             }
 
             LogicalPlan::Selection {
@@ -867,8 +893,6 @@ impl ExecutionContext {
                 };
                 Ok(Rc::new(rel))
             }
-
-            _ => unimplemented!(),
         }
     }
 
@@ -898,7 +922,7 @@ impl ExecutionContext {
         }
     }
 
-    pub fn write(&self, df: Rc<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
+    pub fn write_csv(&self, df: Rc<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
         let physical_plan = PhysicalPlan::Write {
             plan: df.plan().clone(),
             filename: filename.to_string(),
@@ -947,38 +971,37 @@ impl ExecutionContext {
                 ref filename,
             } => {
 
-                unimplemented!();
-//                // create output file
-//                // println!("Writing csv to {}", filename);
-//                let file = File::create(filename)?;
-//
-//                let mut writer = BufWriter::with_capacity(8 * 1024 * 1024, file);
-//
-//                let mut execution_plan = self.create_execution_plan(data_dir, plan)?;
-//
-//                // implement execution here for now but should be a common method for processing a plan
-//                let it = execution_plan.scan(self);
-//                let mut count: usize = 0;
-//                it.for_each(|t| {
-//                    match t {
-//                        Ok(ref batch) => {
-//                            //println!("Processing batch of {} rows", batch.row_count());
-//                            for i in 0..batch.row_count() {
-//                                let row = batch.row_slice(i);
-//                                let csv = row.into_iter()
-//                                    .map(|v| v.to_string())
-//                                    .collect::<Vec<String>>()
-//                                    .join(",");
-//                                writer.write(&csv.into_bytes()).unwrap();
-//                                writer.write(b"\n").unwrap();
-//                                count += 1;
-//                            }
-//                        }
-//                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
-//                    }
-//                });
-//
-//                Ok(ExecutionResult::Count(count))
+                // create output file
+                // println!("Writing csv to {}", filename);
+                let file = File::create(filename)?;
+
+                let mut writer = BufWriter::with_capacity(8 * 1024 * 1024, file);
+
+                let mut execution_plan = self.create_execution_plan(data_dir, plan)?;
+
+                // implement execution here for now but should be a common method for processing a plan
+                let it = execution_plan.scan();
+                let mut count: usize = 0;
+                it.for_each(|t| {
+                    match t {
+                        Ok(ref batch) => {
+                            //println!("Processing batch of {} rows", batch.row_count());
+                            for i in 0..batch.num_rows() {
+                                let row = row_slice(batch,i);
+                                let csv = row.into_iter()
+                                    .map(|v| v.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(",");
+                                writer.write(&csv.into_bytes()).unwrap();
+                                writer.write(b"\n").unwrap();
+                                count += 1;
+                            }
+                        }
+                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
+                    }
+                });
+
+                Ok(ExecutionResult::Count(count))
             }
         }
     }
@@ -1231,7 +1254,7 @@ mod tests {
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
-        ctx.write(df, "_sqrt_out.csv").unwrap();
+        ctx.write_csv(df, "_sqrt_out.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1245,7 +1268,7 @@ mod tests {
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
 
-        ctx.write(df, "_uk_cities_sql.csv").unwrap();
+        ctx.write_csv(df, "_uk_cities_sql.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1262,7 +1285,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
 
         // create an expression for invoking a scalar function
         //        let func_expr = Expr::ScalarFunction {
@@ -1278,7 +1301,7 @@ mod tests {
 
         let df2 = df.select(vec![func_expr]).unwrap();
 
-        ctx.write(df2, "_uk_cities_df.csv").unwrap();
+        ctx.write_csv(df2, "_uk_cities_df.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1295,7 +1318,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
 
         // filter by lat
         let df2 = df.filter(Expr::BinaryExpr {
@@ -1304,7 +1327,7 @@ mod tests {
             right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
         }).unwrap();
 
-        ctx.write(df2, "_uk_cities_filtered_gt_52.csv").unwrap();
+        ctx.write_csv(df2, "_uk_cities_filtered_gt_52.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1345,7 +1368,7 @@ mod tests {
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
 
-        ctx.write(df, "_uk_cities_wkt.csv").unwrap();
+        ctx.write_csv(df, "_uk_cities_wkt.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1395,6 +1418,17 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write(df1, "_southern_cities.csv").unwrap();
+        ctx.write_csv(df1, "_southern_cities.csv").unwrap();
     }
+}
+
+
+fn row_slice(batch: &Rc<RecordBatch>, index: usize) -> Vec<Rc<ScalarValue>> {
+    batch.columns()
+        .iter()
+        .map(|c| match c {
+            &Value::Scalar(ref v) => v.clone(),
+            &Value::Column(ref v) => Rc::new(get_value(v, index)),
+        })
+        .collect()
 }

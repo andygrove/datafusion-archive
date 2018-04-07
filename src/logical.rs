@@ -158,6 +158,10 @@ pub enum LogicalPlan {
         filename: String,
         schema: Rc<Schema>,
     },
+    ParquetFile {
+        filename: String,
+        schema: Rc<Schema>,
+    },
     EmptyRelation {
         schema: Rc<Schema>,
     },
@@ -169,6 +173,7 @@ impl LogicalPlan {
             LogicalPlan::EmptyRelation { schema } => schema,
             LogicalPlan::TableScan { schema, .. } => schema,
             LogicalPlan::CsvFile { schema, .. } => schema,
+            LogicalPlan::ParquetFile { schema, .. } => schema,
             LogicalPlan::Projection { schema, .. } => schema,
             LogicalPlan::Selection { schema, .. } => schema,
             LogicalPlan::Sort { schema, .. } => schema,
