@@ -2,11 +2,11 @@
 extern crate datafusion;
 //extern crate liner;
 
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::str;
-use std::time::Instant;
+//use std::fs::File;
+//use std::io::BufRead;
+//use std::io::BufReader;
+//use std::str;
+//use std::time::Instant;
 
 //use clap::{App, Arg};
 //use datafusion::exec::*;
@@ -15,7 +15,7 @@ use std::time::Instant;
 
 mod linereader;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+//const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     println!("DataFusion Console");

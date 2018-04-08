@@ -16,6 +16,7 @@ use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufReader;
 use std::rc::Rc;
+use std::str;
 
 use arrow::array::*;
 use arrow::builder::*;
@@ -23,10 +24,12 @@ use arrow::datatypes::*;
 
 use csv;
 use csv::StringRecordsIntoIter;
-use parquet::basic::LogicalType;
+use parquet::basic;
 use parquet::column::reader::*;
+use parquet::data_type::ByteArray;
 use parquet::file::reader::*;
-use parquet::schema::types::*;
+use parquet::schema::types::Type;
+use parquet::util::memory::{ByteBuffer, ByteBufferPtr};
 
 use super::types::*;
 
@@ -36,6 +39,46 @@ pub trait RecordBatch {
     fn num_rows(&self) -> usize;
     fn column(&self, index: usize) -> &Value;
     fn columns(&self) -> &Vec<Rc<Value>>;
+
+    /// Read one row from a record batch (very inefficient but handy for debugging)
+    fn row_slice(&self, index: usize) -> Vec<Rc<ScalarValue>> {
+        self.columns()
+            .iter()
+            .map(|c| match c.as_ref() {
+                &Value::Scalar(ref v) => v.clone(),
+                &Value::Column(ref v) => Rc::new(get_value(v, index)),
+            })
+            .collect()
+    }
+}
+
+pub fn get_value(column: &Array, index: usize) -> ScalarValue {
+    ////println!("get_value() index={}", index);
+    let v = match column.data() {
+        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
+        &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
+        &ArrayData::Float64(ref v) => ScalarValue::Float64(*v.get(index)),
+        &ArrayData::Int8(ref v) => ScalarValue::Int8(*v.get(index)),
+        &ArrayData::Int16(ref v) => ScalarValue::Int16(*v.get(index)),
+        &ArrayData::Int32(ref v) => ScalarValue::Int32(*v.get(index)),
+        &ArrayData::Int64(ref v) => ScalarValue::Int64(*v.get(index)),
+        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(*v.get(index)),
+        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(*v.get(index)),
+        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
+        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
+        &ArrayData::Utf8(ref data) => {
+            ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap()))
+        }
+        &ArrayData::Struct(ref v) => {
+            // v is Vec<ArrayData>
+            // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
+            //            //println!("get_value() complex value has {} fields", v.len());
+            let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
+            ScalarValue::Struct(fields)
+        }
+    };
+    //    //println!("get_value() index={} returned {:?}", index, v);
+    v
 }
 
 //TODO: remove pub from fields
@@ -126,6 +169,7 @@ impl DataSource for CsvFile {
                         .zip(r.into_iter())
                         .map(|(c, s)| match c.data_type {
                             DataType::Boolean => ScalarValue::Boolean(s.parse::<bool>().unwrap()),
+                            DataType::Float16 => ScalarValue::Float32(s.parse::<f32>().unwrap()),
                             DataType::Float32 => ScalarValue::Float32(s.parse::<f32>().unwrap()),
                             DataType::Float64 => ScalarValue::Float64(s.parse::<f64>().unwrap()),
                             DataType::Int8 => ScalarValue::Int8(s.parse::<i8>().unwrap()),
@@ -137,7 +181,7 @@ impl DataSource for CsvFile {
                             DataType::UInt32 => ScalarValue::UInt32(s.parse::<u32>().unwrap()),
                             DataType::UInt64 => ScalarValue::UInt64(s.parse::<u64>().unwrap()),
                             DataType::Utf8 => ScalarValue::Utf8(s.to_string()),
-                            _ => panic!("csv unsupported type"),
+                            DataType::Struct(_) => ScalarValue::Null, // CSV files do not have Structs
                         })
                         .collect();
 
@@ -280,44 +324,26 @@ impl ParquetFile {
         match t {
             Type::PrimitiveType {
                 basic_info,
+                physical_type,
                 ..
-                //physical_type,
                 //type_length,
                 //scale,
                 //precision,
             } => {
-                println!("basic_info: {:?}", basic_info);
+//                println!("basic_info: {:?}", basic_info);
 
-                let arrow_type = match basic_info.logical_type() {
-                    LogicalType::UINT_8 => DataType::UInt8,
-                    LogicalType::UINT_16 => DataType::UInt16,
-                    LogicalType::UINT_32 => DataType::UInt32,
-                    LogicalType::UINT_64 => DataType::UInt64,
-                    LogicalType::INT_8 => DataType::Int8,
-                    LogicalType::INT_16 => DataType::Int16,
-                    LogicalType::INT_32 => DataType::Int32,
-                    LogicalType::INT_64 => DataType::Int64,
-                    LogicalType::UTF8 => DataType::Utf8,
-                    _ => {
-                        println!("Unsupported parquet type {}", basic_info.logical_type());
-                        DataType::Int32 //TODO
-                    } //TODO
-                    /*
-                    NONE,
-                    MAP,
-                    MAP_KEY_VALUE,
-                    LIST,
-                    ENUM,
-                    DECIMAL,
-                    DATE,
-                    TIME_MILLIS,
-                    TIME_MICROS,
-                    TIMESTAMP_MILLIS,
-                    TIMESTAMP_MICROS,
-                    JSON,
-                    BSON,
-                    INTERVAL
-                    */
+                let arrow_type = match physical_type {
+                    basic::Type::BOOLEAN => unimplemented!("No support for Parquet BOOLEAN yet"),
+                    basic::Type::INT32 => DataType::Int32,
+                    basic::Type::INT64 => DataType::Int64,
+                    basic::Type::INT96 => unimplemented!("No support for Parquet INT96 yet"),
+                    basic::Type::FLOAT => DataType::Float32,
+                    basic::Type::DOUBLE => DataType::Float64,
+                    basic::Type::BYTE_ARRAY => match basic_info.logical_type() {
+                        basic::LogicalType::UTF8 => DataType::Utf8,
+                        _ => unimplemented!("No support for Parquet BYTE_ARRAY yet"),
+                    }
+                    basic::Type::FIXED_LEN_BYTE_ARRAY => unimplemented!("No support for Parquet FIXED_LEN_BYTE_ARRAY yet")
                 };
 
                 Field {
@@ -334,19 +360,6 @@ impl ParquetFile {
                 nullable: false,
             },
         }
-
-        /*
-        #[derive(Debug, PartialEq)]
-pub enum Type {
-  PrimitiveType {
-    basic_info: BasicTypeInfo, physical_type: PhysicalType,
-    type_length: i32, scale: i32, precision: i32
-  },
-  GroupType {
-    basic_info: BasicTypeInfo, fields: Vec<TypePtr>
-  }
-}
-*/
     }
 }
 
@@ -364,11 +377,26 @@ impl DataSource for ParquetFile {
 
                     for i in 0..row_group_reader.num_columns() {
                         let array: Option<Array> = match row_group_reader.get_column_reader(i) {
-                            //                            //TODO: support all column types
-                            Ok(ColumnReader::ByteArrayColumnReader(ref mut _r)) => {
-                                //unimplemented!("parquet Utf8 not supported")
-                                // placeholder
-                                Some(Array::from(vec!["TBD"]))
+                            Ok(ColumnReader::ByteArrayColumnReader(ref mut r)) => {
+                                let mut builder = vec![ByteArray::default(); 1024];
+                                match r.read_batch(self.batch_size, None, None, &mut builder) {
+                                    Ok((count, _)) => {
+                                        row_count = count;
+                                        //TODO: there is probably a more efficient way to copy the data to Arrow
+                                        let strings: Vec<
+                                            String,
+                                        > = (builder[0..count])
+                                            .iter()
+                                            .map(|b| {
+                                                String::from_utf8(
+                                                    b.slice(0, b.len()).data().to_vec(),
+                                                ).unwrap()
+                                            })
+                                            .collect::<Vec<String>>();
+                                        Some(Array::from(strings))
+                                    }
+                                    _ => panic!(),
+                                }
                             }
                             Ok(ColumnReader::Int32ColumnReader(ref mut r)) => {
                                 let mut builder: Builder<i32> =
@@ -465,11 +493,13 @@ mod tests {
 
     #[test]
     fn test_parquet() {
-        let file = File::open("test/data/alltypes_plain.parquet").unwrap();
+        let file = File::open("test/data/uk_cities.parquet").unwrap();
         let mut parquet = ParquetFile::open(file).unwrap();
         let batch = parquet.next().unwrap().unwrap();
         println!("Schema: {:?}", batch.schema());
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
+
+        println!("First row: {:?}", batch.row_slice(0));
     }
 
     #[test]

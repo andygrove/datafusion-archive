@@ -21,6 +21,7 @@ use arrow::datatypes::*;
 impl ScalarValue {
     pub fn to_string(&self) -> String {
         match self {
+            &ScalarValue::Null => "NULL".to_string(),
             &ScalarValue::Boolean(b) => b.to_string(),
             &ScalarValue::Int8(l) => l.to_string(),
             &ScalarValue::Int16(l) => l.to_string(),

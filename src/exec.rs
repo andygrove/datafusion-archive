@@ -40,8 +40,6 @@ use super::sqlcompiler::*;
 use super::sqlparser::*;
 use super::types::*;
 //use super::cluster::*;
-use super::functions::geospatial::*;
-use super::functions::math::*;
 
 #[derive(Debug, Clone)]
 pub enum DFConfig {
@@ -918,7 +916,7 @@ impl ExecutionContext {
                         Ok(ref batch) => {
                             ////println!("Processing batch of {} rows", batch.row_count());
                             for i in 0..batch.num_rows() {
-                                let row = row_slice(batch, i);
+                                let row = batch.row_slice(i);
                                 let csv = row.into_iter()
                                     .map(|v| v.to_string())
                                     .collect::<Vec<String>>()
@@ -946,13 +944,15 @@ impl ExecutionContext {
                     match t {
                         Ok(ref batch) => {
                             ////println!("Processing batch of {} rows", batch.row_count());
-                            for i in 0..batch.num_rows() {
-                                let row = row_slice(batch, i);
-                                let csv = row.into_iter()
-                                    .map(|v| v.to_string())
-                                    .collect::<Vec<String>>()
-                                    .join(",");
-                                println!("{}", csv);
+                            for i in 0..*count {
+                                if i < batch.num_rows() {
+                                    let row = batch.row_slice(i);
+                                    let csv = row.into_iter()
+                                        .map(|v| v.to_string())
+                                        .collect::<Vec<String>>()
+                                        .join(",");
+                                    println!("{}", csv);
+                                }
                             }
                         }
                         Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
@@ -1092,35 +1092,6 @@ impl DataFrame for DF {
     }
 }
 
-pub fn get_value(column: &Array, index: usize) -> ScalarValue {
-    ////println!("get_value() index={}", index);
-    let v = match column.data() {
-        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
-        &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
-        &ArrayData::Float64(ref v) => ScalarValue::Float64(*v.get(index)),
-        &ArrayData::Int8(ref v) => ScalarValue::Int8(*v.get(index)),
-        &ArrayData::Int16(ref v) => ScalarValue::Int16(*v.get(index)),
-        &ArrayData::Int32(ref v) => ScalarValue::Int32(*v.get(index)),
-        &ArrayData::Int64(ref v) => ScalarValue::Int64(*v.get(index)),
-        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(*v.get(index)),
-        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(*v.get(index)),
-        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
-        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
-        &ArrayData::Utf8(ref data) => {
-            ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap()))
-        }
-        &ArrayData::Struct(ref v) => {
-            // v is Vec<ArrayData>
-            // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
-            //            //println!("get_value() complex value has {} fields", v.len());
-            let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
-            ScalarValue::Struct(fields)
-        }
-    };
-    //    //println!("get_value() index={} returned {:?}", index, v);
-    v
-}
-
 pub fn filter(column: &Value, bools: &Array) -> Array {
     match column {
         &Value::Scalar(_) => unimplemented!(),
@@ -1215,6 +1186,8 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
 
 #[cfg(test)]
 mod tests {
+    use super::super::functions::geospatial::*;
+    use super::super::functions::math::*;
     use super::*;
 
     #[test]
@@ -1409,15 +1382,4 @@ mod tests {
         // write the results to a file
         ctx.write_csv(df1, "_southern_cities.csv").unwrap();
     }
-}
-
-fn row_slice(batch: &Rc<RecordBatch>, index: usize) -> Vec<Rc<ScalarValue>> {
-    batch
-        .columns()
-        .iter()
-        .map(|c| match c.as_ref() {
-            &Value::Scalar(ref v) => v.clone(),
-            &Value::Column(ref v) => Rc::new(get_value(v, index)),
-        })
-        .collect()
 }

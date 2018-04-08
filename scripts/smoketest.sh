@@ -13,6 +13,7 @@ function cleanup {
 trap cleanup EXIT
 
 # run tests
+cargo fmt
 cargo test
 cargo run --example csv_sql
 cargo run --example csv_dataframe

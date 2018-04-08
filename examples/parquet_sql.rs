@@ -20,12 +20,12 @@ fn main() {
     // create execution context
     let mut ctx = ExecutionContext::local();
 
-    let df = ctx.load_parquet("./test/data/uk_cities.parquet/part-00000-ca09e150-0217-400e-af21-6a9c3689cad1-c000.snappy.parquet").unwrap();
+    let df = ctx.load_parquet("./test/data/uk_cities.parquet").unwrap();
 
     ctx.register("uk_cities", df);
 
     // define the SQL statement
-    let sql = "SELECT lat, lng FROM uk_cities";
+    let sql = "SELECT city, lat, lng FROM uk_cities";
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();

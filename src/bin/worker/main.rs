@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::{Error, ErrorKind};
-use std::str;
-use std::thread;
-use std::time::Duration;
+//use std::fs::File;
+//use std::io::prelude::*;
+//use std::io::{Error, ErrorKind};
+//use std::str;
+//use std::thread;
+//use std::time::Duration;
 
 extern crate datafusion;
 //extern crate etcd;
@@ -40,7 +40,7 @@ extern crate datafusion;
 //use tokio_core::reactor::Core;
 //use uuid::Uuid;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+//const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     //    let matches = App::new("DataFusion Worker Node")

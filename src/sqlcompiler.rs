@@ -164,7 +164,11 @@ impl SqlToRel {
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.columns.iter().position(|c| c.name.eq(id)) {
                     Some(index) => Ok(Expr::Column(index)),
-                    None => Err(format!("Invalid identifier {}", id)),
+                    None => Err(format!(
+                        "Invalid identifier '{}' for schema {}",
+                        id,
+                        schema.to_string()
+                    )),
                 }
             }
 

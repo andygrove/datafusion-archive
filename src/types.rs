@@ -23,6 +23,7 @@ use super::sqlparser::ParserError;
 /// Value holder for all supported data types
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScalarValue {
+    Null,
     Boolean(bool),
     Float32(f32),
     Float64(f64),
