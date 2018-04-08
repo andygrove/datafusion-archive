@@ -333,7 +333,7 @@ impl ParquetFile {
 //                println!("basic_info: {:?}", basic_info);
 
                 let arrow_type = match physical_type {
-                    basic::Type::BOOLEAN => unimplemented!("No support for Parquet BOOLEAN yet"),
+                    basic::Type::BOOLEAN => DataType::Boolean,
                     basic::Type::INT32 => DataType::Int32,
                     basic::Type::INT64 => DataType::Int64,
                     basic::Type::INT96 => unimplemented!("No support for Parquet INT96 yet"),
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn test_parquet_iterator() {
-        let file = File::open("test/data/alltypes_plain.parquet").unwrap();
+        let file = File::open("test/data/uk_cities.parquet").unwrap();
         let mut parquet = ParquetFile::open(file).unwrap();
         parquet.set_batch_size(2);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(parquet)));
