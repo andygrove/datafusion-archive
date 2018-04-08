@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
+extern crate arrow;
+extern crate datafusion;
 
-use arrow::datatypes::*;
+use datafusion::exec::*;
 
-use super::exec::{ExecutionError, Value};
+/// This example shows the use of the DataFrame API to define a query plan
+fn main() {
+    let ctx = ExecutionContext::local();
 
-/// Scalar function. User-defined implementations will be dynamically loaded at runtime.
-pub trait ScalarFunction {
-    fn name(&self) -> String;
-    fn args(&self) -> Vec<Field>;
-    fn return_type(&self) -> DataType;
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError>;
+    let df = ctx.load_parquet("test/data/alltypes_plain.parquet")
+        .unwrap();
+    println!("schema: {}", df.schema().to_string());
+
+    // show the first 10 rows
+    df.show(10);
 }

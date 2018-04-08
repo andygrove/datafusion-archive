@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate criterion;
-use criterion::Criterion;
-
 use std::rc::Rc;
 
 extern crate arrow;
@@ -27,7 +23,8 @@ use datafusion::functions::geospatial::*;
 use datafusion::logical::*;
 use datafusion::types::*;
 
-fn dataframe() {
+/// This example shows the use of the DataFrame API to define a query plan
+fn main() {
     // create execution context
     let mut ctx = ExecutionContext::local();
     ctx.register_function(Rc::new(STPointFunc {}));
@@ -42,11 +39,13 @@ fn dataframe() {
 
     // open a CSV file as a dataframe
     let df1 = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
+    println!("df1: {}", df1.schema().to_string());
 
     // filter on lat > 52.0
     let lat = df1.col("lat").unwrap();
     let value = Expr::Literal(ScalarValue::Float64(52.0));
     let df2 = df1.filter(lat.gt(&value)).unwrap();
+    println!("df2: {}", df1.schema().to_string());
 
     // apply a projection using a scalar function to create a complex type
     // invoke custom code as a scalar UDF
@@ -56,14 +55,8 @@ fn dataframe() {
     );
 
     let df3 = df2.select(vec![st_point]).unwrap();
+    println!("df3: {}", df1.schema().to_string());
 
     // write the results to a file
     ctx.write_csv(df3, "_northern_cities.csv").unwrap();
 }
-
-fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("dataframe", |b| b.iter(|| dataframe()));
-}
-
-criterion_group!(benches, criterion_benchmark);
-criterion_main!(benches);

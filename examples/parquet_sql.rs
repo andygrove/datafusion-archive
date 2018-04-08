@@ -18,22 +18,17 @@ use datafusion::exec::*;
 /// This example shows the steps to parse, plan, and execute simple SQL in the current process
 fn main() {
     // create execution context
-    let mut ctx = ExecutionContext::local("./test/data".to_string());
+    let mut ctx = ExecutionContext::local();
 
-    // define an external table (csv file)
-    ctx.sql(
-        "CREATE EXTERNAL TABLE uk_cities (\
-         city VARCHAR(100), \
-         lat DOUBLE, \
-         lng DOUBLE)",
-    ).unwrap();
+    let df = ctx.load_parquet("./test/data/uk_cities.parquet/part-00000-ca09e150-0217-400e-af21-6a9c3689cad1-c000.snappy.parquet").unwrap();
+
+    ctx.register("uk_cities", df);
 
     // define the SQL statement
-    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities WHERE lat < 53.0";
+    let sql = "SELECT lat, lng FROM uk_cities";
 
     // create a data frame
-    let df1 = ctx.sql(&sql).unwrap();
+    let df = ctx.sql(&sql).unwrap();
 
-    // write the results to a file
-    ctx.write(df1, "_southern_cities.csv").unwrap();
+    df.show(10);
 }

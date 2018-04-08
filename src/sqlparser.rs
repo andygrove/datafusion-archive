@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;
 
-use super::sql::*;
+use super::sqlast::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {

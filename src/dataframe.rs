@@ -13,50 +13,10 @@
 // limitations under the License.
 
 use std::io::Error;
+use std::rc::Rc;
 
 use arrow::datatypes::*;
 
-use super::exec::*;
-use super::rel::*;
+use super::logical::*;
+use super::types::*;
 
-#[derive(Debug)]
-pub enum DataFrameError {
-    IoError(Error),
-    ExecError(ExecutionError),
-    InvalidColumn(String),
-    NotImplemented,
-}
-
-impl From<ExecutionError> for DataFrameError {
-    fn from(e: ExecutionError) -> Self {
-        DataFrameError::ExecError(e)
-    }
-}
-
-impl From<Error> for DataFrameError {
-    fn from(e: Error) -> Self {
-        DataFrameError::IoError(e)
-    }
-}
-
-/// DataFrame is an abstraction of a distributed query plan
-pub trait DataFrame {
-    /// Change the number of partitions
-    fn repartition(&self, n: u32) -> Result<Box<DataFrame>, DataFrameError>;
-
-    /// Projection
-    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError>;
-
-    /// Selection
-    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError>;
-
-    /// Sorting
-    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError>;
-
-    /// Return an expression representing the specified column
-    fn col(&self, column_name: &str) -> Result<Expr, DataFrameError>;
-
-    fn schema(&self) -> Schema;
-
-    fn plan(&self) -> Box<LogicalPlan>;
-}

@@ -25,22 +25,23 @@ name = "console"
 path = "src/bin/console/main.rs"
 
 [dependencies]
-datafusion-arrow = "0.1.0-nightly-20180404"
 bytes = "0.4"
 byteorder = "1"
 csv = "1.0.0-beta.5"
-futures = "0.1.18"
-futures-timer = "0.1"
-tokio-core = "0.1.2"
-hyper = "0.11.2"
+datafusion-arrow = "0.1.0-nightly-20180406"
+parquet = "0.1.0"
+#futures = "0.1.18"
+#futures-timer = "0.1"
+#tokio-core = "0.1.2"
+#hyper = "0.11.2"
 #serde_derive = "1.0"
 #serde = "1.0"
 #serde_json = "1.0"
-rprompt = "1.0"
-etcd = "0.8.0"
-clap = "2.31.2"
-uuid = { version = "0.6.0-beta", features = ["v5"] }
-liner = "0.4.3"
+#rprompt = "1.0"
+#etcd = "0.8.0"
+#clap = "2.31.2"
+#uuid = { version = "0.6.0-beta", features = ["v5"] }
+#liner = "0.4.3"
 
 [dev-dependencies]
 criterion = "0.2.0"
@@ -48,15 +49,15 @@ criterion = "0.2.0"
 [[bench]]
 name = "dataframe_bench"
 harness = false
-
-[[bench]]
-name = "sql_bench"
-harness = false
-
-[[bench]]
-name = "filter_primitive"
-harness = false
-
-[[bench]]
-name = "udf_udt"
-harness = false
+#
+#[[bench]]
+#name = "sql_bench"
+#harness = false
+#
+#[[bench]]
+#name = "filter_primitive"
+#harness = false
+#
+#[[bench]]
+#name = "udf_udt"
+#harness = false

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use std::clone::Clone;
 use std::collections::HashMap;
 use std::convert::*;
@@ -32,107 +33,65 @@ use arrow::datatypes::*;
 //use hyper::{Method, Request};
 //use hyper::header::{ContentLength, ContentType};
 
-use super::api::*;
-use super::datasource::csv::CsvRelation;
-use super::parser::*;
-use super::rel::*;
-use super::sql::ASTNode::*;
-use super::sqltorel::*;
+use super::datasource::*;
+use super::logical::*;
+use super::sqlast::ASTNode::*;
+use super::sqlcompiler::*;
+use super::sqlparser::*;
+use super::types::*;
 //use super::cluster::*;
-use super::dataframe::*;
 use super::functions::geospatial::*;
 use super::functions::math::*;
 
 #[derive(Debug, Clone)]
 pub enum DFConfig {
-    Local { data_dir: String },
+    Local,
     Remote { etcd: String },
 }
 
 #[derive(Debug)]
-pub enum ExecutionError {
+pub enum DataFrameError {
     IoError(Error),
-    ParserError(ParserError),
-    Custom(String),
+    ExecError(ExecutionError),
+    InvalidColumn(String),
+    NotImplemented,
 }
 
-impl From<Error> for ExecutionError {
+impl From<ExecutionError> for DataFrameError {
+    fn from(e: ExecutionError) -> Self {
+        DataFrameError::ExecError(e)
+    }
+}
+
+impl From<Error> for DataFrameError {
     fn from(e: Error) -> Self {
-        ExecutionError::IoError(e)
+        DataFrameError::IoError(e)
     }
 }
 
-impl From<String> for ExecutionError {
-    fn from(e: String) -> Self {
-        ExecutionError::Custom(e)
-    }
+/// DataFrame is an abstraction of a logical plan and a schema
+pub trait DataFrame {
+    /// Projection
+    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
+
+    /// Selection
+    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>, DataFrameError>;
+
+    /// Sorting
+    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
+
+    /// Return an expression representing the specified column
+    fn col(&self, column_name: &str) -> Result<Expr, DataFrameError>;
+
+    fn schema(&self) -> &Rc<Schema>;
+
+    fn plan(&self) -> &Rc<LogicalPlan>;
+
+    /// show N rows (useful for debugging)
+    fn show(&self, count: usize);
+
+    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>, ExecutionError>;
 }
-
-impl From<ParserError> for ExecutionError {
-    fn from(e: ParserError) -> Self {
-        ExecutionError::ParserError(e)
-    }
-}
-
-pub trait Batch {
-    fn col_count(&self) -> usize;
-    fn row_count(&self) -> usize;
-    fn column(&self, index: usize) -> &Rc<Value>;
-
-    /// copy values into a row (EXPENSIVE)
-    fn row_slice(&self, index: usize) -> Vec<ScalarValue>;
-}
-
-pub struct ColumnBatch {
-    pub row_count: usize,
-    pub columns: Vec<Rc<Value>>,
-}
-
-impl Batch for ColumnBatch {
-    fn col_count(&self) -> usize {
-        self.columns.len()
-    }
-
-    fn row_count(&self) -> usize {
-        self.row_count
-    }
-
-    fn column(&self, index: usize) -> &Rc<Value> {
-        &self.columns[index]
-    }
-
-    fn row_slice(&self, index: usize) -> Vec<ScalarValue> {
-        //        println!("row_slice() row = {} of {}", index, self.row_count);
-        self.columns
-            .iter()
-            .map(|c| match c.as_ref() {
-                &Value::Scalar(_, ref v) => v.clone(),
-                &Value::Column(_, ref v) => get_value(v, index),
-            })
-            .collect()
-    }
-}
-
-pub enum Value {
-    Column(Rc<Field>, Rc<Array>),
-    Scalar(Rc<Field>, ScalarValue),
-}
-
-//macro_rules! compare_column_to_scalar {
-//    ($TY:ident, $EXPR:expr) => {
-//        match (l, r) {
-//            (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int8(ref a), &ScalarValue::Int8(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int16(ref a), &ScalarValue::Int16(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int32(ref a), &ScalarValue::Int32(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            (&ArrayData::Int64(ref a), &ScalarValue::Int64(b)) => Ok(a.iter().map(|n| n > b).collect(),
-//            //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
-//            _ => unimplemented!()
-//        };
-//
-//    }
-//}
 
 macro_rules! compare_arrays_inner {
     ($V1:ident, $V2:ident, $F:expr) => {
@@ -156,17 +115,16 @@ macro_rules! compare_arrays_inner {
 }
 
 macro_rules! compare_arrays {
-    ($NAME:expr, $F1:ident, $V1:ident, $F2:ident, $V2:ident, $F:expr) => {
-        Ok(Rc::new(Value::Column(
-            Rc::new(Field::new($NAME, $F1.data_type.clone(), false)),
-            Rc::new(Array::from(compare_arrays_inner!($V1, $V2, $F)?)),
-        )))
+    ($V1:ident, $V2:ident, $F:expr) => {
+        Ok(Rc::new(Value::Column(Rc::new(Array::from(
+            compare_arrays_inner!($V1, $V2, $F)?,
+        )))))
     };
 }
 
 macro_rules! compare_array_with_scalar_inner {
     ($V1:ident, $V2:ident, $F:expr) => {
-        match ($V1.data(), $V2) {
+        match ($V1.data(), $V2.as_ref()) {
             (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => {
                 Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
             }
@@ -181,114 +139,101 @@ macro_rules! compare_array_with_scalar_inner {
 }
 
 macro_rules! compare_array_with_scalar {
-    ($NAME:expr, $F1:ident, $V1:ident, $F2:ident, $V2:ident, $F:expr) => {
-        Ok(Rc::new(Value::Column(
-            Rc::new(Field::new($NAME, $F1.data_type.clone(), false)),
-            Rc::new(Array::from(compare_array_with_scalar_inner!($V1, $V2, $F)?)),
-        )))
+    ($V1:ident, $V2:ident, $F:expr) => {
+        Ok(Rc::new(Value::Column(Rc::new(Array::from(
+            compare_array_with_scalar_inner!($V1, $V2, $F)?,
+        )))))
     };
 }
 
 impl Value {
     pub fn eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_arrays!("==", f1, v1, _f2, v2, |(aa, bb)| aa == bb)
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                compare_arrays!(v1, v2, |(aa, bb)| aa == bb)
             }
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("==", f1, v1, _f2, v2, |(aa, bb)| aa == bb)
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa == bb)
             }
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa, bb)| aa == bb)
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa == bb)
             }
-            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => {
-                unimplemented!()
-            }
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
         }
     }
 
     pub fn not_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_arrays!("!=", f1, v1, _f2, v2, |(aa, bb)| aa != bb)
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                compare_arrays!(v1, v2, |(aa, bb)| aa != bb)
             }
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("!=", f1, v1, _f2, v2, |(aa, bb)| aa != bb)
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb)
             }
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa, bb)| aa != bb)
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa != bb)
             }
-            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => {
-                unimplemented!()
-            }
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
         }
     }
 
     pub fn lt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_arrays!("<", f1, v1, _f2, v2, |(aa, bb)| aa < bb)
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                compare_arrays!(v1, v2, |(aa, bb)| aa < bb)
             }
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("<", f1, v1, _f2, v2, |(aa, bb)| aa < bb)
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa < bb)
             }
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa, bb)| aa < bb)
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa < bb)
             }
-            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => {
-                unimplemented!()
-            }
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
         }
     }
 
     pub fn lt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_arrays!("<", f1, v1, _f2, v2, |(aa, bb)| aa <= bb)
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                compare_arrays!(v1, v2, |(aa, bb)| aa <= bb)
             }
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("<", f1, v1, _f2, v2, |(aa, bb)| aa <= bb)
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa <= bb)
             }
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa, bb)| aa <= bb)
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa <= bb)
             }
-            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => {
-                unimplemented!()
-            }
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
         }
     }
 
     pub fn gt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_arrays!(">", f1, v1, _f2, v2, |(aa, bb)| aa >= bb)
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                compare_arrays!(v1, v2, |(aa, bb)| aa >= bb)
             }
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => {
-                compare_array_with_scalar!(">", f1, v1, _f2, v2, |(aa, bb)| aa >= bb)
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa >= bb)
             }
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa, bb)| aa >= bb)
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa >= bb)
             }
-            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => {
-                unimplemented!()
-            }
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
         }
     }
 
     pub fn gt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
         match (self, other) {
-            (&Value::Column(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_arrays!(">", f1, v1, _f2, v2, |(aa, bb)| aa > bb)
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                compare_arrays!(v1, v2, |(aa, bb)| aa > bb)
             }
-            (&Value::Column(ref f1, ref v1), &Value::Scalar(ref _f2, ref v2)) => {
-                compare_array_with_scalar!(">", f1, v1, _f2, v2, |(aa, bb)| aa > bb)
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa > bb)
             }
-            (&Value::Scalar(ref f1, ref v1), &Value::Column(ref _f2, ref v2)) => {
-                compare_array_with_scalar!("==", f1, v2, _f2, v1, |(aa, bb)| aa > bb)
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa > bb)
             }
-            (&Value::Scalar(ref _f1, ref _v1), &Value::Scalar(ref _f2, ref _v2)) => {
-                unimplemented!()
-            }
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
         }
     }
 
@@ -307,7 +252,7 @@ impl Value {
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&Batch) -> Result<Rc<Value>, ExecutionError>>;
+pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Rc<Value>, ExecutionError>>;
 
 /// Compiles a relational expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
@@ -317,14 +262,11 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                Ok(Rc::new(Value::Scalar(
-                    Rc::new(Field::new("lit", DataType::Int64, false)), //TODO: get data type from plan
-                    literal_value.clone(),
-                )))
+                Ok(Rc::new(Value::Scalar(Rc::new(literal_value.clone()))))
             }))
         }
-        &Expr::Column(index) => Ok(Box::new(move |batch: &Batch| {
-            Ok((*batch.column(index)).clone())
+        &Expr::Column(index) => Ok(Box::new(move |batch: &RecordBatch| {
+            Ok(Rc::new((*batch.column(index)).clone()))
         })),
         &Expr::BinaryExpr {
             ref left,
@@ -334,52 +276,52 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             let left_expr = compile_expr(ctx, left)?;
             let right_expr = compile_expr(ctx, right)?;
             match op {
-                &Operator::Eq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Eq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.eq(&right_values)
                 })),
-                &Operator::NotEq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::NotEq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.not_eq(&right_values)
                 })),
-                &Operator::Lt => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Lt => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.lt(&right_values)
                 })),
-                &Operator::LtEq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::LtEq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.lt_eq(&right_values)
                 })),
-                &Operator::Gt => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Gt => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.gt(&right_values)
                 })),
-                &Operator::GtEq => Ok(Box::new(move |batch: &Batch| {
+                &Operator::GtEq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.gt_eq(&right_values)
                 })),
-                &Operator::Plus => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Plus => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.add(&right_values)
                 })),
-                &Operator::Minus => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Minus => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.subtract(&right_values)
                 })),
-                &Operator::Divide => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Divide => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.divide(&right_values)
                 })),
-                &Operator::Multiply => Ok(Box::new(move |batch: &Batch| {
+                &Operator::Multiply => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
                     let right_values = right_expr(batch)?;
                     left_values.multiply(&right_values)
@@ -397,7 +339,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             compile_expr(ctx, expr)
         }
         &Expr::ScalarFunction { ref name, ref args } => {
-            //println!("Executing function {}", name);
+            ////println!("Executing function {}", name);
 
             // evaluate the arguments to the function
             let compiled_args: Result<Vec<CompiledExpr>, ExecutionError> =
@@ -409,9 +351,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             Ok(Box::new(move |batch| {
                 let arg_values: Result<Vec<Rc<Value>>, ExecutionError> =
-                    compiled_args_ok.iter()
-                        .map(|expr| expr(batch))
-                        .collect();
+                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
 
                 func.execute(arg_values?)
             }))
@@ -420,12 +360,13 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 }
 
 pub struct FilterRelation {
-    schema: Schema,
+    schema: Rc<Schema>,
     input: Box<SimpleRelation>,
     expr: CompiledExpr,
 }
+
 pub struct ProjectRelation {
-    schema: Schema,
+    schema: Rc<Schema>,
     input: Box<SimpleRelation>,
     expr: Vec<CompiledExpr>,
 }
@@ -438,7 +379,7 @@ pub struct ProjectRelation {
 //}
 
 pub struct LimitRelation {
-    schema: Schema,
+    schema: Rc<Schema>,
     input: Box<SimpleRelation>,
     limit: usize,
 }
@@ -447,43 +388,56 @@ pub struct LimitRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(
-        &'a mut self,
-        ctx: &'a ExecutionContext,
-    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a>;
+    fn scan<'a>(&'a mut self)
+        -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a>;
+
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
+}
+
+struct DataSourceRelation {
+    schema: Schema,
+    ds: Rc<RefCell<DataSource>>,
+}
+
+impl SimpleRelation for DataSourceRelation {
+    fn scan<'a>(
+        &'a mut self,
+    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+        Box::new(DataSourceIterator::new(self.ds.clone()))
+    }
+
+    fn schema<'a>(&'a self) -> &'a Schema {
+        &self.schema
+    }
 }
 
 impl SimpleRelation for FilterRelation {
     fn scan<'a>(
         &'a mut self,
-        ctx: &'a ExecutionContext,
-    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a> {
+    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
         let filter_expr = &self.expr;
+        let schema = self.schema.clone();
 
-        Box::new(self.input.scan(ctx).map(move |b| {
+        Box::new(self.input.scan().map(move |b| {
             match b {
                 Ok(ref batch) => {
                     // evaluate the filter expression for every row in the batch
                     let x = (*filter_expr)(batch.as_ref())?;
                     match x.as_ref() {
-                        &Value::Column(_, ref filter_eval) => {
-                            let filtered_columns: Vec<Rc<Value>> = (0..batch.col_count())
+                        &Value::Column(ref filter_eval) => {
+                            let filtered_columns: Vec<Rc<Value>> = (0..batch.num_columns())
                                 .map(move |column_index| {
                                     let column = batch.column(column_index);
-                                    Rc::new(Value::Column(
-                                        Rc::new(Field::new("filter", DataType::Int64, false)), //TODO: use correct type
-                                        Rc::new(filter(column, &filter_eval)),
-                                    ))
+                                    Rc::new(Value::Column(Rc::new(filter(column, &filter_eval))))
                                 })
                                 .collect();
 
                             let row_count_opt: Option<usize> = filtered_columns
                                 .iter()
                                 .map(|c| match c.as_ref() {
-                                    &Value::Scalar(_, _) => 1,
-                                    &Value::Column(_, ref v) => v.len(),
+                                    &Value::Scalar(_) => 1,
+                                    &Value::Column(ref v) => v.len(),
                                 })
                                 .max();
 
@@ -493,9 +447,10 @@ impl SimpleRelation for FilterRelation {
                                 Some(n) => n,
                             };
 
-                            let filtered_batch: Box<Batch> = Box::new(ColumnBatch {
+                            let filtered_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
                                 row_count,
-                                columns: filtered_columns,
+                                data: filtered_columns,
+                                schema: schema.clone(),
                             });
 
                             Ok(filtered_batch)
@@ -513,11 +468,71 @@ impl SimpleRelation for FilterRelation {
     }
 }
 
+impl SimpleRelation for ProjectRelation {
+    fn scan<'a>(
+        &'a mut self,
+    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+        let project_expr = &self.expr;
+
+        let projection_iter = self.input.scan().map(move |r| match r {
+            Ok(ref batch) => {
+                let projected_columns: Result<Vec<Rc<Value>>, ExecutionError> =
+                    project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
+
+                let projected_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
+                    schema: Rc::new(Schema::empty()), //TODO
+                    data: projected_columns?,
+                    row_count: batch.num_rows(),
+                });
+
+                Ok(projected_batch)
+                //                let projected_batch: Box<RecordBatch> = Box::new(ColumnBatch {
+                //                    row_count: batch.row_count(),
+                //                    columns: projected_columns?.clone(),
+                //                });
+                //
+                //                Ok(projected_batch)
+            }
+            Err(_) => r,
+        });
+
+        Box::new(projection_iter)
+    }
+
+    fn schema<'a>(&'a self) -> &'a Schema {
+        unimplemented!()
+    }
+}
+
+impl SimpleRelation for LimitRelation {
+    fn scan<'a>(
+        &'a mut self,
+    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+        unimplemented!()
+    }
+
+    fn schema<'a>(&'a self) -> &'a Schema {
+        unimplemented!()
+    }
+}
+
+//impl SimpleRelation for FilterRelation {
+//    fn scan<'a>(
+//        &'a mut self,
+//        ctx: &'a ExecutionContext,
+//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
+//    }
+//
+//    fn schema<'a>(&'a self) -> &'a Schema {
+//        &self.schema
+//    }
+//}
+
 //impl SimpleRelation for SortRelation {
 //
 //    // this needs rewriting completely
 //
-//    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<Batch>, ExecutionError>> + 'a> {
+//    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<RecordBatch>, ExecutionError>> + 'a> {
 //
 ////        // collect entire relation into memory (obviously not scalable!)
 ////        let batches = self.input.scan(ctx);
@@ -563,7 +578,7 @@ impl SimpleRelation for FilterRelation {
 ////        });
 ////
 ////        // now turn back into columnar!
-////        let result_batch : Box<Batch> = Box::new(ColumnBatch::from_rows(rows));
+////        let result_batch : Box<RecordBatch> = Box::new(ColumnBatch::from_rows(rows));
 ////        let result_it = vec![Ok(result_batch)].into_iter();
 ////
 ////
@@ -577,58 +592,46 @@ impl SimpleRelation for FilterRelation {
 //    }
 //}
 
-impl SimpleRelation for ProjectRelation {
-    fn scan<'a>(
-        &'a mut self,
-        ctx: &'a ExecutionContext,
-    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a> {
-        let project_expr = &self.expr;
-
-        let projection_iter = self.input.scan(ctx).map(move |r| match r {
-            Ok(ref batch) => {
-                let projected_columns: Result<Vec<Rc<Value>>, ExecutionError> =
-                    project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
-
-                let projected_batch: Box<Batch> = Box::new(ColumnBatch {
-                    row_count: batch.row_count(),
-                    columns: projected_columns?.clone(),
-                });
-
-                Ok(projected_batch)
-            }
-            Err(_) => r,
-        });
-
-        Box::new(projection_iter)
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        &self.schema
-    }
-}
-
-impl SimpleRelation for LimitRelation {
-    fn scan<'a>(
-        &'a mut self,
-        ctx: &'a ExecutionContext,
-    ) -> Box<Iterator<Item = Result<Box<Batch>, ExecutionError>> + 'a> {
-        Box::new(self.input.scan(ctx).take(self.limit))
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        &self.schema
-    }
-}
+//impl SimpleRelation for ProjectRelation {
+//    fn scan<'a>(
+//        &'a mut self,
+//        ctx: &'a ExecutionContext,
+//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
+//    }
+//
+//    fn schema<'a>(&'a self) -> &'a Schema {
+//        &self.schema
+//    }
+//}
+//
+//impl SimpleRelation for LimitRelation {
+//    fn scan<'a>(
+//        &'a mut self,
+//        ctx: &'a ExecutionContext,
+//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
+//        Box::new(self.input.scan(ctx).take(self.limit))
+//    }
+//
+//    fn schema<'a>(&'a self) -> &'a Schema {
+//        &self.schema
+//    }
+//}
 
 /// Execution plans are sent to worker nodes for execution
 #[derive(Debug, Clone)]
 pub enum PhysicalPlan {
     /// Run a query and return the results to the client
-    Interactive { plan: Box<LogicalPlan> },
+    Interactive {
+        plan: Box<LogicalPlan>,
+    },
     /// Execute a logical plan and write the output to a file
     Write {
-        plan: Box<LogicalPlan>,
+        plan: Rc<LogicalPlan>,
         filename: String,
+    },
+    Show {
+        plan: Rc<LogicalPlan>,
+        count: usize,
     },
 }
 
@@ -638,45 +641,59 @@ pub enum ExecutionResult {
     Count(usize),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ExecutionContext {
-    schemas: HashMap<String, Schema>,
-    functions: HashMap<String, FunctionMeta>,
-    config: DFConfig,
+    schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
+    function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
+    functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
+    config: Rc<DFConfig>,
+    tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
 }
 
 impl ExecutionContext {
-    pub fn local(data_dir: String) -> Self {
+    pub fn local() -> Self {
         ExecutionContext {
-            schemas: HashMap::new(),
-            functions: HashMap::new(),
-            config: DFConfig::Local { data_dir },
+            schemas: Rc::new(RefCell::new(HashMap::new())),
+            function_meta: Rc::new(RefCell::new(HashMap::new())),
+            functions: Rc::new(RefCell::new(HashMap::new())),
+            tables: Rc::new(RefCell::new(HashMap::new())),
+            config: Rc::new(DFConfig::Local),
         }
     }
 
-    pub fn remote(etcd: String) -> Self {
-        ExecutionContext {
-            schemas: HashMap::new(),
-            functions: HashMap::new(),
-            config: DFConfig::Remote { etcd: etcd },
-        }
+    pub fn remote(_etcd: String) -> Self {
+        unimplemented!("this feature is disabled at the moment")
+        //        ExecutionContext {
+        //            schemas: Rc::new(RefCell::new(HashMap::new())),
+        //            function_meta: Rc::new(RefCell::new(HashMap::new())),
+        //            tables: Rc::new(RefCell::new(HashMap::new())),
+        //            config: Rc::new(DFConfig::Remote { etcd: etcd }),
+        //        }
     }
 
     pub fn define_schema(&mut self, name: &str, schema: &Schema) {
-        self.schemas.insert(name.to_string(), schema.clone());
+        self.schemas
+            .borrow_mut()
+            .insert(name.to_string(), Rc::new(schema.clone()));
     }
 
-    pub fn define_function(&mut self, func: &ScalarFunction) {
+    pub fn register_function(&mut self, func: Rc<ScalarFunction>) {
         let fm = FunctionMeta {
             name: func.name(),
             args: func.args(),
             return_type: func.return_type(),
         };
 
-        self.functions.insert(fm.name.to_lowercase(), fm);
+        self.function_meta
+            .borrow_mut()
+            .insert(func.name().to_lowercase(), fm);
+
+        self.functions
+            .borrow_mut()
+            .insert(func.name().to_lowercase(), func.clone());
     }
 
-    pub fn create_logical_plan(&self, sql: &str) -> Result<Box<LogicalPlan>, ExecutionError> {
+    pub fn create_logical_plan(&self, sql: &str) -> Result<Rc<LogicalPlan>, ExecutionError> {
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
 
@@ -687,7 +704,21 @@ impl ExecutionContext {
         Ok(query_planner.sql_to_rel(&ast)?)
     }
 
-    pub fn sql(&mut self, sql: &str) -> Result<Box<DataFrame>, ExecutionError> {
+    pub fn register(&mut self, table_name: &str, df: Rc<DataFrame>) {
+        //println!("Registering table {}", table_name);
+        self.tables
+            .borrow_mut()
+            .insert(table_name.to_string(), df.clone());
+
+        // temp hack
+        self.schemas
+            .borrow_mut()
+            .insert(table_name.to_string(), df.schema().clone());
+    }
+
+    pub fn sql(&mut self, sql: &str) -> Result<Rc<DataFrame>, ExecutionError> {
+        //println!("sql() {}", sql);
+
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
 
@@ -701,8 +732,11 @@ impl ExecutionContext {
                 self.define_schema(&name, &schema);
 
                 //TODO: not sure what to return here
-                Ok(Box::new(DF {
-                    plan: Box::new(LogicalPlan::EmptyRelation),
+                Ok(Rc::new(DF {
+                    ctx: self.clone(),
+                    plan: Rc::new(LogicalPlan::EmptyRelation {
+                        schema: Rc::new(Schema::empty()),
+                    }),
                 }))
             }
             _ => {
@@ -713,48 +747,74 @@ impl ExecutionContext {
                 let plan = query_planner.sql_to_rel(&ast)?;
 
                 // return the DataFrame
-                Ok(Box::new(DF { plan: plan }))
+                Ok(Rc::new(DF {
+                    ctx: self.clone(),
+                    plan: plan,
+                }))
             }
         }
     }
 
     /// Open a CSV file
     ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
-    pub fn load(&self, filename: &str, schema: &Schema) -> Result<Box<DataFrame>, ExecutionError> {
+    pub fn load_csv(
+        &self,
+        filename: &str,
+        schema: &Schema,
+    ) -> Result<Rc<DataFrame>, ExecutionError> {
         let plan = LogicalPlan::CsvFile {
             filename: filename.to_string(),
-            schema: schema.clone(),
+            schema: Rc::new(schema.clone()),
         };
-        Ok(Box::new(DF {
-            plan: Box::new(plan),
+        Ok(Rc::new(DF {
+            ctx: self.clone(),
+            plan: Rc::new(plan),
+        }))
+    }
+
+    pub fn load_parquet(&self, filename: &str) -> Result<Rc<DataFrame>, ExecutionError> {
+        //TODO: can only get schema by assuming file is local and opening it - need catalog!!
+        let file = File::open(filename)?;
+        let p = ParquetFile::open(file);
+
+        let plan = LogicalPlan::ParquetFile {
+            filename: filename.to_string(),
+            schema: p.schema().clone(),
+        };
+        Ok(Rc::new(DF {
+            ctx: self.clone(),
+            plan: Rc::new(plan),
         }))
     }
 
     pub fn register_table(&mut self, name: String, schema: Schema) {
-        self.schemas.insert(name, schema);
+        self.schemas
+            .borrow_mut()
+            .insert(name, Rc::new(schema.clone()));
     }
 
     pub fn create_execution_plan(
         &self,
-        data_dir: String,
         plan: &LogicalPlan,
     ) -> Result<Box<SimpleRelation>, ExecutionError> {
+        //println!("Logical plan: {:?}", plan);
+
         match *plan {
-            LogicalPlan::EmptyRelation => Err(ExecutionError::Custom(String::from(
+            LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::Custom(String::from(
                 "empty relation is not implemented yet",
             ))),
 
-            LogicalPlan::TableScan {
-                ref table_name,
-                ref schema,
-                ..
-            } => {
-                // for now, tables are csv files
-                let filename = format!("{}/{}.csv", data_dir, table_name);
-                //println!("Reading {}", filename);
-                let file = File::open(filename)?;
-                let rel = CsvRelation::open(file, schema.clone())?;
-                Ok(Box::new(rel))
+            LogicalPlan::Sort { .. } => unimplemented!(),
+
+            LogicalPlan::TableScan { ref table_name, .. } => {
+                //println!("TableScan: {}", table_name);
+                match self.tables.borrow().get(table_name) {
+                    Some(df) => df.create_execution_plan(),
+                    _ => Err(ExecutionError::Custom(format!(
+                        "No table registered as '{}'",
+                        table_name
+                    ))),
+                }
             }
 
             LogicalPlan::CsvFile {
@@ -762,8 +822,24 @@ impl ExecutionContext {
                 ref schema,
             } => {
                 let file = File::open(filename)?;
-                let rel = CsvRelation::open(file, schema.clone())?;
-                Ok(Box::new(rel))
+                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone())))
+                    as Rc<RefCell<DataSource>>;
+                Ok(Box::new(DataSourceRelation {
+                    schema: schema.as_ref().clone(),
+                    ds,
+                }))
+            }
+
+            LogicalPlan::ParquetFile {
+                ref filename,
+                ref schema,
+            } => {
+                let file = File::open(filename)?;
+                let ds = Rc::new(RefCell::new(ParquetFile::open(file))) as Rc<RefCell<DataSource>>;
+                Ok(Box::new(DataSourceRelation {
+                    schema: schema.as_ref().clone(),
+                    ds,
+                }))
             }
 
             LogicalPlan::Selection {
@@ -771,7 +847,7 @@ impl ExecutionContext {
                 ref input,
                 ref schema,
             } => {
-                let input_rel = self.create_execution_plan(data_dir, input)?;
+                let input_rel = self.create_execution_plan(input)?;
 
                 let rel = FilterRelation {
                     input: input_rel,
@@ -786,7 +862,7 @@ impl ExecutionContext {
                 ref input,
                 ..
             } => {
-                let input_rel = self.create_execution_plan(data_dir, &input)?;
+                let input_rel = self.create_execution_plan(&input)?;
                 let input_schema = input_rel.schema().clone();
 
                 //TODO: seems to be duplicate of sql_to_rel code
@@ -814,7 +890,7 @@ impl ExecutionContext {
                 let rel = ProjectRelation {
                     input: input_rel,
                     expr: compiled_expr?,
-                    schema: project_schema,
+                    schema: Rc::new(project_schema),
                 };
 
                 Ok(Box::new(rel))
@@ -848,7 +924,7 @@ impl ExecutionContext {
                 ref schema,
                 ..
             } => {
-                let input_rel = self.create_execution_plan(data_dir, input)?;
+                let input_rel = self.create_execution_plan(input)?;
                 let rel = LimitRelation {
                     input: input_rel,
                     limit: limit,
@@ -856,8 +932,6 @@ impl ExecutionContext {
                 };
                 Ok(Box::new(rel))
             }
-
-            _ => unimplemented!(),
         }
     }
 
@@ -865,14 +939,9 @@ impl ExecutionContext {
     fn load_function_impl(
         &self,
         function_name: &str,
-    ) -> Result<Box<ScalarFunction>, ExecutionError> {
-        //TODO: this is a huge hack since the functions have already been registered with the
-        // execution context ... I need to implement this so it dynamically loads the functions
-
-        match function_name.to_lowercase().as_ref() {
-            "sqrt" => Ok(Box::new(SqrtFunction {})),
-            "st_point" => Ok(Box::new(STPointFunc {})),
-            "st_astext" => Ok(Box::new(STAsText {})),
+    ) -> Result<Rc<ScalarFunction>, ExecutionError> {
+        match self.functions.borrow().get(&function_name.to_lowercase()) {
+            Some(f) => Ok(f.clone()),
             _ => Err(ExecutionError::Custom(format!(
                 "Unknown function {}",
                 function_name
@@ -887,7 +956,20 @@ impl ExecutionContext {
         }
     }
 
-    pub fn write(&self, df: Box<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
+    pub fn show(&self, df: &DataFrame, count: usize) -> Result<usize, DataFrameError> {
+        //println!("show()");
+        let physical_plan = PhysicalPlan::Show {
+            plan: df.plan().clone(),
+            count,
+        };
+
+        match self.execute(&physical_plan)? {
+            ExecutionResult::Count(count) => Ok(count),
+            _ => Err(DataFrameError::NotImplemented), //TODO better error
+        }
+    }
+
+    pub fn write_csv(&self, df: Rc<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
         let physical_plan = PhysicalPlan::Write {
             plan: df.plan().clone(),
             filename: filename.to_string(),
@@ -899,24 +981,15 @@ impl ExecutionContext {
         }
     }
 
-    //    pub fn collect(&self, df: Box<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
-    //
-    //        let physical_plan = PhysicalPlan::Write {
-    //            plan: df.plan().clone(),
-    //            filename: filename.to_string()
-    //        };
-    //
-    //        match self.execute(&physical_plan)? {
-    //            ExecutionResult::Count(count) => Ok(count),
-    //            _ => Err(DataFrameError::NotImplemented) //TODO better error
-    //        }
-    //
-    //    }
-
     pub fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
-        match &self.config {
-            &DFConfig::Local { ref data_dir } => {
-                self.execute_local(physical_plan, data_dir.clone())
+        //println!("execute()");
+        match &self.config.as_ref() {
+            &DFConfig::Local => {
+                //TODO error handling
+                match self.execute_local(physical_plan) {
+                    Ok(r) => Ok(r),
+                    Err(e) => Err(ExecutionError::Custom(format!("execution failed: {:?}", e))),
+                }
             }
             &DFConfig::Remote { ref etcd } => self.execute_remote(physical_plan, etcd.clone()),
         }
@@ -925,8 +998,9 @@ impl ExecutionContext {
     fn execute_local(
         &self,
         physical_plan: &PhysicalPlan,
-        data_dir: String,
     ) -> Result<ExecutionResult, ExecutionError> {
+        //println!("execute_local()");
+
         match physical_plan {
             &PhysicalPlan::Interactive { .. } => {
                 Err(ExecutionError::Custom(format!("not implemented")))
@@ -936,22 +1010,22 @@ impl ExecutionContext {
                 ref filename,
             } => {
                 // create output file
-                // println!("Writing csv to {}", filename);
+                // //println!("Writing csv to {}", filename);
                 let file = File::create(filename)?;
 
                 let mut writer = BufWriter::with_capacity(8 * 1024 * 1024, file);
 
-                let mut execution_plan = self.create_execution_plan(data_dir, plan)?;
+                let mut execution_plan = self.create_execution_plan(plan)?;
 
                 // implement execution here for now but should be a common method for processing a plan
-                let it = execution_plan.scan(self);
+                let it = execution_plan.scan();
                 let mut count: usize = 0;
                 it.for_each(|t| {
                     match t {
                         Ok(ref batch) => {
-                            //println!("Processing batch of {} rows", batch.row_count());
-                            for i in 0..batch.row_count() {
-                                let row = batch.row_slice(i);
+                            ////println!("Processing batch of {} rows", batch.row_count());
+                            for i in 0..batch.num_rows() {
+                                let row = row_slice(batch, i);
                                 let csv = row.into_iter()
                                     .map(|v| v.to_string())
                                     .collect::<Vec<String>>()
@@ -966,6 +1040,33 @@ impl ExecutionContext {
                 });
 
                 Ok(ExecutionResult::Count(count))
+            }
+            &PhysicalPlan::Show {
+                ref plan,
+                ref count,
+            } => {
+                let mut execution_plan = self.create_execution_plan(plan)?;
+
+                // implement execution here for now but should be a common method for processing a plan
+                let it = execution_plan.scan().take(*count);
+                it.for_each(|t| {
+                    match t {
+                        Ok(ref batch) => {
+                            ////println!("Processing batch of {} rows", batch.row_count());
+                            for i in 0..batch.num_rows() {
+                                let row = row_slice(batch, i);
+                                let csv = row.into_iter()
+                                    .map(|v| v.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(",");
+                                println!("{}", csv);
+                            }
+                        }
+                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
+                    }
+                });
+
+                Ok(ExecutionResult::Count(*count))
             }
         }
     }
@@ -1000,7 +1101,7 @@ impl ExecutionContext {
     //                                req.set_body(json);
     //
     //                                let post = client.request(req).and_then(|res| {
-    //                                    //println!("POST: {}", res.status());
+    //                                    ////println!("POST: {}", res.status());
     //                                    res.body().concat2()
     //                                });
     //
@@ -1008,7 +1109,7 @@ impl ExecutionContext {
     //                                    Ok(result) => {
     //                                        //TODO: parse result
     //                                        let result = str::from_utf8(&result).unwrap();
-    //                                        println!("{}", result);
+    //                                        //println!("{}", result);
     //                                        Ok(ExecutionResult::Unit)
     //                                    }
     //                                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
@@ -1029,44 +1130,49 @@ impl ExecutionContext {
 }
 
 pub struct DF {
-    pub plan: Box<LogicalPlan>,
+    ctx: ExecutionContext,
+    pub plan: Rc<LogicalPlan>,
+}
+
+impl DF {
+    pub fn new(ctx: ExecutionContext, plan: Rc<LogicalPlan>) -> Self {
+        DF { ctx, plan }
+    }
+
+    pub fn with_plan(&self, plan: Rc<LogicalPlan>) -> Self {
+        DF::new(self.ctx.clone(), plan)
+    }
 }
 
 impl DataFrame for DF {
-    fn select(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
+    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError> {
         let plan = LogicalPlan::Projection {
             expr: expr,
             input: self.plan.clone(),
             schema: self.plan.schema().clone(),
         };
 
-        Ok(Box::new(DF {
-            plan: Box::new(plan),
-        }))
+        Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
-    fn sort(&self, expr: Vec<Expr>) -> Result<Box<DataFrame>, DataFrameError> {
+    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError> {
         let plan = LogicalPlan::Sort {
             expr: expr,
             input: self.plan.clone(),
             schema: self.plan.schema().clone(),
         };
 
-        Ok(Box::new(DF {
-            plan: Box::new(plan),
-        }))
+        Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
-    fn filter(&self, expr: Expr) -> Result<Box<DataFrame>, DataFrameError> {
+    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>, DataFrameError> {
         let plan = LogicalPlan::Selection {
             expr: expr,
             input: self.plan.clone(),
             schema: self.plan.schema().clone(),
         };
 
-        Ok(Box::new(DF {
-            plan: Box::new(plan),
-        }))
+        Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
     fn col(&self, column_name: &str) -> Result<Expr, DataFrameError> {
@@ -1076,21 +1182,25 @@ impl DataFrame for DF {
         }
     }
 
-    fn schema(&self) -> Schema {
-        self.plan.schema().clone()
+    fn schema(&self) -> &Rc<Schema> {
+        self.plan.schema()
     }
 
-    fn repartition(&self, _n: u32) -> Result<Box<DataFrame>, DataFrameError> {
-        unimplemented!()
+    fn plan(&self) -> &Rc<LogicalPlan> {
+        &self.plan
     }
 
-    fn plan(&self) -> Box<LogicalPlan> {
-        self.plan.clone()
+    fn show(&self, count: usize) {
+        self.ctx.show(self, count).unwrap();
+    }
+
+    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>, ExecutionError> {
+        self.ctx.create_execution_plan(&self.plan)
     }
 }
 
 pub fn get_value(column: &Array, index: usize) -> ScalarValue {
-    //println!("get_value() index={}", index);
+    ////println!("get_value() index={}", index);
     let v = match column.data() {
         &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
         &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
@@ -1109,19 +1219,19 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
         &ArrayData::Struct(ref v) => {
             // v is Vec<ArrayData>
             // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
-            //            println!("get_value() complex value has {} fields", v.len());
+            //            //println!("get_value() complex value has {} fields", v.len());
             let fields = v.iter().map(|arr| get_value(&arr, index)).collect();
             ScalarValue::Struct(fields)
         }
     };
-    //    println!("get_value() index={} returned {:?}", index, v);
+    //    //println!("get_value() index={} returned {:?}", index, v);
     v
 }
 
-pub fn filter(column: &Rc<Value>, bools: &Array) -> Array {
-    match column.as_ref() {
-        &Value::Scalar(_, _) => unimplemented!(),
-        &Value::Column(_, ref arr) => match bools.data() {
+pub fn filter(column: &Value, bools: &Array) -> Array {
+    match column {
+        &Value::Scalar(_) => unimplemented!(),
+        &Value::Column(ref arr) => match bools.data() {
             &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
                 &ArrayData::Boolean(ref v) => Array::from(
                     v.iter()
@@ -1218,11 +1328,13 @@ mod tests {
     fn test_sqrt() {
         let mut ctx = create_context();
 
-        ctx.define_function(&SqrtFunction {});
+        ctx.register_function(Rc::new(SqrtFunction {}));
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
-        ctx.write(df, "_sqrt_out.csv").unwrap();
+        //println!("Logical plan: {:?}", df.plan());
+
+        ctx.write_csv(df, "_sqrt_out.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1231,12 +1343,12 @@ mod tests {
     fn test_sql_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
 
-        ctx.write(df, "_uk_cities_sql.csv").unwrap();
+        ctx.write_csv(df, "_uk_cities_sql.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1245,7 +1357,7 @@ mod tests {
     fn test_df_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1253,7 +1365,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
 
         // create an expression for invoking a scalar function
         //        let func_expr = Expr::ScalarFunction {
@@ -1269,7 +1381,7 @@ mod tests {
 
         let df2 = df.select(vec![func_expr]).unwrap();
 
-        ctx.write(df2, "_uk_cities_df.csv").unwrap();
+        ctx.write_csv(df2, "_uk_cities_df.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1278,7 +1390,7 @@ mod tests {
     fn test_filter() {
         let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1286,16 +1398,16 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
 
         // filter by lat
         let df2 = df.filter(Expr::BinaryExpr {
-            left: Box::new(Expr::Column(1)), // lat
+            left: Rc::new(Expr::Column(1)), // lat
             op: Operator::Gt,
-            right: Box::new(Expr::Literal(ScalarValue::Float64(52.0))),
+            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
         }).unwrap();
 
-        ctx.write(df2, "_uk_cities_filtered_gt_52.csv").unwrap();
+        ctx.write_csv(df2, "_uk_cities_filtered_gt_52.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1330,38 +1442,43 @@ mod tests {
     #[test]
     fn test_chaining_functions() {
         let mut ctx = create_context();
+        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_function(Rc::new(STAsText {}));
 
-        ctx.define_function(&STPointFunc {});
+        ctx.register_function(Rc::new(STPointFunc {}));
 
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
 
-        ctx.write(df, "_uk_cities_wkt.csv").unwrap();
+        ctx.write_csv(df, "_uk_cities_wkt.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
 
     fn create_context() -> ExecutionContext {
         // create execution context
-        let mut ctx = ExecutionContext::local("./test/data".to_string());
+        let mut ctx = ExecutionContext::local();
 
-        // define schemas for test data
-        ctx.define_schema(
-            "people",
+        let people = ctx.load_csv(
+            "./test/data/people.csv",
             &Schema::new(vec![
                 Field::new("id", DataType::Int32, false),
                 Field::new("name", DataType::Utf8, false),
             ]),
-        );
+        ).unwrap();
 
-        ctx.define_schema(
-            "uk_cities",
+        ctx.register("people", people);
+
+        let uk_cities = ctx.load_csv(
+            "./test/data/uk_cities.csv",
             &Schema::new(vec![
                 Field::new("city", DataType::Utf8, false),
                 Field::new("lat", DataType::Float64, false),
                 Field::new("lng", DataType::Float64, false),
             ]),
-        );
+        ).unwrap();
+
+        ctx.register("uk_cities", uk_cities);
 
         ctx
     }
@@ -1369,15 +1486,26 @@ mod tests {
     #[test]
     fn sql_query_example() {
         // create execution context
-        let mut ctx = ExecutionContext::local("./test/data".to_string());
+        let mut ctx = ExecutionContext::local();
+        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_function(Rc::new(STAsText {}));
 
         // define an external table (csv file)
-        ctx.sql(
-            "CREATE EXTERNAL TABLE uk_cities (\
-             city VARCHAR(100), \
-             lat DOUBLE, \
-             lng DOUBLE)",
-        ).unwrap();
+        //        ctx.sql(
+        //            "CREATE EXTERNAL TABLE uk_cities (\
+        //             city VARCHAR(100), \
+        //             lat DOUBLE, \
+        //             lng DOUBLE)",
+        //        ).unwrap();
+
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false),
+        ]);
+
+        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema).unwrap();
+        ctx.register("uk_cities", df);
 
         // define the SQL statement
         let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities WHERE lat < 53.0";
@@ -1386,6 +1514,17 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write(df1, "_southern_cities.csv").unwrap();
+        ctx.write_csv(df1, "_southern_cities.csv").unwrap();
     }
+}
+
+fn row_slice(batch: &Rc<RecordBatch>, index: usize) -> Vec<Rc<ScalarValue>> {
+    batch
+        .columns()
+        .iter()
+        .map(|c| match c.as_ref() {
+            &Value::Scalar(ref v) => v.clone(),
+            &Value::Column(ref v) => Rc::new(get_value(v, index)),
+        })
+        .collect()
 }
