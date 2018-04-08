@@ -97,15 +97,15 @@ pub struct CsvFile {
 }
 
 impl CsvFile {
-    pub fn open(file: File, schema: Rc<Schema>) -> Self {
+    pub fn open(file: File, schema: Rc<Schema>) -> Result<Self, ExecutionError> {
         let buf_reader = BufReader::with_capacity(8 * 1024 * 1024, file);
         let csv_reader = csv::Reader::from_reader(buf_reader);
         let record_iter = csv_reader.into_records();
-        CsvFile {
+        Ok(CsvFile {
             schema: schema.clone(),
             record_iter,
             batch_size: 1024,
-        }
+        })
     }
 
     pub fn set_batch_size(&mut self, batch_size: usize) {
@@ -249,25 +249,26 @@ pub struct ParquetFile {
 }
 
 impl ParquetFile {
-    pub fn open(file: File) -> Self {
+    pub fn open(file: File) -> Result<Self, ExecutionError> {
         let reader = SerializedFileReader::new(file).unwrap();
 
         let metadata = reader.metadata();
         let file_type = ParquetFile::to_arrow(metadata.file_metadata().schema());
 
-        //TODO error handling
-        let schema = match file_type.data_type {
-            DataType::Struct(fields) => Schema::new(fields),
-            _ => panic!(),
-        };
-
-        println!("Parquet schema: {:?}", schema);
-
-        ParquetFile {
-            reader: reader,
-            row_index: 0,
-            schema: Rc::new(schema),
-            batch_size: 1024,
+        match file_type.data_type {
+            DataType::Struct(fields) => {
+                let schema = Schema::new(fields);
+                //println!("Parquet schema: {:?}", schema);
+                Ok(ParquetFile {
+                    reader: reader,
+                    row_index: 0,
+                    schema: Rc::new(schema),
+                    batch_size: 1024,
+                })
+            }
+            _ => Err(ExecutionError::Custom(
+                "Failed to read Parquet schema".to_string(),
+            )),
         }
     }
 
@@ -440,7 +441,7 @@ mod tests {
 
         let file = File::open("test/data/uk_cities.csv").unwrap();
 
-        let mut csv = CsvFile::open(file, Rc::new(schema));
+        let mut csv = CsvFile::open(file, Rc::new(schema)).unwrap();
         let batch = csv.next().unwrap().unwrap();
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
     }
@@ -453,7 +454,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
         let file = File::open("test/data/uk_cities.csv").unwrap();
-        let mut csv = CsvFile::open(file, Rc::new(schema));
+        let mut csv = CsvFile::open(file, Rc::new(schema)).unwrap();
         csv.set_batch_size(2);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(csv)));
         it.for_each(|record_batch| match record_batch {
@@ -465,7 +466,7 @@ mod tests {
     #[test]
     fn test_parquet() {
         let file = File::open("test/data/alltypes_plain.parquet").unwrap();
-        let mut parquet = ParquetFile::open(file);
+        let mut parquet = ParquetFile::open(file).unwrap();
         let batch = parquet.next().unwrap().unwrap();
         println!("Schema: {:?}", batch.schema());
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
@@ -474,7 +475,7 @@ mod tests {
     #[test]
     fn test_parquet_iterator() {
         let file = File::open("test/data/alltypes_plain.parquet").unwrap();
-        let mut parquet = ParquetFile::open(file);
+        let mut parquet = ParquetFile::open(file).unwrap();
         parquet.set_batch_size(2);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(parquet)));
         it.for_each(|record_batch| match record_batch {

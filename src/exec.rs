@@ -486,12 +486,6 @@ impl SimpleRelation for ProjectRelation {
                 });
 
                 Ok(projected_batch)
-                //                let projected_batch: Box<RecordBatch> = Box::new(ColumnBatch {
-                //                    row_count: batch.row_count(),
-                //                    columns: projected_columns?.clone(),
-                //                });
-                //
-                //                Ok(projected_batch)
             }
             Err(_) => r,
         });
@@ -515,107 +509,6 @@ impl SimpleRelation for LimitRelation {
         unimplemented!()
     }
 }
-
-//impl SimpleRelation for FilterRelation {
-//    fn scan<'a>(
-//        &'a mut self,
-//        ctx: &'a ExecutionContext,
-//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
-//    }
-//
-//    fn schema<'a>(&'a self) -> &'a Schema {
-//        &self.schema
-//    }
-//}
-
-//impl SimpleRelation for SortRelation {
-//
-//    // this needs rewriting completely
-//
-//    fn scan<'a>(&'a mut self, _ctx: &'a ExecutionContext) -> Box<Iterator<Item=Result<Box<RecordBatch>, ExecutionError>> + 'a> {
-//
-////        // collect entire relation into memory (obviously not scalable!)
-////        let batches = self.input.scan(ctx);
-////
-////        // convert into rows for now but this should be converted to columnar
-////        let mut rows : Vec<Vec<Value>> = vec![];
-////        batches.for_each(|r| match r {
-////            Ok(ref batch) => {
-////                for i in 0 .. batch.row_count() {
-////                    let row : Vec<&Value> = batch.row_slice(i);
-////                    let values : Vec<Value> = row.into_iter()
-////                        .map(|v| v.clone())
-////                        .collect();
-////
-////                    rows.push(values);
-////                }
-////            },
-////            _ => {}
-////                //return Err(ExecutionError::Custom(format!("TBD")))
-////        });
-////
-////        // now sort them
-////        rows.sort_by(|a,b| {
-////
-////            for i in 0 .. self.sort_expr.len() {
-////
-////                let evaluate = &self.sort_expr[i];
-////                let asc = self.sort_asc[i];
-////
-////                // ugh, this is ugly - convert rows into column batches to evaluate sort expressions
-////
-////                let a_value = evaluate(&ColumnBatch::from_rows(vec![a.clone()]));
-////                let b_value = evaluate(&ColumnBatch::from_rows(vec![b.clone()]));
-////
-////                if a_value < b_value {
-////                    return if asc { Less } else { Greater };
-////                } else if a_value > b_value {
-////                    return if asc { Greater } else { Less };
-////                }
-////            }
-////
-////            Equal
-////        });
-////
-////        // now turn back into columnar!
-////        let result_batch : Box<RecordBatch> = Box::new(ColumnBatch::from_rows(rows));
-////        let result_it = vec![Ok(result_batch)].into_iter();
-////
-////
-////        Box::new(result_it)
-//
-//        unimplemented!()
-//    }
-//
-//    fn schema<'a>(&'a self) -> &'a Schema {
-//        &self.schema
-//    }
-//}
-
-//impl SimpleRelation for ProjectRelation {
-//    fn scan<'a>(
-//        &'a mut self,
-//        ctx: &'a ExecutionContext,
-//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
-//    }
-//
-//    fn schema<'a>(&'a self) -> &'a Schema {
-//        &self.schema
-//    }
-//}
-//
-//impl SimpleRelation for LimitRelation {
-//    fn scan<'a>(
-//        &'a mut self,
-//        ctx: &'a ExecutionContext,
-//    ) -> Box<Iterator<Item = Result<Box<RecordBatch>, ExecutionError>> + 'a> {
-//        Box::new(self.input.scan(ctx).take(self.limit))
-//    }
-//
-//    fn schema<'a>(&'a self) -> &'a Schema {
-//        &self.schema
-//    }
-//}
 
 /// Execution plans are sent to worker nodes for execution
 #[derive(Debug, Clone)]
@@ -775,7 +668,7 @@ impl ExecutionContext {
     pub fn load_parquet(&self, filename: &str) -> Result<Rc<DataFrame>, ExecutionError> {
         //TODO: can only get schema by assuming file is local and opening it - need catalog!!
         let file = File::open(filename)?;
-        let p = ParquetFile::open(file);
+        let p = ParquetFile::open(file)?;
 
         let plan = LogicalPlan::ParquetFile {
             filename: filename.to_string(),
@@ -822,7 +715,7 @@ impl ExecutionContext {
                 ref schema,
             } => {
                 let file = File::open(filename)?;
-                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone())))
+                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone())?))
                     as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {
                     schema: schema.as_ref().clone(),
@@ -835,7 +728,7 @@ impl ExecutionContext {
                 ref schema,
             } => {
                 let file = File::open(filename)?;
-                let ds = Rc::new(RefCell::new(ParquetFile::open(file))) as Rc<RefCell<DataSource>>;
+                let ds = Rc::new(RefCell::new(ParquetFile::open(file)?)) as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {
                     schema: schema.as_ref().clone(),
                     ds,
