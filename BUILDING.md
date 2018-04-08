@@ -3,7 +3,8 @@
 
 ## Prerequisites
 
-- Docker
+- Rust nightly
+- Thrift (required by `parquet-rs` crate) - instructions [here](https://github.com/sunchao/parquet-rs/)
 
 ## Building Locally
 

@@ -9,7 +9,7 @@ DataFusion is a modern distributed compute platform implemented in Rust. It is v
 
 DataFusion can also be used as a crate dependency in your project if you want the ability to perform SQL queries and DataFrame style data manipulation in-process against your own data sources. In that respect, DataFusion is inspired by Apache Calcite in the Java world.
 
-# Prerequisits
+# Prerequisites
 
 - Rust nightly
 - Thrift (required by `parquet-rs` crate) - instructions [here](https://github.com/sunchao/parquet-rs/)
