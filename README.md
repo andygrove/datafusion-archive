@@ -9,6 +9,10 @@ DataFusion is a modern distributed compute platform implemented in Rust. It is v
 
 DataFusion can also be used as a crate dependency in your project if you want the ability to perform SQL queries and DataFrame style data manipulation in-process against your own data sources. In that respect, DataFusion is inspired by Apache Calcite in the Java world.
 
+# Project Home Page
+
+The project home page is now at [https://datafusion.rs](https://datafusion.rs) and contains the [roadmap](https://datafusion.rs/roadmap) as well as documentation for using this crate or running DataFusion as a distributed cluster. I am using [GitHub issues](https://github.com/andygrove/datafusion-rs/issues) to track development tasks and feedback.
+
 # Prerequisites
 
 - Rust nightly
@@ -17,10 +21,6 @@ DataFusion can also be used as a crate dependency in your project if you want th
 # Building DataFusion
 
 See [BUILDING.md](/BUILDING.md).
-
-# Project Home Page
-
-The project home page is now at [https://datafusion.rs](https://datafusion.rs) and contains the [roadmap](https://datafusion.rs/roadmap) as well as documentation for using this crate or running DataFusion as a distributed cluster. I am using [GitHub issues](https://github.com/andygrove/datafusion-rs/issues) to track development tasks and feedback.
 
 # Gitter
 

@@ -1350,6 +1350,36 @@ mod tests {
     }
 
     #[test]
+    fn test_a_thing() {
+
+        let n = 10;
+        let mut ctx = ExecutionContext::local();
+        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_function(Rc::new(STAsText {}));
+
+        // define schemas for test data
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::UInt64, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false),
+        ]);
+
+        let filename = format!("/mnt/ssd/csv/locations_{}.csv", n);
+        let df = ctx.load_csv(&filename, &schema).unwrap();
+        ctx.register("locations", df);
+
+        let sql = format!("SELECT ST_AsText(ST_Point(lat, lng)) FROM locations");
+
+        let df = ctx.sql(&sql).unwrap();
+
+        let output_filename = format!("/tmp/wkt_{}", n);
+
+        ctx.write_csv(df, &output_filename).unwrap();
+
+    }
+
+
+    #[test]
     fn sql_query_example() {
         // create execution context
         let mut ctx = ExecutionContext::local();

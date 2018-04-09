@@ -29,7 +29,6 @@ use parquet::column::reader::*;
 use parquet::data_type::ByteArray;
 use parquet::file::reader::*;
 use parquet::schema::types::Type;
-use parquet::util::memory::{ByteBuffer, ByteBufferPtr};
 
 use super::types::*;
 
@@ -223,6 +222,22 @@ impl DataSource for CsvFile {
                         })
                         .collect::<Vec<f64>>(),
                 ),
+                DataType::Int8 => Array::from(
+                    rows.iter()
+                        .map(|row| match &row[i] {
+                            &ScalarValue::Int8(v) => v,
+                            _ => panic!(),
+                        })
+                        .collect::<Vec<i8>>(),
+                ),
+                DataType::Int16 => Array::from(
+                    rows.iter()
+                        .map(|row| match &row[i] {
+                            &ScalarValue::Int16(v) => v,
+                            _ => panic!(),
+                        })
+                        .collect::<Vec<i16>>(),
+                ),
                 DataType::Int32 => Array::from(
                     rows.iter()
                         .map(|row| match &row[i] {
@@ -238,6 +253,38 @@ impl DataSource for CsvFile {
                             _ => panic!(),
                         })
                         .collect::<Vec<i64>>(),
+                ),
+//                DataType::UInt8 => Array::from(
+//                    rows.iter()
+//                        .map(|row| match &row[i] {
+//                            &ScalarValue::UInt8(v) => v,
+//                            _ => panic!(),
+//                        })
+//                        .collect::<Vec<u8>>(),
+//                ),
+                DataType::UInt16 => Array::from(
+                    rows.iter()
+                        .map(|row| match &row[i] {
+                            &ScalarValue::UInt16(v) => v,
+                            _ => panic!(),
+                        })
+                        .collect::<Vec<u16>>(),
+                ),
+                DataType::UInt32 => Array::from(
+                    rows.iter()
+                        .map(|row| match &row[i] {
+                            &ScalarValue::UInt32(v) => v,
+                            _ => panic!(),
+                        })
+                        .collect::<Vec<u32>>(),
+                ),
+                DataType::UInt64 => Array::from(
+                    rows.iter()
+                        .map(|row| match &row[i] {
+                            &ScalarValue::UInt64(v) => v,
+                            _ => panic!(),
+                        })
+                        .collect::<Vec<u64>>(),
                 ),
                 DataType::Utf8 => {
                     //TODO: this can be optimized to avoid creating strings once arrow stabilizes
