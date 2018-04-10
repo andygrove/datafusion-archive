@@ -21,9 +21,11 @@ use std::str;
 use arrow::array::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
+use arrow::list::*;
+use arrow::list_builder::ListBuilder;
 
 use csv;
-use csv::StringRecordsIntoIter;
+use csv::{StringRecord, StringRecordsIntoIter};
 use parquet::basic;
 use parquet::column::reader::*;
 use parquet::data_type::ByteArray;
@@ -54,21 +56,21 @@ pub trait RecordBatch {
 pub fn get_value(column: &Array, index: usize) -> ScalarValue {
     ////println!("get_value() index={}", index);
     let v = match column.data() {
-        &ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
-        &ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
-        &ArrayData::Float64(ref v) => ScalarValue::Float64(*v.get(index)),
-        &ArrayData::Int8(ref v) => ScalarValue::Int8(*v.get(index)),
-        &ArrayData::Int16(ref v) => ScalarValue::Int16(*v.get(index)),
-        &ArrayData::Int32(ref v) => ScalarValue::Int32(*v.get(index)),
-        &ArrayData::Int64(ref v) => ScalarValue::Int64(*v.get(index)),
-        &ArrayData::UInt8(ref v) => ScalarValue::UInt8(*v.get(index)),
-        &ArrayData::UInt16(ref v) => ScalarValue::UInt16(*v.get(index)),
-        &ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
-        &ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
-        &ArrayData::Utf8(ref data) => {
+        ArrayData::Boolean(ref v) => ScalarValue::Boolean(*v.get(index)),
+        ArrayData::Float32(ref v) => ScalarValue::Float32(*v.get(index)),
+        ArrayData::Float64(ref v) => ScalarValue::Float64(*v.get(index)),
+        ArrayData::Int8(ref v) => ScalarValue::Int8(*v.get(index)),
+        ArrayData::Int16(ref v) => ScalarValue::Int16(*v.get(index)),
+        ArrayData::Int32(ref v) => ScalarValue::Int32(*v.get(index)),
+        ArrayData::Int64(ref v) => ScalarValue::Int64(*v.get(index)),
+        ArrayData::UInt8(ref v) => ScalarValue::UInt8(*v.get(index)),
+        ArrayData::UInt16(ref v) => ScalarValue::UInt16(*v.get(index)),
+        ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
+        ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
+        ArrayData::Utf8(ref data) => {
             ScalarValue::Utf8(String::from(str::from_utf8(data.slice(index)).unwrap()))
         }
-        &ArrayData::Struct(ref v) => {
+        ArrayData::Struct(ref v) => {
             // v is Vec<ArrayData>
             // each field has its own ArrayData e.g. lat, lon so we want to get a value from each (but it's recursive)
             //            //println!("get_value() complex value has {} fields", v.len());
@@ -155,36 +157,27 @@ impl CsvFile {
     }
 }
 
+macro_rules! collect_column {
+    ($ROWS:expr, $COL_INDEX:expr, $TY:ty, $LEN:expr) => {{
+        let mut b: Builder<$TY> = Builder::with_capacity($LEN);
+        for row_index in 0..$LEN {
+            b.push(match $ROWS[row_index].get($COL_INDEX) {
+                Some(s) => s.parse::<$TY>().unwrap(),
+                None => panic!(),
+            })
+        }
+        Rc::new(Value::Column(Rc::new(Array::from(b.finish()))))
+    }};
+}
+
 impl DataSource for CsvFile {
     fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>> {
-        let mut rows: Vec<Vec<ScalarValue>> = Vec::with_capacity(self.batch_size);
-
+        // read a batch of rows into memory
+        let mut rows: Vec<StringRecord> = Vec::with_capacity(self.batch_size);
         for _ in 0..self.batch_size {
             match self.record_iter.next() {
                 Some(Ok(r)) => {
-                    let values: Vec<ScalarValue> = self.schema
-                        .columns
-                        .iter()
-                        .zip(r.into_iter())
-                        .map(|(c, s)| match c.data_type {
-                            DataType::Boolean => ScalarValue::Boolean(s.parse::<bool>().unwrap()),
-                            DataType::Float16 => ScalarValue::Float32(s.parse::<f32>().unwrap()),
-                            DataType::Float32 => ScalarValue::Float32(s.parse::<f32>().unwrap()),
-                            DataType::Float64 => ScalarValue::Float64(s.parse::<f64>().unwrap()),
-                            DataType::Int8 => ScalarValue::Int8(s.parse::<i8>().unwrap()),
-                            DataType::Int16 => ScalarValue::Int16(s.parse::<i16>().unwrap()),
-                            DataType::Int32 => ScalarValue::Int32(s.parse::<i32>().unwrap()),
-                            DataType::Int64 => ScalarValue::Int64(s.parse::<i64>().unwrap()),
-                            DataType::UInt8 => ScalarValue::UInt8(s.parse::<u8>().unwrap()),
-                            DataType::UInt16 => ScalarValue::UInt16(s.parse::<u16>().unwrap()),
-                            DataType::UInt32 => ScalarValue::UInt32(s.parse::<u32>().unwrap()),
-                            DataType::UInt64 => ScalarValue::UInt64(s.parse::<u64>().unwrap()),
-                            DataType::Utf8 => ScalarValue::Utf8(s.to_string()),
-                            DataType::Struct(_) => ScalarValue::Null, // CSV files do not have Structs
-                        })
-                        .collect();
-
-                    rows.push(values);
+                    rows.push(r);
                 }
                 _ => break,
             }
@@ -194,131 +187,37 @@ impl DataSource for CsvFile {
             return None;
         }
 
-        let mut columns: Vec<Rc<Value>> = Vec::with_capacity(self.schema.columns.len());
-
-        for i in 0..self.schema.columns.len() {
-            let array: Array = match self.schema.columns[i].data_type {
-                DataType::Boolean => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::Boolean(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<bool>>(),
-                ),
-                DataType::Float32 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::Float32(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<f32>>(),
-                ),
-                DataType::Float64 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::Float64(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<f64>>(),
-                ),
-                DataType::Int8 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::Int8(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<i8>>(),
-                ),
-                DataType::Int16 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::Int16(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<i16>>(),
-                ),
-                DataType::Int32 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::Int32(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<i32>>(),
-                ),
-                DataType::Int64 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::Int64(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<i64>>(),
-                ),
-//                DataType::UInt8 => Array::from(
-//                    rows.iter()
-//                        .map(|row| match &row[i] {
-//                            &ScalarValue::UInt8(v) => v,
-//                            _ => panic!(),
-//                        })
-//                        .collect::<Vec<u8>>(),
-//                ),
-                DataType::UInt16 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::UInt16(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<u16>>(),
-                ),
-                DataType::UInt32 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::UInt32(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<u32>>(),
-                ),
-                DataType::UInt64 => Array::from(
-                    rows.iter()
-                        .map(|row| match &row[i] {
-                            &ScalarValue::UInt64(v) => v,
-                            _ => panic!(),
-                        })
-                        .collect::<Vec<u64>>(),
-                ),
+        let columns: Vec<Rc<Value>> = self.schema
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(i, c)| match c.data_type {
+                DataType::Boolean => collect_column!(rows, i, bool, rows.len()),
+                DataType::Int8 => collect_column!(rows, i, i8, rows.len()),
+                DataType::Int16 => collect_column!(rows, i, i16, rows.len()),
+                DataType::Int32 => collect_column!(rows, i, i32, rows.len()),
+                DataType::Int64 => collect_column!(rows, i, i64, rows.len()),
+                DataType::UInt8 => collect_column!(rows, i, u8, rows.len()),
+                DataType::UInt16 => collect_column!(rows, i, u16, rows.len()),
+                DataType::UInt32 => collect_column!(rows, i, u32, rows.len()),
+                DataType::UInt64 => collect_column!(rows, i, u64, rows.len()),
+                DataType::Float16 => collect_column!(rows, i, f32, rows.len()),
+                DataType::Float32 => collect_column!(rows, i, f32, rows.len()),
+                DataType::Float64 => collect_column!(rows, i, f64, rows.len()),
                 DataType::Utf8 => {
-                    //TODO: this can be optimized to avoid creating strings once arrow stabilizes
-                    Array::from(
-                        rows.iter()
-                            .map(|row| match &row[i] {
-                                &ScalarValue::Utf8(ref v) => v.clone(),
-                                _ => panic!(),
-                            })
-                            .collect::<Vec<String>>(),
-                    )
-
-                    //                    let mut offsets : Vec<i32> = Vec::with_capacity(rows.len() + 1);
-                    //                    let mut buf = BytesMut::with_capacity(rows.len() * 32);
-                    //
-                    //                    offsets.push(0_i32);
-                    //
-                    //                    rows.iter().for_each(|row| match &row[i] {
-                    //                        &ScalarValue::Utf8(ref v) => {
-                    //                            buf.put(v.as_bytes());
-                    //                            offsets.push(buf.len() as i32);
-                    //                        },
-                    //                        _ => panic!()
-                    //                    });
-                    //
-                    //                    let bytes: Bytes = buf.freeze();
-                    //
-                    //                    Array::new(rows.len(), ArrayData::Utf8(ListData { offsets, bytes }))
+                    let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(rows.len());
+                    rows.iter().for_each(|row| {
+                        let s = row.get(i).unwrap_or("").to_string();
+                        builder.push(s.as_bytes());
+                    });
+                    Rc::new(Value::Column(Rc::new(Array::new(
+                        rows.len(),
+                        ArrayData::Utf8(builder.finish()),
+                    ))))
                 }
                 _ => unimplemented!(),
-            };
-
-            columns.push(Rc::new(Value::Column(Rc::new(array))));
-        }
+            })
+            .collect();
 
         Some(Ok(Rc::new(DefaultRecordBatch {
             schema: self.schema.clone(),
@@ -448,9 +347,12 @@ impl DataSource for ParquetFile {
                             Ok(ColumnReader::Int32ColumnReader(ref mut r)) => {
                                 let mut builder: Builder<i32> =
                                     Builder::with_capacity(self.batch_size);
-                                match r.read_batch(self.batch_size, None, None, unsafe {
-                                    builder.slice_mut(0, self.batch_size)
-                                }) {
+                                match r.read_batch(
+                                    self.batch_size,
+                                    None,
+                                    None,
+                                    builder.slice_mut(0, self.batch_size),
+                                ) {
                                     Ok((count, _)) => {
                                         row_count = count;
                                         builder.set_len(count);
@@ -462,9 +364,12 @@ impl DataSource for ParquetFile {
                             Ok(ColumnReader::FloatColumnReader(ref mut r)) => {
                                 let mut builder: Builder<f32> =
                                     Builder::with_capacity(self.batch_size);
-                                match r.read_batch(self.batch_size, None, None, unsafe {
-                                    builder.slice_mut(0, self.batch_size)
-                                }) {
+                                match r.read_batch(
+                                    self.batch_size,
+                                    None,
+                                    None,
+                                    builder.slice_mut(0, self.batch_size),
+                                ) {
                                     Ok((count, _)) => {
                                         row_count = count;
                                         builder.set_len(count);

@@ -28,7 +28,8 @@ path = "src/bin/console/main.rs"
 bytes = "0.4"
 byteorder = "1"
 csv = "1.0.0-beta.5"
-datafusion-arrow = "0.1.0-nightly-20180409"
+datafusion-arrow = "0.1.0-nightly-20180410-2"
+#datafusion-arrow = { path = "../datafusion-arrow" }
 parquet = "0.1.0"
 #futures = "0.1.18"
 #futures-timer = "0.1"
@@ -46,14 +47,18 @@ parquet = "0.1.0"
 [dev-dependencies]
 criterion = "0.2.0"
 
-[[bench]]
-name = "dataframe_bench"
-harness = false
-#
+#[[bench]]
+#name = "dataframe_bench"
+#harness = false
+
 #[[bench]]
 #name = "sql_bench"
 #harness = false
-#
+
+[[bench]]
+name = "read_csv"
+harness = false
+
 #[[bench]]
 #name = "filter_primitive"
 #harness = false

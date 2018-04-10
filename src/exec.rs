@@ -1351,7 +1351,6 @@ mod tests {
 
     #[test]
     fn test_a_thing() {
-
         let n = 10;
         let mut ctx = ExecutionContext::local();
         ctx.register_function(Rc::new(STPointFunc {}));
@@ -1375,9 +1374,7 @@ mod tests {
         let output_filename = format!("/tmp/wkt_{}", n);
 
         ctx.write_csv(df, &output_filename).unwrap();
-
     }
-
 
     #[test]
     fn sql_query_example() {
