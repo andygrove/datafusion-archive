@@ -12,34 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-use std::iter::Peekable;
-use std::str::Chars;
-
 use super::sqlast::*;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Token {
-    Identifier(String),
-    Keyword(String),
-    Operator(String),
-    Number(String),
-    Comma,
-    Whitespace,
-    Eq,
-    Neq,
-    Lt,
-    Gt,
-    LtEq,
-    GtEq,
-    Plus,
-    Minus,
-    Mult,
-    Div,
-    LParen,
-    RParen,
-    //Operator(String)
-}
+use super::sqltokenizer::*;
 
 #[derive(Debug, Clone)]
 pub enum ParserError {
@@ -47,168 +21,20 @@ pub enum ParserError {
     ParserError(String),
 }
 
-/// SQL keywords
-static KEYWORDS: &'static [&'static str] = &[
-    "SELECT", "FROM", "WHERE", "LIMIT", "ORDER", "GROUP", "BY", "HAVING", "UNION", "ALL", "INSERT",
-    "UPDATE", "DELETE", "IN", "NOT", "NULL", "SET", "CREATE", "EXTERNAL", "TABLE", "ASC", "DESC",
-    "VARCHAR", "DOUBLE", "AND", "OR",
-];
-
-pub struct Tokenizer {
-    keywords: HashSet<String>,
-    pub query: String,
-}
-
-impl Tokenizer {
-    pub fn new(query: &str) -> Self {
-        let mut tokenizer = Tokenizer {
-            keywords: HashSet::new(),
-            query: query.to_string(),
-        };
-        KEYWORDS.into_iter().for_each(|k| {
-            tokenizer.keywords.insert(k.to_string());
-        });
-        tokenizer
-    }
-
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, ParserError> {
-        let mut peekable = self.query.chars().peekable();
-
-        let mut tokens: Vec<Token> = vec![];
-
-        while let Some(token) = self.next_token(&mut peekable)? {
-            tokens.push(token);
-        }
-
-        Ok(tokens
-            .into_iter()
-            .filter(|t| match t {
-                &Token::Whitespace => false,
-                _ => true,
-            })
-            .collect())
-    }
-
-    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token>, ParserError> {
-        match chars.peek() {
-            Some(&ch) => match ch {
-                // whitespace
-                ' ' | '\t' | '\n' => {
-                    chars.next(); // consume
-                    Ok(Some(Token::Whitespace))
-                }
-                // identifier or keyword
-                'a'...'z' | 'A'...'Z' | '_' | '@' => {
-                    let mut s = String::new();
-                    while let Some(&ch) = chars.peek() {
-                        match ch {
-                            'a'...'z' | 'A'...'Z' | '_' | '0'...'9' => {
-                                chars.next(); // consume
-                                s.push(ch);
-                            }
-                            _ => break,
-                        }
-                    }
-                    if self.keywords.contains(&s) {
-                        Ok(Some(Token::Keyword(s)))
-                    } else {
-                        Ok(Some(Token::Identifier(s)))
-                    }
-                }
-                // numbers
-                '0'...'9' | '.' => {
-                    let mut s = String::new();
-                    while let Some(&ch) = chars.peek() {
-                        match ch {
-                            '0'...'9' | '.' => {
-                                chars.next(); // consume
-                                s.push(ch);
-                            }
-                            _ => break,
-                        }
-                    }
-                    Ok(Some(Token::Number(s)))
-                }
-                // punctuation
-                ',' => {
-                    chars.next();
-                    Ok(Some(Token::Comma))
-                }
-                '(' => {
-                    chars.next();
-                    Ok(Some(Token::LParen))
-                }
-                ')' => {
-                    chars.next();
-                    Ok(Some(Token::RParen))
-                }
-                // operators
-                '+' => {
-                    chars.next();
-                    Ok(Some(Token::Plus))
-                }
-                '-' => {
-                    chars.next();
-                    Ok(Some(Token::Minus))
-                }
-                '*' => {
-                    chars.next();
-                    Ok(Some(Token::Mult))
-                }
-                '/' => {
-                    chars.next();
-                    Ok(Some(Token::Div))
-                }
-                '=' => {
-                    chars.next();
-                    Ok(Some(Token::Eq))
-                }
-                '<' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some(&ch) => match ch {
-                            '=' => {
-                                chars.next();
-                                Ok(Some(Token::LtEq))
-                            }
-                            '>' => {
-                                chars.next();
-                                Ok(Some(Token::Neq))
-                            }
-                            _ => Ok(Some(Token::Lt)),
-                        },
-                        None => Ok(Some(Token::Lt)),
-                    }
-                }
-                '>' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some(&ch) => match ch {
-                            '=' => {
-                                chars.next();
-                                Ok(Some(Token::GtEq))
-                            }
-                            _ => Ok(Some(Token::Gt)),
-                        },
-                        None => Ok(Some(Token::Gt)),
-                    }
-                }
-                _ => Err(ParserError::TokenizerError(String::from(format!(
-                    "unhandled char '{}' in tokenizer",
-                    ch
-                )))),
-            },
-            None => Ok(None),
-        }
+impl From<TokenizerError> for ParserError {
+    fn from(e: TokenizerError) -> Self {
+        ParserError::TokenizerError(format!("{:?}", e))
     }
 }
 
+/// SQL Parser
 pub struct Parser {
     tokens: Vec<Token>,
     index: usize,
 }
 
 impl Parser {
+    /// Parse the specified tokens
     pub fn new(tokens: Vec<Token>) -> Self {
         Parser {
             tokens: tokens,
@@ -216,6 +42,7 @@ impl Parser {
         }
     }
 
+    /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize()?;
@@ -223,10 +50,12 @@ impl Parser {
         parser.parse()
     }
 
+    /// Parse a new expression
     pub fn parse(&mut self) -> Result<ASTNode, ParserError> {
         self.parse_expr(0)
     }
 
+    /// Parse tokens until the precedence changes
     fn parse_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
         //        println!("parse_expr() precendence = {}", precedence);
 
@@ -251,6 +80,7 @@ impl Parser {
         Ok(expr)
     }
 
+    /// Parse an expression prefix
     fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
         match self.next_token() {
             Some(t) => {
@@ -303,6 +133,7 @@ impl Parser {
         }
     }
 
+    /// Parse an expression infix
     fn parse_infix(
         &mut self,
         expr: ASTNode,
@@ -337,6 +168,7 @@ impl Parser {
         }
     }
 
+    /// Convert a token operator to an AST operator
     fn to_sql_operator(&self, tok: &Token) -> Result<SQLOperator, ParserError> {
         match tok {
             &Token::Eq => Ok(SQLOperator::Eq),
@@ -355,6 +187,7 @@ impl Parser {
         }
     }
 
+    /// Get the precedence of the next token
     fn get_next_precedence(&self) -> Result<u8, ParserError> {
         if self.index < self.tokens.len() {
             self.get_precedence(&self.tokens[self.index])
@@ -363,6 +196,7 @@ impl Parser {
         }
     }
 
+    /// Get the precedence of a token
     fn get_precedence(&self, tok: &Token) -> Result<u8, ParserError> {
         //println!("get_precedence() {:?}", tok);
 
@@ -378,6 +212,7 @@ impl Parser {
         }
     }
 
+    /// Peek at the next token
     fn peek_token(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
             Some(self.tokens[self.index].clone())
@@ -386,6 +221,7 @@ impl Parser {
         }
     }
 
+    /// Get the next token and increment the token index
     fn next_token(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
             self.index = self.index + 1;
@@ -395,6 +231,7 @@ impl Parser {
         }
     }
 
+    /// Get the previous token and decrement the token index
     fn prev_token(&mut self) -> Option<Token> {
         if self.index > 0 {
             Some(self.tokens[self.index - 1].clone())
@@ -403,6 +240,7 @@ impl Parser {
         }
     }
 
+    /// Look for an expected keyword and consume it if it exists
     fn parse_keyword(&mut self, expected: &'static str) -> bool {
         match self.peek_token() {
             Some(Token::Keyword(k)) => {
@@ -417,6 +255,7 @@ impl Parser {
         }
     }
 
+    /// Look for an expected sequence of keywords and consume them if they exist
     fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
         let index = self.index;
         for keyword in keywords {
@@ -436,6 +275,7 @@ impl Parser {
     //        }
     //    }
 
+    /// Consume the next token if it matches the expected token, otherwise return an error
     fn consume_token(&mut self, expected: &Token) -> Result<(), ParserError> {
         match self.next_token() {
             Some(ref t) if *t == *expected => Ok(()),
@@ -449,6 +289,7 @@ impl Parser {
 
     // specific methods
 
+    /// Parse a SQL CREATE statement
     fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
         if self.parse_keywords(vec!["EXTERNAL", "TABLE"]) {
             match self.next_token() {
@@ -522,6 +363,7 @@ impl Parser {
         }
     }
 
+    /// Parse a literal integer/long
     fn parse_literal_int(&mut self) -> Result<i64, ParserError> {
         match self.next_token() {
             Some(Token::Number(s)) => s.parse::<i64>().map_err(|e| {
@@ -531,6 +373,7 @@ impl Parser {
         }
     }
 
+    /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     fn parse_data_type(&mut self) -> Result<SQLType, ParserError> {
         match self.next_token() {
             Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
@@ -550,6 +393,7 @@ impl Parser {
         }
     }
 
+    /// Parse a SELECT statement
     fn parse_select(&mut self) -> Result<ASTNode, ParserError> {
         let projection = self.parse_expr_list()?;
 
@@ -608,6 +452,7 @@ impl Parser {
         }
     }
 
+    /// Parse a comma-delimited list of SQL expressions
     fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
         let mut expr_list: Vec<ASTNode> = vec![];
         loop {
@@ -626,6 +471,7 @@ impl Parser {
         Ok(expr_list)
     }
 
+    /// Parse a comma-delimited list of SQL ORDER BY expressions
     fn parse_order_by_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
         let mut expr_list: Vec<ASTNode> = vec![];
         loop {
@@ -675,6 +521,7 @@ impl Parser {
         Ok(expr_list)
     }
 
+    /// Parse a LIMIT clause
     fn parse_limit(&mut self) -> Result<Option<Box<ASTNode>>, ParserError> {
         if self.parse_keyword("ALL") {
             Ok(None)

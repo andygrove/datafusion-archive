@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// SQL Abstract Syntax Tree (AST) type
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     SQLIdentifier(String),
@@ -50,6 +51,7 @@ pub enum ASTNode {
     },
 }
 
+/// SQL column definition
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLColumnDef {
     pub name: String,
@@ -57,6 +59,7 @@ pub struct SQLColumnDef {
     pub allow_null: bool,
 }
 
+/// SQL datatypes for literals in SQL statements
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLType {
     Varchar(usize),
@@ -66,6 +69,7 @@ pub enum SQLType {
     Long,
 }
 
+/// SQL Operator
 #[derive(Debug, PartialEq, Clone)]
 pub enum SQLOperator {
     Plus,

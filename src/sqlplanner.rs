@@ -23,18 +23,21 @@ use super::types::*;
 
 use arrow::datatypes::*;
 
+/// SQL query planner
 pub struct SqlToRel {
     //default_schema: Option<String>,
     schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
 }
 
 impl SqlToRel {
+    /// Create a new query planner
     pub fn new(schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>) -> Self {
         SqlToRel {
             /*default_schema: None,*/ schemas,
         }
     }
 
+    /// Generate a logic plan from a SQL AST node
     pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rc<LogicalPlan>, String> {
         match sql {
             &ASTNode::SQLSelect {
@@ -156,6 +159,7 @@ impl SqlToRel {
         }
     }
 
+    /// Generate a relational expression from a SQL expression
     pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
             &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(ScalarValue::Int64(n))),

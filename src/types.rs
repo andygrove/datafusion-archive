@@ -20,7 +20,7 @@ use arrow::datatypes::{DataType, Field};
 
 use super::sqlparser::ParserError;
 
-/// Value holder for all supported data types
+/// ScalarValue enumeration
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScalarValue {
     Null,
@@ -37,6 +37,31 @@ pub enum ScalarValue {
     UInt64(u64),
     Utf8(String),
     Struct(Vec<ScalarValue>),
+}
+
+impl ScalarValue {
+    /// Produces a string representation of a scalar value
+    pub fn to_string(&self) -> String {
+        match self {
+            &ScalarValue::Null => "NULL".to_string(),
+            &ScalarValue::Boolean(b) => b.to_string(),
+            &ScalarValue::Int8(l) => l.to_string(),
+            &ScalarValue::Int16(l) => l.to_string(),
+            &ScalarValue::Int32(l) => l.to_string(),
+            &ScalarValue::Int64(l) => l.to_string(),
+            &ScalarValue::UInt8(l) => l.to_string(),
+            &ScalarValue::UInt16(l) => l.to_string(),
+            &ScalarValue::UInt32(l) => l.to_string(),
+            &ScalarValue::UInt64(l) => l.to_string(),
+            &ScalarValue::Float32(d) => d.to_string(),
+            &ScalarValue::Float64(d) => d.to_string(),
+            &ScalarValue::Utf8(ref s) => s.clone(),
+            &ScalarValue::Struct(ref v) => {
+                let s: Vec<String> = v.iter().map(|v| v.to_string()).collect();
+                s.join(",")
+            }
+        }
+    }
 }
 
 #[derive(Clone)]

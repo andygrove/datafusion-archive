@@ -14,14 +14,13 @@
 
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter, Write};
 use std::rc::Rc;
 use std::str;
 
 use arrow::array::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
-use arrow::list::*;
 use arrow::list_builder::ListBuilder;
 
 use csv;
@@ -228,6 +227,53 @@ impl DataSource for CsvFile {
 
     fn schema(&self) -> &Rc<Schema> {
         &self.schema
+    }
+}
+
+pub struct CsvWriter {
+    pub w: BufWriter<File>,
+}
+
+impl CsvWriter {
+    pub fn write_scalar(&mut self, v: &ScalarValue) {
+        self.write_bytes(format!("{:?}", v).as_bytes());
+    }
+    pub fn write_bool(&mut self, v: &bool) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_u8(&mut self, v: &u8) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_u16(&mut self, v: &u16) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_u32(&mut self, v: &u32) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_u64(&mut self, v: &u64) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_i8(&mut self, v: &i8) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_i16(&mut self, v: &i16) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_i32(&mut self, v: &i32) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_i64(&mut self, v: &i64) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_f32(&mut self, v: &f32) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+    pub fn write_f64(&mut self, v: &f64) {
+        self.w.write(format!("{}", *v).as_bytes()).unwrap();
+    }
+
+    pub fn write_bytes(&mut self, s: &[u8]) {
+        self.w.write(s).unwrap();
     }
 }
 

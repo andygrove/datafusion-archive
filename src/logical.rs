@@ -18,30 +18,6 @@ use super::types::*;
 
 use arrow::datatypes::*;
 
-impl ScalarValue {
-    pub fn to_string(&self) -> String {
-        match self {
-            &ScalarValue::Null => "NULL".to_string(),
-            &ScalarValue::Boolean(b) => b.to_string(),
-            &ScalarValue::Int8(l) => l.to_string(),
-            &ScalarValue::Int16(l) => l.to_string(),
-            &ScalarValue::Int32(l) => l.to_string(),
-            &ScalarValue::Int64(l) => l.to_string(),
-            &ScalarValue::UInt8(l) => l.to_string(),
-            &ScalarValue::UInt16(l) => l.to_string(),
-            &ScalarValue::UInt32(l) => l.to_string(),
-            &ScalarValue::UInt64(l) => l.to_string(),
-            &ScalarValue::Float32(d) => d.to_string(),
-            &ScalarValue::Float64(d) => d.to_string(),
-            &ScalarValue::Utf8(ref s) => s.clone(),
-            &ScalarValue::Struct(ref v) => {
-                let s: Vec<String> = v.iter().map(|v| v.to_string()).collect();
-                s.join(",")
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct FunctionMeta {
     pub name: String,
@@ -127,48 +103,56 @@ impl Expr {
     }
 }
 
-/// Relations
+/// The LogicalPlan represents different types of relations (such as Projection, Selection, etc) and
+/// can be created by the SQL query planner and the DataFrame API.
 #[derive(Debug, Clone)]
 pub enum LogicalPlan {
+    /// A relation that applies a row limit to its child relation
     Limit {
         limit: usize,
         input: Rc<LogicalPlan>,
         schema: Rc<Schema>,
     },
+    /// A Projection (essentially a SELECT with an expression list)
     Projection {
         expr: Vec<Expr>,
         input: Rc<LogicalPlan>,
         schema: Rc<Schema>,
     },
+    /// A Selection (essentially a WHERE clause with a predicate expression)
     Selection {
         expr: Expr,
         input: Rc<LogicalPlan>,
         schema: Rc<Schema>,
     },
+    /// Represents a list of sort expressions to be applied to a relation
     Sort {
         expr: Vec<Expr>,
         input: Rc<LogicalPlan>,
         schema: Rc<Schema>,
     },
+    /// A table scan against a table that has been registered on a context
     TableScan {
         schema_name: String,
         table_name: String,
         schema: Rc<Schema>,
     },
+    /// Represents a CSV file with a provided schema
     CsvFile {
         filename: String,
         schema: Rc<Schema>,
     },
+    /// Represents a Parquet file that contains schema information
     ParquetFile {
         filename: String,
         schema: Rc<Schema>,
     },
-    EmptyRelation {
-        schema: Rc<Schema>,
-    },
+    /// An empty relation with an empty schema
+    EmptyRelation { schema: Rc<Schema> },
 }
 
 impl LogicalPlan {
+    /// Get a reference to the logical plan's schema
     pub fn schema(&self) -> &Rc<Schema> {
         match self {
             LogicalPlan::EmptyRelation { schema } => schema,

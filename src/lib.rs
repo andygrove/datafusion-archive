@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # DataFusion
+//!
+//! `datafusion` is a modern distributed compute platform for Rust that can also be used as a
+//! crate dependency for in-process SQL and DataFrame queries against CSV and Parquet files.
+
 extern crate arrow;
 extern crate bytes;
 extern crate csv;
@@ -27,8 +32,9 @@ pub mod datasource;
 pub mod exec;
 pub mod functions;
 pub mod sqlast;
-pub mod sqlcompiler;
 pub mod sqlparser;
+pub mod sqlplanner;
+pub mod sqltokenizer;
 //pub mod persist;
 pub mod logical;
 pub mod types;

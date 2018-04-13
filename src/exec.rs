@@ -17,7 +17,6 @@ use std::clone::Clone;
 use std::collections::HashMap;
 use std::convert::*;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::{BufWriter, Error};
 use std::iter::Iterator;
 use std::rc::Rc;
@@ -36,8 +35,8 @@ use arrow::datatypes::*;
 use super::datasource::*;
 use super::logical::*;
 use super::sqlast::ASTNode::*;
-use super::sqlcompiler::*;
 use super::sqlparser::*;
+use super::sqlplanner::*;
 use super::types::*;
 //use super::cluster::*;
 
@@ -904,7 +903,9 @@ impl ExecutionContext {
                 // //println!("Writing csv to {}", filename);
                 let file = File::create(filename)?;
 
-                let mut writer = BufWriter::with_capacity(8 * 1024 * 1024, file);
+                let mut w = CsvWriter {
+                    w: BufWriter::with_capacity(8 * 1024 * 1024, file),
+                };
 
                 let mut execution_plan = self.create_execution_plan(plan)?;
 
@@ -916,13 +917,39 @@ impl ExecutionContext {
                         Ok(ref batch) => {
                             ////println!("Processing batch of {} rows", batch.row_count());
                             for i in 0..batch.num_rows() {
-                                let row = batch.row_slice(i);
-                                let csv = row.into_iter()
-                                    .map(|v| v.to_string())
-                                    .collect::<Vec<String>>()
-                                    .join(",");
-                                writer.write(&csv.into_bytes()).unwrap();
-                                writer.write(b"\n").unwrap();
+                                for j in 0..batch.num_columns() {
+                                    if j > 0 {
+                                        w.write_bytes(b",");
+                                    }
+                                    match *batch.column(j) {
+                                        Value::Scalar(ref v) => w.write_scalar(v),
+                                        Value::Column(ref v) => {
+                                            match v.data() {
+                                                ArrayData::Boolean(ref v) => w.write_bool(v.get(i)),
+                                                ArrayData::Float32(ref v) => w.write_f32(v.get(i)),
+                                                ArrayData::Float64(ref v) => w.write_f64(v.get(i)),
+                                                ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
+                                                ArrayData::Int16(ref v) => w.write_i16(v.get(i)),
+                                                ArrayData::Int32(ref v) => w.write_i32(v.get(i)),
+                                                ArrayData::Int64(ref v) => w.write_i64(v.get(i)),
+                                                ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
+                                                ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
+                                                ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
+                                                ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
+                                                ArrayData::Utf8(ref data) => {
+                                                    w.write_bytes(data.slice(i))
+                                                }
+                                                ArrayData::Struct(ref v) => {
+                                                    let fields = v.iter()
+                                                        .map(|arr| get_value(&arr, i))
+                                                        .collect();
+                                                    w.write_bytes(format!("{:?}", ScalarValue::Struct(fields)).as_bytes());
+                                                } // csv can't write struct
+                                            }
+                                        }
+                                    }
+                                }
+                                w.write_bytes(b"\n");
                                 count += 1;
                             }
                         }
