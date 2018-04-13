@@ -70,7 +70,7 @@ impl ScalarFunction for STPointFunc {
     }
 }
 
-/// create a point from two doubles
+/// Converts a point to Well-Known Text (WKT)
 pub struct STAsText;
 
 impl ScalarFunction for STAsText {
