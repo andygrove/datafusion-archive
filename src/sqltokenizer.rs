@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! SQL Tokenizer
+
 use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;

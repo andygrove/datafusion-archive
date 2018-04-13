@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Defines data sources supported by DataFusion (currently CSV and Apache Parquet)
+
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
