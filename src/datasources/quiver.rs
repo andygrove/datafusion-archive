@@ -18,10 +18,13 @@
 use std::io::{BufReader, BufWriter, Read, Result, Write};
 use std::mem;
 use std::rc::Rc;
+use std::str;
 
 use arrow::array::{Array, ArrayData};
+use arrow::buffer::Buffer;
 use arrow::builder::Builder;
 use arrow::datatypes::{DataType, Field, Schema};
+use arrow::list::List;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 const TYPE_ID_BOOL: u8 = 1;
@@ -39,8 +42,19 @@ const TYPE_ID_UTF8: u8 = 12;
 
 const TYPE_ID_STRUCT: u8 = 20;
 
+//macro_rules! write_primitive_buffer {
+//    ($SELF:ident, $BUF:ident, $TYPE_ID:ident, $TY:ty) => {
+//        // write type id (u8)
+//        $SELF.w.write_u8($TYPE_ID)?;
+//        // for now write each element individually but should be able to copy slice instead
+//        $SELF.w.write(unsafe {
+//            mem::transmute::<&[$TY], &[u8]>($BUF.slice(0, $BUF.len() as usize))
+//        })
+//    }
+//}
+
 /// Quiver file writer
-struct QuiverWriter<W: Write> {
+pub struct QuiverWriter<W: Write> {
     w: BufWriter<W>,
 }
 
@@ -48,9 +62,13 @@ impl<W> QuiverWriter<W>
 where
     W: Write,
 {
-    fn write_header(&mut self, schema: &Schema) -> Result<()> {
-        //TODO: write magic bytes + file format version in fixed-size header record
+    pub fn new(w: W) -> Self {
+        QuiverWriter {
+            w: BufWriter::new(w),
+        }
+    }
 
+    pub fn write_schema(&mut self, schema: &Schema) -> Result<()> {
         // write number of fields
         self.w
             .write_i32::<LittleEndian>(schema.columns.len() as i32)?;
@@ -95,7 +113,7 @@ where
         Ok(())
     }
 
-    fn write_row_group(&mut self, batch: Vec<Rc<Array>>) -> Result<()> {
+    pub fn write_row_group(&mut self, batch: Vec<Rc<Array>>) -> Result<()> {
         // write array count as i32
         self.w.write_i32::<LittleEndian>(batch.len() as i32)?;
         for array in &batch {
@@ -111,76 +129,80 @@ where
         match a.data() {
             ArrayData::Boolean(buf) => {
                 self.w.write_u8(TYPE_ID_BOOL)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[bool], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_u8(if v { 1 } else { 0 })?;
+                }
             }
             ArrayData::UInt8(buf) => {
                 self.w.write_u8(TYPE_ID_UINT8)?;
-                self.w.write_all(buf.slice(0, a.len as usize))
+                for v in buf.iter() {
+                    self.w.write_u8(v)?;
+                }
             }
             ArrayData::UInt16(buf) => {
                 self.w.write_u8(TYPE_ID_UINT16)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[u16], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_u16::<LittleEndian>(v)?;
+                }
             }
             ArrayData::UInt32(buf) => {
                 self.w.write_u8(TYPE_ID_UINT32)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[u32], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_u32::<LittleEndian>(v)?;
+                }
             }
             ArrayData::UInt64(buf) => {
                 self.w.write_u8(TYPE_ID_UINT64)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[u64], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_u64::<LittleEndian>(v)?;
+                }
             }
             ArrayData::Int8(buf) => {
                 self.w.write_u8(TYPE_ID_INT8)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[i8], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_i8(v)?;
+                }
             }
             ArrayData::Int16(buf) => {
                 self.w.write_u8(TYPE_ID_INT16)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[i16], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_i16::<LittleEndian>(v)?;
+                }
             }
             ArrayData::Int32(buf) => {
                 self.w.write_u8(TYPE_ID_INT32)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[i32], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_i32::<LittleEndian>(v)?;
+                }
             }
             ArrayData::Int64(buf) => {
                 self.w.write_u8(TYPE_ID_INT64)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[i64], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_i64::<LittleEndian>(v)?;
+                }
             }
             ArrayData::Float32(buf) => {
                 self.w.write_u8(TYPE_ID_FLOAT32)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[f32], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_f32::<LittleEndian>(v)?;
+                }
             }
             ArrayData::Float64(buf) => {
                 self.w.write_u8(TYPE_ID_FLOAT64)?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[f64], &[u8]>(buf.slice(0, a.len as usize))
-                })
+                for v in buf.iter() {
+                    self.w.write_f64::<LittleEndian>(v)?;
+                }
             }
             ArrayData::Utf8(ref list) => {
                 self.w.write_u8(TYPE_ID_UTF8)?;
                 self.w.write_i32::<LittleEndian>(list.offsets.len())?;
-                self.w.write_all(unsafe {
-                    mem::transmute::<&[i32], &[u8]>(list.offsets.slice(0, a.len as usize))
-                })?;
+                for v in list.offsets.iter() {
+                    self.w.write_i32::<LittleEndian>(v)?;
+                }
                 self.w.write_i32::<LittleEndian>(list.data.len())?;
-                self.w.write_all(list.data.slice(0, a.len as usize))
+                for v in list.data.iter() {
+                    self.w.write_u8(v)?;
+                }
             }
             ArrayData::Struct(ref list) => {
                 self.w.write_u8(TYPE_ID_STRUCT)?;
@@ -189,37 +211,223 @@ where
                 for array in list.iter() {
                     self.write_array(array.as_ref())?;
                 }
-                Ok(())
             }
         }
+        Ok(())
     }
 }
 
 /// Quiver file reader
-struct QuiverReader<R: Read> {
+pub struct QuiverReader<R: Read> {
     r: BufReader<R>,
 }
+
+//macro_rules! read_primitive_buffer {
+//    ($SELF:ident, $TY:ty, $READ_METHOD:ident, $LEN:expr) => {{
+//        let mut builder: Builder<$TY> = Builder::with_capacity($LEN);
+//        for _ in 0..$LEN
+//            builder.push($SELF.r.$READ_METHOD()?);
+//        }
+//        let x = builder.finish();
+//        println!("read {} items: {:?}", x.len(), x.iter().collect::<Vec<$TY>>());
+//        x
+//    }};
+//}
 
 impl<R> QuiverReader<R>
 where
     R: Read,
 {
+    pub fn new(r: R) -> Self {
+        QuiverReader {
+            r: BufReader::new(r),
+        }
+    }
+
+    pub fn read_schema(&mut self) -> Result<Rc<Schema>> {
+        let field_count = self.r.read_i32::<LittleEndian>()?;
+        let mut fields: Vec<Field> = vec![];
+        for i in 0..field_count {
+            println!("Reading field {}", i);
+            fields.push(self.read_field()?.as_ref().clone());
+        }
+        Ok(Rc::new(Schema::new(fields)))
+    }
+
+    /// Read meta-data for a single field
+    fn read_field(&mut self) -> Result<Rc<Field>> {
+        // read name
+        let name_len = self.r.read_i32::<LittleEndian>()? as usize;
+        println!("field name length: {}", name_len);
+        let mut name_buf: Vec<u8> = Vec::with_capacity(name_len);
+        unsafe { name_buf.set_len(name_len) };
+        let buf = name_buf.as_mut();
+        self.r.read_exact(buf)?;
+        let name_str = str::from_utf8_mut(buf).unwrap();
+
+        // read datatype byte
+        let type_id = self.r.read_u8()?;
+
+        println!("field name: {}, type: {}", name_str, type_id);
+
+        // convert to Arrow DataType
+        let dt = if type_id == TYPE_ID_BOOL {
+            DataType::Boolean
+        } else if type_id == TYPE_ID_UINT8 {
+            DataType::UInt8
+        } else if type_id == TYPE_ID_UINT16 {
+            DataType::UInt16
+        } else if type_id == TYPE_ID_UINT32 {
+            DataType::UInt32
+        } else if type_id == TYPE_ID_UINT64 {
+            DataType::UInt64
+        } else if type_id == TYPE_ID_INT8 {
+            DataType::Int8
+        } else if type_id == TYPE_ID_INT16 {
+            DataType::Int16
+        } else if type_id == TYPE_ID_INT32 {
+            DataType::Int32
+        } else if type_id == TYPE_ID_INT64 {
+            DataType::Int64
+        } else if type_id == TYPE_ID_FLOAT32 {
+            DataType::Float32
+        } else if type_id == TYPE_ID_FLOAT64 {
+            DataType::Float64
+        } else if type_id == TYPE_ID_UTF8 {
+            DataType::Utf8
+        } else if type_id == TYPE_ID_STRUCT {
+            // read number of fields
+            let field_count = self.r.read_i32::<LittleEndian>()? as usize;
+            let mut fields: Vec<Field> = Vec::with_capacity(field_count);
+            for _ in 0..field_count {
+                fields.push(self.read_field()?.as_ref().clone());
+            }
+            DataType::Struct(fields)
+        } else {
+            panic!("invlid datatype type_id in field meta-data")
+        };
+
+        Ok(Rc::new(Field::new(name_str, dt, true)))
+    }
+
+    pub fn read_row_group(&mut self) -> Result<Vec<Rc<Array>>> {
+        let count = self.r.read_i32::<LittleEndian>()? as usize;
+        let mut arrays: Vec<Rc<Array>> = Vec::with_capacity(count);
+        for i in 0..count {
+            println!("reading array {}", i);
+            arrays.push(self.read_array()?);
+        }
+        Ok(arrays)
+    }
+
     pub fn read_array(&mut self) -> Result<Rc<Array>> {
         let len = self.r.read_i32::<LittleEndian>()? as usize;
-        println!("len: {}", len);
+        println!("array len: {}", len);
         let type_id = self.r.read_u8()?;
-        println!("type: {}", type_id);
-        if type_id == TYPE_ID_UINT16 {
-            println!("reading TYPE_ID_UINT16");
+        println!("array type: {}", type_id);
+
+        let array = if type_id == TYPE_ID_BOOL {
+            let mut builder: Builder<bool> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_u8()? == 1);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_UINT8 {
+            let mut builder: Builder<u8> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_u8()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_UINT16 {
             let mut builder: Builder<u16> = Builder::with_capacity(len);
-            builder.set_len(len);
-            self.r.read(unsafe {
-                mem::transmute::<&mut [u16], &mut [u8]>(builder.slice_mut(0, len))
-            })?;
-            Ok(Rc::new(Array::from(builder.finish())))
+            for _ in 0..len {
+                builder.push(self.r.read_u16::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_UINT32 {
+            let mut builder: Builder<u32> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_u32::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_UINT64 {
+            let mut builder: Builder<u64> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_u64::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_INT8 {
+            let mut builder: Builder<i8> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_i8()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_INT16 {
+            let mut builder: Builder<i16> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_i16::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_INT32 {
+            let mut builder: Builder<i32> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_i32::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_INT64 {
+            let mut builder: Builder<i64> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_i64::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_FLOAT32 {
+            let mut builder: Builder<f32> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_f32::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_FLOAT64 {
+            let mut builder: Builder<f64> = Builder::with_capacity(len);
+            for _ in 0..len {
+                builder.push(self.r.read_f64::<LittleEndian>()?);
+            }
+            Array::from(builder.finish())
+        } else if type_id == TYPE_ID_UTF8 {
+            println!("Reading UTF8");
+
+            let offsets_count = self.r.read_i32::<LittleEndian>()? as usize;
+            let mut builder: Builder<i32> = Builder::with_capacity(offsets_count);
+            for _ in 0..offsets_count {
+                builder.push(self.r.read_i32::<LittleEndian>()?);
+            }
+            let offsets = builder.finish();
+
+            let data_count = self.r.read_i32::<LittleEndian>()? as usize;
+            let mut data_builder: Builder<u8> = Builder::with_capacity(data_count);
+            for _ in 0..data_count {
+                data_builder.push(self.r.read_u8()?);
+            }
+            let data = data_builder.finish();
+            let list = List { data, offsets };
+            Array {
+                len: (offsets_count - 1) as i32,
+                data: ArrayData::Utf8(list),
+                null_count: 0,
+                validity_bitmap: None,
+            }
+        } else if type_id == TYPE_ID_STRUCT {
+            println!("Reading STRUCT");
+            let array_count = self.r.read_i32::<LittleEndian>()? as usize;
+            let mut arrays: Vec<Rc<Array>> = Vec::with_capacity(array_count);
+            for _ in 0..array_count {
+                arrays.push(self.read_array()?);
+            }
+            Array::from(arrays)
         } else {
-            panic!()
-        }
+            panic!("invalid type_id {}when reading array", type_id)
+        };
+
+        Ok(Rc::new(array))
     }
 }
 
@@ -247,9 +455,44 @@ mod tests {
         // read the file
         let file = File::open("array_u16.quiver").unwrap();
         let mut r = QuiverReader {
-            r: BufReader::new((file)),
+            r: BufReader::new(file),
         };
         let array2 = r.read_array().unwrap();
         assert_eq!(5, array2.len());
+    }
+
+    #[test]
+    fn write_read_file() {
+        // define schema for data source (csv file)
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false),
+        ]);
+
+        let names: Rc<Array> = Rc::new(Array::from(vec![
+            "Elgin, Scotland, the UK".to_string(),
+            "Stoke-on-Trent, Staffordshire, the UK".to_string(),
+        ]));
+
+        let lats: Rc<Array> = Rc::new(Array::from(vec![57.653484, 53.002666]));
+        let lngs: Rc<Array> = Rc::new(Array::from(vec![-3.335724, -2.179404]));
+
+        // write the quiver file
+        {
+            let file = File::create("_uk_cities.quiver").unwrap();
+            let mut w = QuiverWriter::new(file);
+            w.write_schema(&schema).unwrap();
+            w.write_row_group(vec![names, lats, lngs]).unwrap();
+        }
+
+        // read the quiver file
+        let file = File::open("_uk_cities.quiver").unwrap();
+        let mut r = QuiverReader::new(file);
+        let schema = r.read_schema().unwrap();
+        assert_eq!(3, schema.columns.len());
+
+        let data = r.read_row_group().unwrap();
+        assert_eq!(3, data.len());
     }
 }

@@ -23,10 +23,7 @@ use std::str;
 use arrow::array::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
-use arrow::list_builder::ListBuilder;
 
-use csv;
-use csv::{StringRecord, StringRecordsIntoIter};
 use parquet::basic;
 use parquet::column::reader::*;
 use parquet::data_type::ByteArray;
