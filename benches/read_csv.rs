@@ -24,7 +24,8 @@ extern crate arrow;
 extern crate datafusion;
 
 use arrow::datatypes::*;
-use datafusion::datasource::*;
+use datafusion::datasources::common::*;
+use datafusion::datasources::csv::*;
 use datafusion::exec::*;
 
 fn read_csv() {

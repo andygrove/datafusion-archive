@@ -18,6 +18,7 @@
 //! crate dependency for in-process SQL and DataFrame queries against CSV and Parquet files.
 
 extern crate arrow;
+extern crate byteorder;
 extern crate bytes;
 extern crate csv;
 extern crate parquet;
@@ -28,7 +29,7 @@ extern crate parquet;
 //extern crate tokio_core;
 
 //pub mod cluster;
-pub mod datasource;
+pub mod datasources;
 pub mod exec;
 pub mod functions;
 pub mod sqlast;

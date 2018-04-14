@@ -88,6 +88,14 @@ impl Expr {
         }
     }
 
+    pub fn not_eq(&self, other: &Expr) -> Expr {
+        Expr::BinaryExpr {
+            left: Rc::new(self.clone()),
+            op: Operator::NotEq,
+            right: Rc::new(other.clone()),
+        }
+    }
+
     pub fn gt(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
             left: Rc::new(self.clone()),
@@ -96,10 +104,26 @@ impl Expr {
         }
     }
 
+    pub fn gt_eq(&self, other: &Expr) -> Expr {
+        Expr::BinaryExpr {
+            left: Rc::new(self.clone()),
+            op: Operator::GtEq,
+            right: Rc::new(other.clone()),
+        }
+    }
+
     pub fn lt(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
             left: Rc::new(self.clone()),
             op: Operator::Lt,
+            right: Rc::new(other.clone()),
+        }
+    }
+
+    pub fn lt_eq(&self, other: &Expr) -> Expr {
+        Expr::BinaryExpr {
+            left: Rc::new(self.clone()),
+            op: Operator::LtEq,
             right: Rc::new(other.clone()),
         }
     }

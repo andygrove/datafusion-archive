@@ -34,7 +34,9 @@ use arrow::datatypes::*;
 //use hyper::{Method, Request};
 //use hyper::header::{ContentLength, ContentType};
 
-use super::datasource::*;
+use super::datasources::common::*;
+use super::datasources::csv::*;
+use super::datasources::parquet::*;
 use super::logical::*;
 use super::sqlast::ASTNode::*;
 use super::sqlparser::*;
@@ -454,10 +456,10 @@ impl SimpleRelation for FilterRelation {
 
                             Ok(filtered_batch)
                         }
-                        _ => panic!(),
+                        &Value::Scalar(_) => unimplemented!("Cannot filter on a scalar value yet"), //TODO: implement
                     }
                 }
-                _ => panic!(),
+                Err(e) => Err(e),
             }
         }))
     }
@@ -1147,7 +1149,13 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
                         .map(|(v, _)| v)
                         .collect::<Vec<f64>>(),
                 ),
-                //&ArrayData::UInt8(ref v) => Array::from(v.iter().zip(b.iter()).filter(|&(_, f)| f).map(|(v, _)| v).collect::<Vec<u8>>()),
+                &ArrayData::UInt8(ref v) => Array::from(
+                    v.iter()
+                        .zip(b.iter())
+                        .filter(|&(_, f)| f)
+                        .map(|(v, _)| v)
+                        .collect::<Vec<u8>>(),
+                ),
                 &ArrayData::UInt16(ref v) => Array::from(
                     v.iter()
                         .zip(b.iter())
@@ -1206,9 +1214,9 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
                     }
                     Array::from(x)
                 }
-                _ => unimplemented!(),
+                &ArrayData::Struct(ref v) => unimplemented!("Cannot filter on structs yet"),
             },
-            _ => panic!(),
+            _ => panic!("Filter array expected to be boolean"),
         },
     }
 }
