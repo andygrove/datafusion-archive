@@ -25,7 +25,6 @@ pub enum Token {
     Identifier(String),
     /// SQL keyword  e.g. Keyword("SELECT")
     Keyword(String),
-    Operator(String),
     /// Numeric literal
     Number(String),
     /// Comma
@@ -56,6 +55,8 @@ pub enum Token {
     LParen,
     /// Right parenthesis `)`
     RParen,
+    /// Period (used for compound identifiers or projections into nested types)
+    Period,
 }
 
 /// Tokenizer error
@@ -135,7 +136,7 @@ impl Tokenizer {
                     }
                 }
                 // numbers
-                '0'...'9' | '.' => {
+                '0'...'9' => {
                     let mut s = String::new();
                     while let Some(&ch) = chars.peek() {
                         match ch {
@@ -181,6 +182,10 @@ impl Tokenizer {
                 '=' => {
                     chars.next();
                     Ok(Some(Token::Eq))
+                }
+                '.' => {
+                    chars.next();
+                    Ok(Some(Token::Period))
                 }
                 '<' => {
                     chars.next(); // consume

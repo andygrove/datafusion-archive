@@ -18,6 +18,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     SQLIdentifier(String),
+    SQLCompoundIdentifier(Vec<String>),
     SQLBinaryExpr {
         left: Box<ASTNode>,
         op: SQLOperator,

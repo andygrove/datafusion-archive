@@ -106,6 +106,21 @@ impl Parser {
 
                                 Ok(ASTNode::SQLFunction { id, args })
                             }
+                            Some(Token::Period) => {
+                                let mut id_parts: Vec<String> = vec![id];
+                                while self.peek_token() == Some(Token::Period) {
+                                    self.consume_token(&Token::Period)?;
+                                    match self.next_token() {
+                                        Some(Token::Identifier(id)) => id_parts.push(id),
+                                        _ => {
+                                            return Err(ParserError::ParserError(format!(
+                                                "Error parsing compound identifier"
+                                            )))
+                                        }
+                                    }
+                                }
+                                Ok(ASTNode::SQLCompoundIdentifier(id_parts))
+                            }
                             _ => Ok(ASTNode::SQLIdentifier(id)),
                         }
                     }
@@ -609,6 +624,17 @@ mod tests {
             }
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn parse_projection_nested_type() {
+        let sql = String::from("SELECT customer.address.state FROM foo");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        println!("{:?}", tokens);
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        println!("{:?}", ast);
     }
 
     #[test]

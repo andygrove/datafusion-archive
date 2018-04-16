@@ -445,7 +445,7 @@ mod tests {
 
         // write the file
         {
-            let mut file = File::create("array_u16.quiver").unwrap();
+            let file = File::create("array_u16.quiver").unwrap();
             let mut w = QuiverWriter {
                 w: BufWriter::new((file)),
             };
