@@ -21,7 +21,7 @@ use datafusion::exec::*;
 fn main() {
     let ctx = ExecutionContext::local();
 
-    let df = ctx.load_parquet("test/data/alltypes_plain.parquet")
+    let df = ctx.load_parquet("test/data/uk_cities.parquet")
         .unwrap();
     println!("schema: {}", df.schema().to_string());
 
