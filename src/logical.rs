@@ -167,6 +167,7 @@ pub enum LogicalPlan {
     CsvFile {
         filename: String,
         schema: Rc<Schema>,
+        has_header: bool,
     },
     /// Represents a Parquet file that contains schema information
     ParquetFile {

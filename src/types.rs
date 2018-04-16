@@ -14,6 +14,7 @@
 
 //! Datatype definitions
 
+use std::fmt;
 use std::io::Error;
 use std::rc::Rc;
 
@@ -41,26 +42,30 @@ pub enum ScalarValue {
     Struct(Vec<ScalarValue>),
 }
 
-impl ScalarValue {
-    /// Produces a string representation of a scalar value
-    pub fn to_string(&self) -> String {
+impl fmt::Display for ScalarValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &ScalarValue::Null => "NULL".to_string(),
-            &ScalarValue::Boolean(b) => b.to_string(),
-            &ScalarValue::Int8(l) => l.to_string(),
-            &ScalarValue::Int16(l) => l.to_string(),
-            &ScalarValue::Int32(l) => l.to_string(),
-            &ScalarValue::Int64(l) => l.to_string(),
-            &ScalarValue::UInt8(l) => l.to_string(),
-            &ScalarValue::UInt16(l) => l.to_string(),
-            &ScalarValue::UInt32(l) => l.to_string(),
-            &ScalarValue::UInt64(l) => l.to_string(),
-            &ScalarValue::Float32(d) => d.to_string(),
-            &ScalarValue::Float64(d) => d.to_string(),
-            &ScalarValue::Utf8(ref s) => s.clone(),
+            &ScalarValue::Null => write!(f, "NULL"),
+            &ScalarValue::Boolean(v) => write!(f, "{}", v),
+            &ScalarValue::Int8(v) => write!(f, "{}", v),
+            &ScalarValue::Int16(v) => write!(f, "{}", v),
+            &ScalarValue::Int32(v) => write!(f, "{}", v),
+            &ScalarValue::Int64(v) => write!(f, "{}", v),
+            &ScalarValue::UInt8(v) => write!(f, "{}", v),
+            &ScalarValue::UInt16(v) => write!(f, "{}", v),
+            &ScalarValue::UInt32(v) => write!(f, "{}", v),
+            &ScalarValue::UInt64(v) => write!(f, "{}", v),
+            &ScalarValue::Float32(v) => write!(f, "{}", v),
+            &ScalarValue::Float64(v) => write!(f, "{}", v),
+            &ScalarValue::Utf8(ref v) => write!(f, "{}", v),
             &ScalarValue::Struct(ref v) => {
-                let s: Vec<String> = v.iter().map(|v| v.to_string()).collect();
-                s.join(",")
+                for i in 0..v.len() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", v[i])?;
+                }
+                Ok(())
             }
         }
     }

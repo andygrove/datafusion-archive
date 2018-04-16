@@ -14,11 +14,9 @@
 
 //! CSV Support
 
-use std::cell::RefCell;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::rc::Rc;
-use std::str;
 
 use arrow::array::*;
 use arrow::builder::*;
@@ -27,11 +25,6 @@ use arrow::list_builder::ListBuilder;
 
 use csv;
 use csv::{StringRecord, StringRecordsIntoIter};
-use parquet::basic;
-use parquet::column::reader::*;
-use parquet::data_type::ByteArray;
-use parquet::file::reader::*;
-use parquet::schema::types::Type;
 
 use super::super::types::*;
 use super::common::*;
@@ -43,9 +36,11 @@ pub struct CsvFile {
 }
 
 impl CsvFile {
-    pub fn open(file: File, schema: Rc<Schema>) -> Result<Self, ExecutionError> {
-        let buf_reader = BufReader::with_capacity(8 * 1024 * 1024, file);
-        let csv_reader = csv::Reader::from_reader(buf_reader);
+    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool) -> Result<Self, ExecutionError> {
+        let csv_reader = csv::ReaderBuilder::new()
+            .has_headers(has_headers)
+            .from_reader(BufReader::new(file));
+
         let record_iter = csv_reader.into_records();
         Ok(CsvFile {
             schema: schema.clone(),
@@ -187,6 +182,7 @@ impl CsvWriter {
 mod tests {
 
     use super::*;
+    use std::cell::RefCell;
 
     #[test]
     fn test_csv() {
@@ -198,7 +194,7 @@ mod tests {
 
         let file = File::open("test/data/uk_cities.csv").unwrap();
 
-        let mut csv = CsvFile::open(file, Rc::new(schema)).unwrap();
+        let mut csv = CsvFile::open(file, Rc::new(schema), false).unwrap();
         let batch = csv.next().unwrap().unwrap();
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
     }
@@ -211,7 +207,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
         let file = File::open("test/data/uk_cities.csv").unwrap();
-        let mut csv = CsvFile::open(file, Rc::new(schema)).unwrap();
+        let mut csv = CsvFile::open(file, Rc::new(schema), false).unwrap();
         csv.set_batch_size(2);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(csv)));
         it.for_each(|record_batch| match record_batch {

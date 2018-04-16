@@ -16,12 +16,11 @@
 //! to the Apache Parquet file format but is much simpler and optimized for Arrow data.
 
 use std::io::{BufReader, BufWriter, Read, Result, Write};
-use std::mem;
+//use std::mem;
 use std::rc::Rc;
 use std::str;
 
 use arrow::array::{Array, ArrayData};
-use arrow::buffer::Buffer;
 use arrow::builder::Builder;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::list::List;
@@ -436,7 +435,6 @@ mod tests {
     use super::*;
 
     use std::fs::File;
-    use std::io::prelude::*;
 
     #[test]
     fn test_array() {
@@ -447,7 +445,7 @@ mod tests {
         {
             let file = File::create("array_u16.quiver").unwrap();
             let mut w = QuiverWriter {
-                w: BufWriter::new((file)),
+                w: BufWriter::new(file),
             };
             w.write_array(&array).unwrap();
         }

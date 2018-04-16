@@ -14,11 +14,8 @@
 
 //! Defines data sources supported by DataFusion (currently CSV and Apache Parquet)
 
-use std::cell::RefCell;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
 use std::rc::Rc;
-use std::str;
 
 use arrow::array::*;
 use arrow::builder::*;
@@ -212,6 +209,8 @@ impl DataSource for ParquetFile {
 mod tests {
 
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     #[test]
     fn test_parquet() {

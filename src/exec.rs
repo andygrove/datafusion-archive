@@ -516,7 +516,7 @@ impl SimpleRelation for LimitRelation {
 pub enum PhysicalPlan {
     /// Run a query and return the results to the client
     Interactive {
-        plan: Box<LogicalPlan>,
+        plan: Rc<LogicalPlan>,
     },
     /// Execute a logical plan and write the output to a file
     Write {
@@ -655,10 +655,12 @@ impl ExecutionContext {
         &self,
         filename: &str,
         schema: &Schema,
+        has_header: bool,
     ) -> Result<Rc<DataFrame>, ExecutionError> {
         let plan = LogicalPlan::CsvFile {
             filename: filename.to_string(),
             schema: Rc::new(schema.clone()),
+            has_header,
         };
         Ok(Rc::new(DF {
             ctx: self.clone(),
@@ -714,10 +716,14 @@ impl ExecutionContext {
             LogicalPlan::CsvFile {
                 ref filename,
                 ref schema,
+                ref has_header,
             } => {
                 let file = File::open(filename)?;
-                let ds = Rc::new(RefCell::new(CsvFile::open(file, schema.clone())?))
-                    as Rc<RefCell<DataSource>>;
+                let ds = Rc::new(RefCell::new(CsvFile::open(
+                    file,
+                    schema.clone(),
+                    *has_header,
+                )?)) as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {
                     schema: schema.as_ref().clone(),
                     ds,
@@ -927,30 +933,31 @@ impl ExecutionContext {
                                     }
                                     match *batch.column(j) {
                                         Value::Scalar(ref v) => w.write_scalar(v),
-                                        Value::Column(ref v) => {
-                                            match v.data() {
-                                                ArrayData::Boolean(ref v) => w.write_bool(v.get(i)),
-                                                ArrayData::Float32(ref v) => w.write_f32(v.get(i)),
-                                                ArrayData::Float64(ref v) => w.write_f64(v.get(i)),
-                                                ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
-                                                ArrayData::Int16(ref v) => w.write_i16(v.get(i)),
-                                                ArrayData::Int32(ref v) => w.write_i32(v.get(i)),
-                                                ArrayData::Int64(ref v) => w.write_i64(v.get(i)),
-                                                ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
-                                                ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
-                                                ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
-                                                ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
-                                                ArrayData::Utf8(ref data) => {
-                                                    w.write_bytes(data.slice(i))
-                                                }
-                                                ArrayData::Struct(ref v) => {
-                                                    let fields = v.iter()
-                                                        .map(|arr| get_value(&arr, i))
-                                                        .collect();
-                                                    w.write_bytes(format!("{:?}", ScalarValue::Struct(fields)).as_bytes());
-                                                } // csv can't write struct
+                                        Value::Column(ref v) => match v.data() {
+                                            ArrayData::Boolean(ref v) => w.write_bool(v.get(i)),
+                                            ArrayData::Float32(ref v) => w.write_f32(v.get(i)),
+                                            ArrayData::Float64(ref v) => w.write_f64(v.get(i)),
+                                            ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
+                                            ArrayData::Int16(ref v) => w.write_i16(v.get(i)),
+                                            ArrayData::Int32(ref v) => w.write_i32(v.get(i)),
+                                            ArrayData::Int64(ref v) => w.write_i64(v.get(i)),
+                                            ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
+                                            ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
+                                            ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
+                                            ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
+                                            ArrayData::Utf8(ref data) => {
+                                                w.write_bytes(data.slice(i))
                                             }
-                                        }
+                                            ArrayData::Struct(ref v) => {
+                                                let fields = v.iter()
+                                                    .map(|arr| get_value(&arr, i))
+                                                    .collect();
+                                                w.write_bytes(
+                                                    format!("{}", ScalarValue::Struct(fields))
+                                                        .as_bytes(),
+                                                );
+                                            }
+                                        },
                                     }
                                 }
                                 w.write_bytes(b"\n");
@@ -1214,7 +1221,7 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
                     }
                     Array::from(x)
                 }
-                &ArrayData::Struct(ref v) => unimplemented!("Cannot filter on structs yet"),
+                &ArrayData::Struct(ref _v) => unimplemented!("Cannot filter on structs yet"),
             },
             _ => panic!("Filter array expected to be boolean"),
         },
@@ -1226,6 +1233,8 @@ mod tests {
     use super::super::functions::geospatial::*;
     use super::super::functions::math::*;
     use super::*;
+    use std::fs::File;
+    use std::io::prelude::*;
 
     #[test]
     fn test_sqrt() {
@@ -1235,11 +1244,11 @@ mod tests {
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
-        //println!("Logical plan: {:?}", df.plan());
+        ctx.write_csv(df, "_test_sqrt.csv").unwrap();
 
-        ctx.write_csv(df, "_sqrt_out.csv").unwrap();
+        let expected_result = read_file("test/data/expected/test_sqrt.csv");
 
-        //TODO: check that generated file has expected contents
+        assert_eq!(expected_result, read_file("_test_sqrt.csv"));
     }
 
     #[test]
@@ -1251,9 +1260,11 @@ mod tests {
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
 
-        ctx.write_csv(df, "_uk_cities_sql.csv").unwrap();
+        ctx.write_csv(df, "_test_sql_udf_udt.csv").unwrap();
 
-        //TODO: check that generated file has expected contents
+        let expected_result = read_file("test/data/expected/test_sql_udf_udt.csv");
+
+        assert_eq!(expected_result, read_file("_test_sql_udf_udt.csv"));
     }
 
     #[test]
@@ -1268,13 +1279,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
-
-        // create an expression for invoking a scalar function
-        //        let func_expr = Expr::ScalarFunction {
-        //            name: "ST_Point".to_string(),
-        //            args: vec![df.col("lat").unwrap(), df.col("lng").unwrap()]
-        //        };
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false)
+            .unwrap();
 
         // invoke custom code as a scalar UDF
         let func_expr = ctx.udf(
@@ -1284,9 +1290,11 @@ mod tests {
 
         let df2 = df.select(vec![func_expr]).unwrap();
 
-        ctx.write_csv(df2, "_uk_cities_df.csv").unwrap();
+        ctx.write_csv(df2, "_test_df_udf_udt.csv").unwrap();
 
-        //TODO: check that generated file has expected contents
+        let expected_result = read_file("test/data/expected/test_df_udf_udt.csv");
+
+        assert_eq!(expected_result, read_file("_test_df_udf_udt.csv"));
     }
 
     #[test]
@@ -1301,7 +1309,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema).unwrap();
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false)
+            .unwrap();
 
         // filter by lat
         let df2 = df.filter(Expr::BinaryExpr {
@@ -1310,9 +1319,11 @@ mod tests {
             right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
         }).unwrap();
 
-        ctx.write_csv(df2, "_uk_cities_filtered_gt_52.csv").unwrap();
+        ctx.write_csv(df2, "_test_filter.csv").unwrap();
 
-        //TODO: check that generated file has expected contents
+        let expected_result = read_file("test/data/expected/test_filter.csv");
+
+        assert_eq!(expected_result, read_file("_test_filter.csv"));
     }
 
     /*
@@ -1348,73 +1359,18 @@ mod tests {
         ctx.register_function(Rc::new(STPointFunc {}));
         ctx.register_function(Rc::new(STAsText {}));
 
-        ctx.register_function(Rc::new(STPointFunc {}));
-
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
 
-        ctx.write_csv(df, "_uk_cities_wkt.csv").unwrap();
+        ctx.write_csv(df, "_test_chaining_functions.csv").unwrap();
 
-        //TODO: check that generated file has expected contents
-    }
+        let expected_result = read_file("test/data/expected/test_chaining_functions.csv");
 
-    fn create_context() -> ExecutionContext {
-        // create execution context
-        let mut ctx = ExecutionContext::local();
-
-        let people = ctx.load_csv(
-            "./test/data/people.csv",
-            &Schema::new(vec![
-                Field::new("id", DataType::Int32, false),
-                Field::new("name", DataType::Utf8, false),
-            ]),
-        ).unwrap();
-
-        ctx.register("people", people);
-
-        let uk_cities = ctx.load_csv(
-            "./test/data/uk_cities.csv",
-            &Schema::new(vec![
-                Field::new("city", DataType::Utf8, false),
-                Field::new("lat", DataType::Float64, false),
-                Field::new("lng", DataType::Float64, false),
-            ]),
-        ).unwrap();
-
-        ctx.register("uk_cities", uk_cities);
-
-        ctx
+        assert_eq!(expected_result, read_file("_test_chaining_functions.csv"));
     }
 
     #[test]
-    fn test_a_thing() {
-        let n = 10;
-        let mut ctx = ExecutionContext::local();
-        ctx.register_function(Rc::new(STPointFunc {}));
-        ctx.register_function(Rc::new(STAsText {}));
-
-        // define schemas for test data
-        let schema = Schema::new(vec![
-            Field::new("id", DataType::UInt64, false),
-            Field::new("lat", DataType::Float64, false),
-            Field::new("lng", DataType::Float64, false),
-        ]);
-
-        let filename = format!("/mnt/ssd/csv/locations_{}.csv", n);
-        let df = ctx.load_csv(&filename, &schema).unwrap();
-        ctx.register("locations", df);
-
-        let sql = format!("SELECT ST_AsText(ST_Point(lat, lng)) FROM locations");
-
-        let df = ctx.sql(&sql).unwrap();
-
-        let output_filename = format!("/tmp/wkt_{}", n);
-
-        ctx.write_csv(df, &output_filename).unwrap();
-    }
-
-    #[test]
-    fn sql_query_example() {
+    fn test_simple_predicate() {
         // create execution context
         let mut ctx = ExecutionContext::local();
         ctx.register_function(Rc::new(STPointFunc {}));
@@ -1434,7 +1390,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema).unwrap();
+        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false)
+            .unwrap();
         ctx.register("uk_cities", df);
 
         // define the SQL statement
@@ -1444,6 +1401,74 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write_csv(df1, "_southern_cities.csv").unwrap();
+        ctx.write_csv(df1, "_test_simple_predicate.csv").unwrap();
+
+        let expected_result = read_file("test/data/expected/test_simple_predicate.csv");
+
+        assert_eq!(expected_result, read_file("_test_simple_predicate.csv"));
     }
+
+    //    #[test]
+    //    fn sql_aggregates() {
+    //        // create execution context
+    //        let mut ctx = ExecutionContext::local();
+    //
+    //        let schema = Schema::new(vec![
+    //            Field::new("city", DataType::Utf8, false),
+    //            Field::new("lat", DataType::Float64, false),
+    //            Field::new("lng", DataType::Float64, false),
+    //        ]);
+    //
+    //        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false).unwrap();
+    //        ctx.register("uk_cities", df);
+    //
+    //        // define the SQL statement
+    //        let sql = "SELECT MIN(lat), MAX(lat), MIN(lng), MAX(lng) FROM uk_cities";
+    //
+    //        // create a data frame
+    //        let df1 = ctx.sql(&sql).unwrap();
+    //
+    //        // write the results to a file
+    //        ctx.write_csv(df1, "_min_max_lat_lng.csv").unwrap();
+    //
+    //        assert_eq!("TBD".to_string(), read_file("_min_max_lat_lng.csv"));
+    //    }
+
+    fn read_file(filename: &str) -> String {
+        let mut file = File::open(filename).unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+        contents
+    }
+
+    fn create_context() -> ExecutionContext {
+        // create execution context
+        let mut ctx = ExecutionContext::local();
+
+        let people = ctx.load_csv(
+            "./test/data/people.csv",
+            &Schema::new(vec![
+                Field::new("id", DataType::Int32, false),
+                Field::new("name", DataType::Utf8, false),
+            ]),
+            true,
+        ).unwrap();
+
+        ctx.register("people", people);
+
+        let uk_cities = ctx.load_csv(
+            "./test/data/uk_cities.csv",
+            &Schema::new(vec![
+                Field::new("city", DataType::Utf8, false),
+                Field::new("lat", DataType::Float64, false),
+                Field::new("lng", DataType::Float64, false),
+            ]),
+            false,
+        ).unwrap();
+
+        ctx.register("uk_cities", uk_cities);
+
+        ctx
+    }
+
 }

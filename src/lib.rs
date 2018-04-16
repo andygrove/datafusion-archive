@@ -20,7 +20,9 @@
 extern crate arrow;
 extern crate byteorder;
 extern crate bytes;
+extern crate clap;
 extern crate csv;
+extern crate liner;
 extern crate parquet;
 
 //extern crate etcd;

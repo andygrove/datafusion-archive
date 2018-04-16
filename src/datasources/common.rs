@@ -15,22 +15,11 @@
 //! Defines data sources supported by DataFusion (currently CSV and Apache Parquet)
 
 use std::cell::RefCell;
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
 use std::rc::Rc;
 use std::str;
 
 use arrow::array::*;
-use arrow::builder::*;
 use arrow::datatypes::*;
-use arrow::list_builder::ListBuilder;
-
-use csv;
-use csv::{StringRecord, StringRecordsIntoIter};
-use parquet::basic;
-use parquet::column::reader::*;
-use parquet::data_type::ByteArray;
-use parquet::file::reader::*;
 
 use super::super::types::*;
 
