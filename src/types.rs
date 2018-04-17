@@ -42,6 +42,45 @@ pub enum ScalarValue {
     Struct(Vec<ScalarValue>),
 }
 
+macro_rules! primitive_accessor {
+    ($NAME:ident, $VARIANT:ident, $TY:ty) => {
+        pub fn $NAME(&self) -> Result<$TY, ()> {
+            match *self {
+                ScalarValue::$VARIANT(v) => Ok(v),
+                _ => Err(())
+            }
+        }
+    }
+}
+
+impl ScalarValue {
+    primitive_accessor!(get_bool, Boolean, bool);
+    primitive_accessor!(get_i8, Int8, i8);
+    primitive_accessor!(get_i16, Int16, i16);
+    primitive_accessor!(get_i32, Int32, i32);
+    primitive_accessor!(get_i64, Int64, i64);
+    primitive_accessor!(get_u8, UInt8, u8);
+    primitive_accessor!(get_u16, UInt16, u16);
+    primitive_accessor!(get_u32, UInt32, u32);
+    primitive_accessor!(get_u64, UInt64, u64);
+    primitive_accessor!(get_f32, Float32, f32);
+    primitive_accessor!(get_f64, Float64, f64);
+
+    pub fn get_string(&self) -> Result<&String, ()> {
+        match *self {
+            ScalarValue::Utf8(ref v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+
+    pub fn get_struct(&self) -> Result<&Vec<ScalarValue>, ()> {
+        match *self {
+            ScalarValue::Struct(ref v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
 impl fmt::Display for ScalarValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -77,12 +116,21 @@ pub enum Value {
     Scalar(Rc<ScalarValue>),
 }
 
-/// Scalar function. User-defined implementations will be dynamically loaded at runtime.
+/// Scalar function
 pub trait ScalarFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
     fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError>;
+}
+
+/// Aggregate function
+pub trait AggregateFunction {
+    fn name(&self) -> String;
+    fn args(&self) -> Vec<Field>;
+    fn return_type(&self) -> DataType;
+    fn execute(&mut self, args: Vec<Rc<Value>>) -> Result<(), ExecutionError>;
+    fn finish(&self) -> Result<Rc<Value>, ExecutionError>;
 }
 
 #[derive(Debug)]

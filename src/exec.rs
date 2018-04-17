@@ -348,7 +348,7 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
             let compiled_args_ok = compiled_args?;
 
-            let func = ctx.load_function_impl(name.as_ref())?;
+            let func = ctx.load_scalar_function(name.as_ref())?;
 
             Ok(Box::new(move |batch| {
                 let arg_values: Result<Vec<Rc<Value>>, ExecutionError> =
@@ -356,7 +356,28 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
 
                 func.execute(arg_values?)
             }))
-        } //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
+        } //        &Expr::AggregateFunction { ref name, ref args } => {
+          //            ////println!("Executing function {}", name);
+          //
+          //            // evaluate the arguments to the function
+          //            let compiled_args: Result<Vec<CompiledExpr>, ExecutionError> =
+          //                args.iter().map(|e| compile_expr(ctx, e)).collect();
+          //
+          //            let compiled_args_ok = compiled_args?;
+          //
+          //            let func = ctx.load_aggregate_function(name.as_ref())?;
+          //
+          //            Ok(Box::new(move |batch| {
+          //                let arg_values: Result<Vec<Rc<Value>>, ExecutionError> =
+          //                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
+          //
+          //                func.borrow_mut().execute(arg_values?);
+          //
+          //                //TODO forced to return a pointless return value here
+          //                Ok(Rc::new(Value::Scalar(Rc::new(ScalarValue::Null))))
+          //            }))
+          //        }
+          //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
     }
 }
 
@@ -540,6 +561,7 @@ pub struct ExecutionContext {
     schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
     function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
     functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
+    //aggregate_functions: Rc<RefCell<HashMap<String, Rc<RefCell<AggregateFunction>>>>>,
     config: Rc<DFConfig>,
     tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
 }
@@ -550,6 +572,7 @@ impl ExecutionContext {
             schemas: Rc::new(RefCell::new(HashMap::new())),
             function_meta: Rc::new(RefCell::new(HashMap::new())),
             functions: Rc::new(RefCell::new(HashMap::new())),
+            //aggregate_functions: Rc::new(RefCell::new(HashMap::new())),
             tables: Rc::new(RefCell::new(HashMap::new())),
             config: Rc::new(DFConfig::Local),
         }
@@ -571,11 +594,12 @@ impl ExecutionContext {
             .insert(name.to_string(), Rc::new(schema.clone()));
     }
 
-    pub fn register_function(&mut self, func: Rc<ScalarFunction>) {
+    pub fn register_scalar_function(&mut self, func: Rc<ScalarFunction>) {
         let fm = FunctionMeta {
             name: func.name(),
             args: func.args(),
             return_type: func.return_type(),
+            function_type: FunctionType::Scalar,
         };
 
         self.function_meta
@@ -586,6 +610,23 @@ impl ExecutionContext {
             .borrow_mut()
             .insert(func.name().to_lowercase(), func.clone());
     }
+
+    //    pub fn register_aggregate_function(&mut self, func: Rc<AggregateFunction>) {
+    //        let fm = FunctionMeta {
+    //            name: func.name(),
+    //            args: func.args(),
+    //            return_type: func.return_type(),
+    //            function_type: FunctionType::Aggregate
+    //        };
+    //
+    //        self.function_meta
+    //            .borrow_mut()
+    //            .insert(func.name().to_lowercase(), fm);
+    //
+    //        self.aggregate_functions
+    //            .borrow_mut()
+    //            .insert(func.name().to_lowercase(), func.clone());
+    //    }
 
     pub fn create_logical_plan(&self, sql: &str) -> Result<Rc<LogicalPlan>, ExecutionError> {
         // parse SQL into AST
@@ -835,19 +876,33 @@ impl ExecutionContext {
         }
     }
 
-    /// load a function implementation
-    fn load_function_impl(
+    /// load a scalar function implementation
+    fn load_scalar_function(
         &self,
         function_name: &str,
     ) -> Result<Rc<ScalarFunction>, ExecutionError> {
         match self.functions.borrow().get(&function_name.to_lowercase()) {
             Some(f) => Ok(f.clone()),
             _ => Err(ExecutionError::Custom(format!(
-                "Unknown function {}",
+                "Unknown scalar function {}",
                 function_name
             ))),
         }
     }
+
+    //    /// load a scalar function implementation
+    //    fn load_aggregate_function(
+    //        &self,
+    //        function_name: &str,
+    //    ) -> Result<Rc<RefCell<AggregateFunction>>, ExecutionError> {
+    //        match self.aggregate_functions.borrow().get(&function_name.to_lowercase()) {
+    //            Some(f) => Ok(Rc::new(RefCell::new(f.clone()))),
+    //            _ => Err(ExecutionError::Custom(format!(
+    //                "Unknown aggregate function {}",
+    //                function_name
+    //            ))),
+    //        }
+    //    }
 
     pub fn udf(&self, name: &str, args: Vec<Expr>) -> Expr {
         Expr::ScalarFunction {
@@ -1232,6 +1287,7 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
 mod tests {
     use super::super::functions::geospatial::*;
     use super::super::functions::math::*;
+    use super::super::functions::min::*;
     use super::*;
     use std::fs::File;
     use std::io::prelude::*;
@@ -1240,7 +1296,7 @@ mod tests {
     fn test_sqrt() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(SqrtFunction {}));
+        ctx.register_scalar_function(Rc::new(SqrtFunction {}));
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
@@ -1255,7 +1311,7 @@ mod tests {
     fn test_sql_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
@@ -1271,7 +1327,7 @@ mod tests {
     fn test_df_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1301,7 +1357,7 @@ mod tests {
     fn test_filter() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1356,8 +1412,8 @@ mod tests {
     #[test]
     fn test_chaining_functions() {
         let mut ctx = create_context();
-        ctx.register_function(Rc::new(STPointFunc {}));
-        ctx.register_function(Rc::new(STAsText {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STAsText {}));
 
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
@@ -1373,8 +1429,8 @@ mod tests {
     fn test_simple_predicate() {
         // create execution context
         let mut ctx = ExecutionContext::local();
-        ctx.register_function(Rc::new(STPointFunc {}));
-        ctx.register_function(Rc::new(STAsText {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STAsText {}));
 
         // define an external table (csv file)
         //        ctx.sql(
@@ -1409,9 +1465,10 @@ mod tests {
     }
 
     //    #[test]
-    //    fn sql_aggregates() {
+    //    fn test_sql_min() {
     //        // create execution context
     //        let mut ctx = ExecutionContext::local();
+    //        ctx.register_aggregate_function(Rc::new(MinFunction::new(DataType::Float64)));
     //
     //        let schema = Schema::new(vec![
     //            Field::new("city", DataType::Utf8, false),
@@ -1423,15 +1480,15 @@ mod tests {
     //        ctx.register("uk_cities", df);
     //
     //        // define the SQL statement
-    //        let sql = "SELECT MIN(lat), MAX(lat), MIN(lng), MAX(lng) FROM uk_cities";
+    //        let sql = "SELECT MIN(lat) FROM uk_cities";
     //
     //        // create a data frame
     //        let df1 = ctx.sql(&sql).unwrap();
     //
     //        // write the results to a file
-    //        ctx.write_csv(df1, "_min_max_lat_lng.csv").unwrap();
+    //        ctx.write_csv(df1, "test_sql_min.csv").unwrap();
     //
-    //        assert_eq!("TBD".to_string(), read_file("_min_max_lat_lng.csv"));
+    //        assert_eq!("TBD".to_string(), read_file("test_sql_min.csv"));
     //    }
 
     fn read_file(filename: &str) -> String {

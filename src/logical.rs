@@ -21,10 +21,17 @@ use super::types::*;
 use arrow::datatypes::*;
 
 #[derive(Debug, Clone)]
+pub enum FunctionType {
+    Scalar,
+    Aggregate,
+}
+
+#[derive(Debug, Clone)]
 pub struct FunctionMeta {
     pub name: String,
     pub args: Vec<Field>,
     pub return_type: DataType,
+    pub function_type: FunctionType,
 }
 
 pub trait Row {
@@ -77,6 +84,8 @@ pub enum Expr {
     Sort { expr: Rc<Expr>, asc: bool },
     /// scalar function
     ScalarFunction { name: String, args: Vec<Expr> },
+    // /// aggregate function
+    //AggregateFunction { name: String, args: Vec<Expr> },
 }
 
 impl Expr {

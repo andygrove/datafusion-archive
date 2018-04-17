@@ -214,10 +214,19 @@ impl SqlToRel {
                     .map(|a| self.sql_to_rex(a, schema))
                     .collect::<Result<Vec<Expr>, String>>()?;
 
+                //TODO: fix this hack
+                //                if id.to_lowercase() == "min" {
+                //                    Ok(Expr::AggregateFunction {
+                //                        name: id.clone(),
+                //                        args: rex_args,
+                //                    })
+                //
+                //                } else {
                 Ok(Expr::ScalarFunction {
                     name: id.clone(),
                     args: rex_args,
                 })
+                //                }
             }
 
             _ => Err(String::from(format!(
