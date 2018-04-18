@@ -18,6 +18,7 @@ use std::cell::RefCell;
 use std::clone::Clone;
 use std::collections::HashMap;
 use std::convert::*;
+use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Error};
 use std::iter::Iterator;
@@ -37,6 +38,7 @@ use arrow::datatypes::*;
 
 use super::datasources::common::*;
 use super::datasources::csv::*;
+use super::functions::min::*;
 use super::datasources::parquet::*;
 use super::logical::*;
 use super::sqlast::ASTNode::*;
@@ -266,8 +268,28 @@ pub enum RuntimeExpr {
     }
 }
 
-/// Compiles a relational expression into a closure
-pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
+
+/// Compiles a scalar expression into a closure
+pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<RuntimeExpr> {
+    match *expr {
+        Expr::AggregateFunction { ref args, .. } => {
+
+            let compiled_args: Result<Vec<CompiledExpr>> =
+                args.iter()
+                    .map(|e| compile_scalar_expr(ctx, e))
+                    .collect();
+
+            Ok(RuntimeExpr::AggregateFunction {
+                args: compiled_args?
+            })
+        }
+        _ => Ok(RuntimeExpr::Compiled(compile_scalar_expr(ctx, expr)?))
+    }
+}
+
+
+/// Compiles a scalar expression into a closure
+pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
     match expr {
         &Expr::Literal(ref lit) => {
             let literal_value = lit.clone();
@@ -285,8 +307,8 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr>
             ref op,
             ref right,
         } => {
-            let left_expr = compile_expr(ctx, left)?;
-            let right_expr = compile_expr(ctx, right)?;
+            let left_expr = compile_scalar_expr(ctx, left)?;
+            let right_expr = compile_scalar_expr(ctx, right)?;
             match op {
                 &Operator::Eq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
@@ -348,14 +370,14 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr>
         }
         &Expr::Sort { ref expr, .. } => {
             //NOTE sort order is ignored here and is handled during sort execution
-            compile_expr(ctx, expr)
+            compile_scalar_expr(ctx, expr)
         }
         &Expr::ScalarFunction { ref name, ref args } => {
             ////println!("Executing function {}", name);
 
             // evaluate the arguments to the function
             let compiled_args: Result<Vec<CompiledExpr>> =
-                args.iter().map(|e| compile_expr(ctx, e)).collect();
+                args.iter().map(|e| compile_scalar_expr(ctx, e)).collect();
 
             let compiled_args_ok = compiled_args?;
 
@@ -540,7 +562,7 @@ pub struct AggregateRelation {
     schema: Rc<Schema>,
     input: Box<SimpleRelation>,
     group_expr: Vec<CompiledExpr>,
-    aggr_expr: Vec<CompiledExpr>,
+    aggr_expr: Vec<RuntimeExpr>,
 }
 
 struct AggregateEntry {
@@ -585,20 +607,30 @@ impl SimpleRelation for AggregateRelation {
 
                         println!("key: {:?}", key);
 
-//                        let entry = map.entry(key).or_insert_with(|| {
-//
-//                            let mut aggr_values: Vec<Rc<RefCell<AggregateFunction>>> = aggr_expr.iter()
-//                                .map(|e| Rc::new(RefCell::new(e.clone())))
-//                                .collect();
-//                            Rc::new(RefCell::new(AggregateEntry {
-//                                group_values: vec![],
-//                                aggr_values
-//                            }))
-//                        });
-//
-//                        println!("entry before: {:?}", entry);
+                        let entry = map.entry(key).or_insert_with(|| {
+                            Rc::new(RefCell::new(AggregateEntry {
+                                group_values: vec![],
+                                aggr_values: vec![Rc::new(RefCell::new(MinFunction::new(DataType::Float64)))]
+                            }))
+                        });
 
+                        for i in 0..aggr_expr.len() {
 
+                            match aggr_expr[i] {
+                                RuntimeExpr::AggregateFunction { ref args, .. } => {
+                                    println!("aggr func()");
+
+                                    let aggr_func_args: Result<Vec<Rc<Value>>> = args.iter()
+                                        .map(|e| (*e)(b.as_ref()))
+                                        .collect();
+                                    let mut z = entry.borrow_mut();
+                                    let mut y = z.aggr_values[i].borrow_mut();
+                                    y.execute(aggr_func_args.unwrap()).unwrap();
+
+                                }
+                                _ => panic!()
+                            }
+                        }
 
                     }
                 }
@@ -610,8 +642,34 @@ impl SimpleRelation for AggregateRelation {
 
         // TODO return iterator over results
 
+        let mut aggr_batch = DefaultRecordBatch {
+            schema: Rc::new(Schema::empty()),
+            data: Vec::new(),
+            row_count: 0,
+        };
 
-        unimplemented!()
+        for (k,v) in map.iter() {
+
+            //TODO: include group by key in result set
+//
+//            println!("groups: {:?}", entry.0);
+//            let foo = entry.1.borrow();
+//            println!("")
+
+            let g: Vec<Rc<Value>> = v.borrow().aggr_values.iter()
+                .map(|v| v.borrow().finish().unwrap()).collect();
+
+
+
+            println!("aggregate entry: {:?}", g);
+
+        }
+        let tb : Rc<RecordBatch> = Rc::new(aggr_batch);
+
+        let v = vec![Ok(tb)];
+
+
+        Box::new(v.into_iter())
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
@@ -891,7 +949,7 @@ impl ExecutionContext {
 
                 let rel = FilterRelation {
                     input: input_rel,
-                    expr: compile_expr(&self, expr)?,
+                    expr: compile_scalar_expr(&self, expr)?,
                     schema: schema.clone(),
                 };
                 Ok(Box::new(rel))
@@ -912,7 +970,7 @@ impl ExecutionContext {
                 };
 
                 let compiled_expr: Result<Vec<CompiledExpr>> =
-                    expr.iter().map(|e| compile_expr(&self, e)).collect();
+                    expr.iter().map(|e| compile_scalar_expr(&self, e)).collect();
 
                 let rel = ProjectRelation {
                     input: input_rel,
@@ -933,10 +991,10 @@ impl ExecutionContext {
                 let input_schema = input_rel.schema().clone();
 
                 let compiled_group_expr_result: Result<Vec<CompiledExpr>> =
-                    group_expr.iter().map(|e| compile_expr(&self, e)).collect();
+                    group_expr.iter().map(|e| compile_scalar_expr(&self, e)).collect();
                 let compiled_group_expr = compiled_group_expr_result?;
 
-                let compiled_aggr_expr_result: Result<Vec<CompiledExpr>> =
+                let compiled_aggr_expr_result: Result<Vec<RuntimeExpr>> =
                     aggr_expr.iter().map(|e| compile_expr(&self, e)).collect();
                 let compiled_aggr_expr = compiled_aggr_expr_result?;
 

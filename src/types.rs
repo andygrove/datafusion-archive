@@ -15,6 +15,7 @@
 //! Datatype definitions
 
 use std::fmt;
+use std::fmt::Formatter;
 use std::io::Error;
 use std::rc::Rc;
 
@@ -114,6 +115,16 @@ impl fmt::Display for ScalarValue {
 pub enum Value {
     Column(Rc<Array>),
     Scalar(Rc<ScalarValue>),
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Value::Scalar(v) => write!(f, "{:?}", v)?,
+            _ => write!(f, "???")?
+        }
+        Ok(())
+    }
 }
 
 /// Scalar function
