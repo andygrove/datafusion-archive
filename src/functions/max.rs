@@ -21,21 +21,21 @@ use super::super::types::*;
 use arrow::array::*;
 use arrow::datatypes::*;
 
-pub struct MinFunction {
+pub struct MaxFunction {
     data_type: DataType,
     value: ScalarValue,
 }
 
-impl MinFunction {
+impl MaxFunction {
     pub fn new(data_type: DataType) -> Self {
-        MinFunction {
+        MaxFunction {
             data_type,
             value: ScalarValue::Null,
         }
     }
 }
 
-impl AggregateFunction for MinFunction {
+impl AggregateFunction for MaxFunction {
     fn name(&self) -> String {
         "MIN".to_string()
     }
@@ -58,8 +58,8 @@ impl AggregateFunction for MinFunction {
                             let value = *buf.get(i);
                             match self.value {
                                 ScalarValue::Null => self.value = ScalarValue::Float64(value),
-                                ScalarValue::Float64(x) => if value < x {
-                                    println!("New min value: {}", value);
+                                ScalarValue::Float64(x) => if value > x {
+                                    println!("New max value: {}", value);
                                     self.value = ScalarValue::Float64(value)
                                 },
                                 _ => panic!("type mismatch"),
@@ -85,17 +85,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_min() {
-        let mut min = MinFunction::new(DataType::Float64);
-        assert_eq!(DataType::Float64, min.return_type());
+    fn test_max() {
+        let mut max = MaxFunction::new(DataType::Float64);
+        assert_eq!(DataType::Float64, max.return_type());
         let values: Vec<f64> = vec![12.0, 22.0, 32.0, 6.0, 58.1];
 
-        min.execute(vec![Rc::new(Value::Column(Rc::new(Array::from(values))))])
+        max.execute(vec![Rc::new(Value::Column(Rc::new(Array::from(values))))])
             .unwrap();
-        let result = min.finish().unwrap();
+        let result = max.finish().unwrap();
 
         match result.as_ref() {
-            &Value::Scalar(ref v) => assert_eq!(v.get_f64().unwrap(), 6.0),
+            &Value::Scalar(ref v) => assert_eq!(v.get_f64().unwrap(), 58.1),
             _ => panic!(),
         }
     }

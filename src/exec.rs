@@ -40,6 +40,7 @@ use arrow::datatypes::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
 use super::functions::min::*;
+use super::functions::max::*;
 use super::datasources::parquet::*;
 use super::logical::*;
 use super::sqlast::ASTNode::*;
@@ -261,10 +262,20 @@ impl Value {
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
 pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Rc<Value>>>;
 
+pub enum AggregateType {
+    Min,
+    Max,
+    Sum,
+    Count,
+    Avg,
+    //CountDistinct()
+}
+
 /// Runtime expression
 pub enum RuntimeExpr {
     Compiled(CompiledExpr),
     AggregateFunction {
+        func: AggregateType,
         args: Vec<CompiledExpr>
     }
 }
@@ -273,14 +284,21 @@ pub enum RuntimeExpr {
 /// Compiles a scalar expression into a closure
 pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<RuntimeExpr> {
     match *expr {
-        Expr::AggregateFunction { ref args, .. } => {
+        Expr::AggregateFunction { ref name, ref args } => {
 
             let compiled_args: Result<Vec<CompiledExpr>> =
                 args.iter()
                     .map(|e| compile_scalar_expr(ctx, e))
                     .collect();
 
+            let func = match name.to_lowercase().as_ref() {
+                "min" => AggregateType::Min,
+                "max" => AggregateType::Max,
+                _ => unimplemented!()
+            };
+
             Ok(RuntimeExpr::AggregateFunction {
+                func,
                 args: compiled_args?
             })
         }
@@ -568,7 +586,7 @@ pub struct AggregateRelation {
 
 struct AggregateEntry {
     group_values: Vec<ScalarValue>,
-    aggr_values: Vec<Rc<RefCell<AggregateFunction>>>
+    aggr_values: Vec<Box<AggregateFunction>>
 }
 
 impl SimpleRelation for AggregateRelation {
@@ -580,11 +598,11 @@ impl SimpleRelation for AggregateRelation {
         let aggr_expr = &self.aggr_expr;
         let group_expr = &self.group_expr;
 
+//        println!("There are {} aggregate expressions", aggr_expr.len());
+
         self.input.scan().for_each(|batch| {
             match batch {
                 Ok(ref b) => {
-
-                    println!("Aggregating batch");
 
                     // evaluate the grouping expressions
                     let group_values_result: Result<Vec<Rc<Value>>> = group_expr.iter()
@@ -595,40 +613,53 @@ impl SimpleRelation for AggregateRelation {
 
                     for i in 0..b.num_rows() {
 
+                        // create a key for use in the HashMap for this grouping (could be empty
+                        // if there is no GROUP BY)
                         let key: Vec<String> = group_values
                             .iter()
                             .map(|v| match v.as_ref() {
                                 Value::Scalar(ref vv) => format!("{:?}", vv),
                                 Value::Column(ref array) => match array.data() {
                                     ArrayData::Float64(ref buf) => format!("{:?}", buf.get(i)),
+                                    //TODO: support all simple types
                                     _ => unimplemented!()
                                 }
                             })
                             .collect();
 
-                        println!("key: {:?}", key);
+                        //println!("key: {:?}", key);
+
+                        // initialize all the aggregate functions
+                        let functions: Vec<Box<AggregateFunction>> = aggr_expr.iter()
+                            .map(|e| match e {
+                                RuntimeExpr::AggregateFunction { ref func, .. } => match func {
+                                    AggregateType::Min => Box::new(MinFunction::new(DataType::Float64)) as Box<AggregateFunction>,
+                                    AggregateType::Max => Box::new(MaxFunction::new(DataType::Float64)) as Box<AggregateFunction>,
+                                    _ => panic!()
+                                }
+                                _ => panic!()
+                            })
+                            .collect();
 
                         let entry = map.entry(key).or_insert_with(|| {
                             Rc::new(RefCell::new(AggregateEntry {
                                 group_values: vec![],
-                                //TODO: hard-coded functions
-                                aggr_values: vec![Rc::new(RefCell::new(MinFunction::new(DataType::Float64)))]
+                                aggr_values: functions
                             }))
                         });
+                        let mut entry_mut = entry.borrow_mut();;
 
                         for i in 0..aggr_expr.len() {
 
                             match aggr_expr[i] {
                                 RuntimeExpr::AggregateFunction { ref args, .. } => {
-                                    println!("aggr func()");
 
+                                    // arguments to the aggregate function
                                     let aggr_func_args: Result<Vec<Rc<Value>>> = args.iter()
                                         .map(|e| (*e)(b.as_ref()))
                                         .collect();
-                                    let mut z = entry.borrow_mut();
-                                    let mut y = z.aggr_values[i].borrow_mut();
-                                    y.execute(aggr_func_args.unwrap()).unwrap();
 
+                                    (*entry_mut).aggr_values[i].execute(aggr_func_args.unwrap()).unwrap();
                                 }
                                 _ => panic!()
                             }
@@ -652,7 +683,7 @@ impl SimpleRelation for AggregateRelation {
             //TODO: include group by key in result set
 
             let g: Vec<Rc<Value>> = v.borrow().aggr_values.iter()
-                .map(|v| v.borrow().finish().unwrap()).collect();
+                .map(|v| v.finish().unwrap()).collect();
 
             println!("aggregate entry: {:?}", g);
 
@@ -1084,7 +1115,7 @@ impl ExecutionContext {
         }
     }
 
-    /// load a scalar function implementation
+    /// load an aggregate function implementation
 //    fn load_aggregate_function(
 //        &self,
 //        function_name: &str,
@@ -1659,7 +1690,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sql_min() {
+    fn test_sql_min_max() {
         // create execution context
         let mut ctx = ExecutionContext::local();
         ctx.register_aggregate_function(Rc::new(MinFunction::new(DataType::Float64)));
@@ -1674,17 +1705,17 @@ mod tests {
         ctx.register("uk_cities", df);
 
         // define the SQL statement
-        let sql = "SELECT MIN(lat) FROM uk_cities";
+        let sql = "SELECT MIN(lat), MAX(lat), MIN(lng), MAX(lng) FROM uk_cities";
 
         // create a data frame
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write_csv(df1, "_test_sql_min.csv").unwrap();
+        ctx.write_csv(df1, "_test_sql_min_max.csv").unwrap();
 
-        let expected_result = read_file("test/data/expected/test_sql_min.csv");
+        let expected_result = read_file("test/data/expected/test_sql_min_max.csv");
 
-        assert_eq!(expected_result, read_file("_test_sql_min.csv"));
+        assert_eq!(expected_result, read_file("_test_sql_min_max.csv"));
     }
 
     fn read_file(filename: &str) -> String {

@@ -17,3 +17,4 @@
 pub mod geospatial;
 pub mod math;
 pub mod min;
+pub mod max;

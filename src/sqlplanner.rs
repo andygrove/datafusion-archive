@@ -224,14 +224,12 @@ impl SqlToRel {
                     .collect::<Result<Vec<Expr>, String>>()?;
 
                 //TODO: fix this hack
-                if id.to_lowercase() == "min" {
-                    Ok(Expr::AggregateFunction {
+                match id.to_lowercase().as_ref() {
+                    "min" | "max" | "count" | "sum" | "avg" => Ok(Expr::AggregateFunction {
                         name: id.clone(),
                         args: rex_args,
-                    })
-
-                } else {
-                    Ok(Expr::ScalarFunction {
+                    }),
+                    _ => Ok(Expr::ScalarFunction {
                         name: id.clone(),
                         args: rex_args,
                     })
