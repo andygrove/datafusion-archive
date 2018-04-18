@@ -138,6 +138,8 @@ pub enum ExecutionError {
     IoError(Error),
     ParserError(ParserError),
     Custom(String),
+    InvalidColumn(String),
+    NotImplemented,
 }
 
 impl From<Error> for ExecutionError {

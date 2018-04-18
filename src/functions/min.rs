@@ -49,6 +49,7 @@ impl AggregateFunction for MinFunction {
     }
 
     fn execute(&mut self, args: Vec<Rc<Value>>) -> Result<(), ExecutionError> {
+        println!("Min()");
         assert_eq!(1, args.len());
         match args[0].as_ref() {
             Value::Column(ref array) => {
@@ -59,6 +60,7 @@ impl AggregateFunction for MinFunction {
                             match self.value {
                                 ScalarValue::Null => self.value = ScalarValue::Float64(value),
                                 ScalarValue::Float64(x) => if value < x {
+                                    println!("New min value: {}", value);
                                     self.value = ScalarValue::Float64(value)
                                 },
                                 _ => panic!("type mismatch"),

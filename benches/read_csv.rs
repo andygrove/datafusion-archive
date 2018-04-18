@@ -35,10 +35,10 @@ fn read_csv() {
         Field::new("lng", DataType::Float64, false),
     ]);
     let file = File::open("/mnt/ssd/csv/locations_10000.csv").unwrap();
-    let csv = CsvFile::open(file, Rc::new(schema)).unwrap();
+    let csv = CsvFile::open(file, Rc::new(schema), false).unwrap();
     let it = DataSourceIterator::new(Rc::new(RefCell::new(csv)));
     it.for_each(|record_batch| match record_batch {
-        Ok(b) => /*println!("new batch with {} rows", b.num_rows())*/ {},
+        Ok(_b) => /*println!("new batch with {} rows", b.num_rows())*/ {},
         _ => println!("error"),
     });
 }
