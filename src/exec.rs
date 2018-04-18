@@ -28,6 +28,7 @@ use std::str;
 use std::string::String;
 
 use arrow::array::*;
+use arrow::builder::*;
 use arrow::datatypes::*;
 
 //use futures::{Future, Stream};
@@ -610,6 +611,7 @@ impl SimpleRelation for AggregateRelation {
                         let entry = map.entry(key).or_insert_with(|| {
                             Rc::new(RefCell::new(AggregateEntry {
                                 group_values: vec![],
+                                //TODO: hard-coded functions
                                 aggr_values: vec![Rc::new(RefCell::new(MinFunction::new(DataType::Float64)))]
                             }))
                         });
@@ -640,35 +642,51 @@ impl SimpleRelation for AggregateRelation {
 
         });
 
-        // TODO return iterator over results
-
-        let mut aggr_batch = DefaultRecordBatch {
-            schema: Rc::new(Schema::empty()),
-            data: Vec::new(),
-            row_count: 0,
-        };
+        let mut result_columns: Vec<Vec<ScalarValue>> = Vec::new();
+        for _ in 0..aggr_expr.len() {
+            result_columns.push(Vec::new());
+        }
 
         for (k,v) in map.iter() {
 
             //TODO: include group by key in result set
-//
-//            println!("groups: {:?}", entry.0);
-//            let foo = entry.1.borrow();
-//            println!("")
 
             let g: Vec<Rc<Value>> = v.borrow().aggr_values.iter()
                 .map(|v| v.borrow().finish().unwrap()).collect();
 
-
-
             println!("aggregate entry: {:?}", g);
 
+            for col_index in 0..g.len() {
+                result_columns[col_index].push(match g[col_index].as_ref() {
+                    Value::Scalar(ref v) => v.as_ref().clone(),
+                    _ => panic!()
+                });
+            }
+
         }
+
+        let mut aggr_batch = DefaultRecordBatch {
+            schema: Rc::new(Schema::empty()),
+            data: Vec::new(),
+            row_count: map.len(),
+        };
+
+        for i in 0..result_columns.len() {
+            //TODO: match on func return type but for now assume f64
+            let mut b: Builder<f64> = Builder::new();
+            for v in &result_columns[i] {
+                match v {
+                    ScalarValue::Float64(vv) => b.push(*vv),
+                    _ => panic!("type mismatch")
+                }
+            }
+            aggr_batch.data.push(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))));
+        }
+
         let tb : Rc<RecordBatch> = Rc::new(aggr_batch);
 
+        // create iterator over the single batch
         let v = vec![Ok(tb)];
-
-
         Box::new(v.into_iter())
     }
 
@@ -676,6 +694,10 @@ impl SimpleRelation for AggregateRelation {
         self.schema.as_ref()
     }
 }
+
+
+
+
 
 impl SimpleRelation for LimitRelation {
     fn scan<'a>(
@@ -1658,9 +1680,11 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write_csv(df1, "test_sql_min.csv").unwrap();
+        ctx.write_csv(df1, "_test_sql_min.csv").unwrap();
 
-        assert_eq!("TBD".to_string(), read_file("test_sql_min.csv"));
+        let expected_result = read_file("test/data/expected/test_sql_min.csv");
+
+        assert_eq!(expected_result, read_file("_test_sql_min.csv"));
     }
 
     fn read_file(filename: &str) -> String {
