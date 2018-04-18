@@ -31,6 +31,7 @@ pub enum ASTNode {
     },
     SQLLiteralLong(i64),
     SQLLiteralDouble(f64),
+    SQLLiteralString(String),
     SQLFunction {
         id: String,
         args: Vec<ASTNode>,
@@ -86,4 +87,6 @@ pub enum SQLOperator {
     LtEq,
     Eq,
     NotEq,
+    And,
+    Or
 }

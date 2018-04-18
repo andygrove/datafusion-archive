@@ -27,9 +27,9 @@ pub struct MaxFunction {
 }
 
 impl MaxFunction {
-    pub fn new(data_type: DataType) -> Self {
+    pub fn new(data_type: &DataType) -> Self {
         MaxFunction {
-            data_type,
+            data_type: data_type.clone(),
             value: ScalarValue::Null,
         }
     }
@@ -53,20 +53,20 @@ impl AggregateFunction for MaxFunction {
         match args[0].as_ref() {
             Value::Column(ref array) => {
                 match array.data() {
+                    //TODO support all types using macros
                     &ArrayData::Float64(ref buf) => {
                         for i in 0..buf.len() as usize {
                             let value = *buf.get(i);
                             match self.value {
                                 ScalarValue::Null => self.value = ScalarValue::Float64(value),
                                 ScalarValue::Float64(x) => if value > x {
-                                    println!("New max value: {}", value);
                                     self.value = ScalarValue::Float64(value)
                                 },
                                 _ => panic!("type mismatch"),
                             }
                         }
                     }
-                    _ => panic!("type mismatch"),
+                    _ => unimplemented!("unsupported data type in MaxFunction"),
                 }
                 Ok(())
             }
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_max() {
-        let mut max = MaxFunction::new(DataType::Float64);
+        let mut max = MaxFunction::new(&DataType::Float64);
         assert_eq!(DataType::Float64, max.return_type());
         let values: Vec<f64> = vec![12.0, 22.0, 32.0, 6.0, 58.1];
 

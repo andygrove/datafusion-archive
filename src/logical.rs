@@ -65,6 +65,8 @@ pub enum Operator {
     Multiply,
     Divide,
     Modulus,
+    And,
+    Or
 }
 
 /// Relation Expression

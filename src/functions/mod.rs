@@ -14,7 +14,8 @@
 
 //! Example SQL functions
 
+pub mod conversions;
 pub mod geospatial;
 pub mod math;
-pub mod min;
 pub mod max;
+pub mod min;

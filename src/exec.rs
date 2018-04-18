@@ -39,9 +39,9 @@ use arrow::datatypes::*;
 
 use super::datasources::common::*;
 use super::datasources::csv::*;
-use super::functions::min::*;
-use super::functions::max::*;
 use super::datasources::parquet::*;
+use super::functions::max::*;
+use super::functions::min::*;
 use super::logical::*;
 use super::sqlast::ASTNode::*;
 use super::sqlparser::*;
@@ -276,36 +276,48 @@ pub enum RuntimeExpr {
     Compiled(CompiledExpr),
     AggregateFunction {
         func: AggregateType,
-        args: Vec<CompiledExpr>
-    }
+        args: Vec<CompiledExpr>,
+        return_type: DataType,
+    },
 }
 
-
 /// Compiles a scalar expression into a closure
-pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<RuntimeExpr> {
+pub fn compile_expr(
+    ctx: &ExecutionContext,
+    expr: &Expr,
+    input_schema: &Schema,
+) -> Result<RuntimeExpr> {
     match *expr {
         Expr::AggregateFunction { ref name, ref args } => {
+            assert_eq!(1, args.len());
+
+            let return_type = match args[0] {
+                Expr::Column(i) => input_schema.columns[i].data_type.clone(),
+                _ => {
+                    //TODO: fix this hack
+                    DataType::Float64
+                    //panic!("Aggregate expressions currently only support simple arguments")
+                },
+            };
 
             let compiled_args: Result<Vec<CompiledExpr>> =
-                args.iter()
-                    .map(|e| compile_scalar_expr(ctx, e))
-                    .collect();
+                args.iter().map(|e| compile_scalar_expr(ctx, e)).collect();
 
             let func = match name.to_lowercase().as_ref() {
                 "min" => AggregateType::Min,
                 "max" => AggregateType::Max,
-                _ => unimplemented!()
+                _ => unimplemented!("Unsupported aggregate function '{}'", name),
             };
 
             Ok(RuntimeExpr::AggregateFunction {
                 func,
-                args: compiled_args?
+                args: compiled_args?,
+                return_type,
             })
         }
-        _ => Ok(RuntimeExpr::Compiled(compile_scalar_expr(ctx, expr)?))
+        _ => Ok(RuntimeExpr::Compiled(compile_scalar_expr(ctx, expr)?)),
     }
 }
-
 
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
@@ -379,6 +391,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
                     let right_values = right_expr(batch)?;
                     left_values.multiply(&right_values)
                 })),
+                //TODO: AND, OR
                 _ => {
                     return Err(ExecutionError::Custom(format!(
                         "Unsupported binary operator '{:?}'",
@@ -410,22 +423,21 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
             }))
         }
         // aggregate functions don't fit this pattern .. will need to rework this ..
-        &Expr::AggregateFunction { .. } => panic!("Aggregate expressions cannot be compiled yet")
-//        &Expr::AggregateFunction { ref name, ref args } => {
-//
-//            // evaluate the arguments to the function
-//            let compiled_args: Result<Vec<CompiledExpr>> =
-//                args.iter().map(|e| compile_expr(ctx, e)).collect();
-//
-//            let compiled_args_ok = compiled_args?;
-//
-//            Ok(Box::new(move |batch| {
-//                let arg_values: Result<Vec<Rc<Value>>> =
-//                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
-//
-//                Ok(Rc::new(arg_values?))
-//            }))
-//        }
+        &Expr::AggregateFunction { .. } => panic!("Aggregate expressions cannot be compiled yet"), //        &Expr::AggregateFunction { ref name, ref args } => {
+                                                                                                   //
+                                                                                                   //            // evaluate the arguments to the function
+                                                                                                   //            let compiled_args: Result<Vec<CompiledExpr>> =
+                                                                                                   //                args.iter().map(|e| compile_expr(ctx, e)).collect();
+                                                                                                   //
+                                                                                                   //            let compiled_args_ok = compiled_args?;
+                                                                                                   //
+                                                                                                   //            Ok(Box::new(move |batch| {
+                                                                                                   //                let arg_values: Result<Vec<Rc<Value>>> =
+                                                                                                   //                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
+                                                                                                   //
+                                                                                                   //                Ok(Rc::new(arg_values?))
+                                                                                                   //            }))
+                                                                                                   //        }
     }
 }
 
@@ -467,8 +479,7 @@ pub struct LimitRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a mut self)
-        -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a>;
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a>;
 
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
@@ -480,9 +491,7 @@ struct DataSourceRelation {
 }
 
 impl SimpleRelation for DataSourceRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         Box::new(DataSourceIterator::new(self.ds.clone()))
     }
 
@@ -492,9 +501,7 @@ impl SimpleRelation for DataSourceRelation {
 }
 
 impl SimpleRelation for FilterRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         let filter_expr = &self.expr;
         let schema = self.schema.clone();
 
@@ -548,9 +555,7 @@ impl SimpleRelation for FilterRelation {
 }
 
 impl SimpleRelation for ProjectRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         let project_expr = &self.expr;
 
         let projection_iter = self.input.scan().map(move |r| match r {
@@ -586,33 +591,28 @@ pub struct AggregateRelation {
 
 struct AggregateEntry {
     group_values: Vec<ScalarValue>,
-    aggr_values: Vec<Box<AggregateFunction>>
+    aggr_values: Vec<Box<AggregateFunction>>,
 }
 
 impl SimpleRelation for AggregateRelation {
-
-    fn scan<'a>(&'a mut self) -> Box<Iterator<Item=Result<Rc<RecordBatch>>> + 'a> {
-
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         let mut map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
 
         let aggr_expr = &self.aggr_expr;
         let group_expr = &self.group_expr;
 
-//        println!("There are {} aggregate expressions", aggr_expr.len());
+        //        println!("There are {} aggregate expressions", aggr_expr.len());
 
         self.input.scan().for_each(|batch| {
             match batch {
                 Ok(ref b) => {
-
                     // evaluate the grouping expressions
-                    let group_values_result: Result<Vec<Rc<Value>>> = group_expr.iter()
-                        .map(|e| (*e)(b.as_ref()))
-                        .collect();
+                    let group_values_result: Result<Vec<Rc<Value>>> =
+                        group_expr.iter().map(|e| (*e)(b.as_ref())).collect();
 
                     let group_values: Vec<Rc<Value>> = group_values_result.unwrap(); //TODO
 
                     for i in 0..b.num_rows() {
-
                         // create a key for use in the HashMap for this grouping (could be empty
                         // if there is no GROUP BY)
                         let key: Vec<String> = group_values
@@ -620,57 +620,73 @@ impl SimpleRelation for AggregateRelation {
                             .map(|v| match v.as_ref() {
                                 Value::Scalar(ref vv) => format!("{:?}", vv),
                                 Value::Column(ref array) => match array.data() {
+                                    ArrayData::Boolean(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int8(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int16(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int32(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int64(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt8(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt16(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt32(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt64(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Float32(ref buf) => format!("{:?}", buf.get(i)),
                                     ArrayData::Float64(ref buf) => format!("{:?}", buf.get(i)),
-                                    //TODO: support all simple types
-                                    _ => unimplemented!()
-                                }
+                                    //TODO: String
+                                    _ => unimplemented!(
+                                        "Unsupported datatype for aggregate grouping expression"
+                                    ),
+                                },
                             })
                             .collect();
 
                         //println!("key: {:?}", key);
 
                         // initialize all the aggregate functions
-                        let functions: Vec<Box<AggregateFunction>> = aggr_expr.iter()
+                        let functions: Vec<Box<AggregateFunction>> = aggr_expr
+                            .iter()
                             .map(|e| match e {
-                                RuntimeExpr::AggregateFunction { ref func, .. } => match func {
-                                    AggregateType::Min => Box::new(MinFunction::new(DataType::Float64)) as Box<AggregateFunction>,
-                                    AggregateType::Max => Box::new(MaxFunction::new(DataType::Float64)) as Box<AggregateFunction>,
-                                    _ => panic!()
-                                }
-                                _ => panic!()
+                                RuntimeExpr::AggregateFunction {
+                                    ref func,
+                                    ref return_type,
+                                    ..
+                                } => match func {
+                                    AggregateType::Min => Box::new(MinFunction::new(return_type))
+                                        as Box<AggregateFunction>,
+                                    AggregateType::Max => Box::new(MaxFunction::new(return_type))
+                                        as Box<AggregateFunction>,
+                                    _ => panic!(),
+                                },
+                                _ => panic!(),
                             })
                             .collect();
 
                         let entry = map.entry(key).or_insert_with(|| {
                             Rc::new(RefCell::new(AggregateEntry {
                                 group_values: vec![],
-                                aggr_values: functions
+                                aggr_values: functions,
                             }))
                         });
-                        let mut entry_mut = entry.borrow_mut();;
+                        let mut entry_mut = entry.borrow_mut();
 
                         for i in 0..aggr_expr.len() {
-
                             match aggr_expr[i] {
                                 RuntimeExpr::AggregateFunction { ref args, .. } => {
-
                                     // arguments to the aggregate function
-                                    let aggr_func_args: Result<Vec<Rc<Value>>> = args.iter()
-                                        .map(|e| (*e)(b.as_ref()))
-                                        .collect();
+                                    let aggr_func_args: Result<
+                                        Vec<Rc<Value>>,
+                                    > = args.iter().map(|e| (*e)(b.as_ref())).collect();
 
-                                    (*entry_mut).aggr_values[i].execute(aggr_func_args.unwrap()).unwrap();
+                                    (*entry_mut).aggr_values[i]
+                                        .execute(aggr_func_args.unwrap())
+                                        .unwrap();
                                 }
-                                _ => panic!()
+                                _ => panic!(),
                             }
                         }
-
                     }
                 }
-                _ => panic!()
+                _ => panic!(),
             }
-
-
         });
 
         let mut result_columns: Vec<Vec<ScalarValue>> = Vec::new();
@@ -678,22 +694,23 @@ impl SimpleRelation for AggregateRelation {
             result_columns.push(Vec::new());
         }
 
-        for (k,v) in map.iter() {
+        for (k, v) in map.iter() {
+            //TODO: include group by key in result set, if there is one
 
-            //TODO: include group by key in result set
+            let g: Vec<Rc<Value>> = v.borrow()
+                .aggr_values
+                .iter()
+                .map(|v| v.finish().unwrap())
+                .collect();
 
-            let g: Vec<Rc<Value>> = v.borrow().aggr_values.iter()
-                .map(|v| v.finish().unwrap()).collect();
-
-            println!("aggregate entry: {:?}", g);
+            //println!("aggregate entry: {:?}", g);
 
             for col_index in 0..g.len() {
                 result_columns[col_index].push(match g[col_index].as_ref() {
                     Value::Scalar(ref v) => v.as_ref().clone(),
-                    _ => panic!()
+                    _ => panic!(),
                 });
             }
-
         }
 
         let mut aggr_batch = DefaultRecordBatch {
@@ -703,18 +720,30 @@ impl SimpleRelation for AggregateRelation {
         };
 
         for i in 0..result_columns.len() {
-            //TODO: match on func return type but for now assume f64
-            let mut b: Builder<f64> = Builder::new();
-            for v in &result_columns[i] {
-                match v {
-                    ScalarValue::Float64(vv) => b.push(*vv),
-                    _ => panic!("type mismatch")
-                }
+            match aggr_expr[i] {
+                RuntimeExpr::AggregateFunction {
+                    ref return_type, ..
+                } => match return_type {
+                    //TODO: support all the types (use macros to make this less verbose)
+                    DataType::Float64 => {
+                        let mut b: Builder<f64> = Builder::new();
+                        for v in &result_columns[i] {
+                            match v {
+                                ScalarValue::Float64(vv) => b.push(*vv),
+                                _ => panic!("type mismatch"),
+                            }
+                        }
+                        aggr_batch
+                            .data
+                            .push(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))));
+                    }
+                    _ => panic!(),
+                },
+                _ => panic!(),
             }
-            aggr_batch.data.push(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))));
         }
 
-        let tb : Rc<RecordBatch> = Rc::new(aggr_batch);
+        let tb: Rc<RecordBatch> = Rc::new(aggr_batch);
 
         // create iterator over the single batch
         let v = vec![Ok(tb)];
@@ -726,14 +755,8 @@ impl SimpleRelation for AggregateRelation {
     }
 }
 
-
-
-
-
 impl SimpleRelation for LimitRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         unimplemented!()
     }
 
@@ -826,7 +849,7 @@ impl ExecutionContext {
             name: func.name(),
             args: func.args(),
             return_type: func.return_type(),
-            function_type: FunctionType::Aggregate
+            function_type: FunctionType::Aggregate,
         };
 
         self.function_meta
@@ -940,10 +963,7 @@ impl ExecutionContext {
             .insert(name, Rc::new(schema.clone()));
     }
 
-    pub fn create_execution_plan(
-        &self,
-        plan: &LogicalPlan,
-    ) -> Result<Box<SimpleRelation>> {
+    pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>> {
         //println!("Logical plan: {:?}", plan);
 
         match *plan {
@@ -1043,12 +1063,16 @@ impl ExecutionContext {
                 let input_rel = self.create_execution_plan(&input)?;
                 let input_schema = input_rel.schema().clone();
 
-                let compiled_group_expr_result: Result<Vec<CompiledExpr>> =
-                    group_expr.iter().map(|e| compile_scalar_expr(&self, e)).collect();
+                let compiled_group_expr_result: Result<Vec<CompiledExpr>> = group_expr
+                    .iter()
+                    .map(|e| compile_scalar_expr(&self, e))
+                    .collect();
                 let compiled_group_expr = compiled_group_expr_result?;
 
-                let compiled_aggr_expr_result: Result<Vec<RuntimeExpr>> =
-                    aggr_expr.iter().map(|e| compile_expr(&self, e)).collect();
+                let compiled_aggr_expr_result: Result<Vec<RuntimeExpr>> = aggr_expr
+                    .iter()
+                    .map(|e| compile_expr(&self, e, input.schema()))
+                    .collect();
                 let compiled_aggr_expr = compiled_aggr_expr_result?;
 
                 let rel = AggregateRelation {
@@ -1102,10 +1126,7 @@ impl ExecutionContext {
     }
 
     /// load a scalar function implementation
-    fn load_scalar_function(
-        &self,
-        function_name: &str,
-    ) -> Result<Rc<ScalarFunction>> {
+    fn load_scalar_function(&self, function_name: &str) -> Result<Rc<ScalarFunction>> {
         match self.functions.borrow().get(&function_name.to_lowercase()) {
             Some(f) => Ok(f.clone()),
             _ => Err(ExecutionError::Custom(format!(
@@ -1116,18 +1137,18 @@ impl ExecutionContext {
     }
 
     /// load an aggregate function implementation
-//    fn load_aggregate_function(
-//        &self,
-//        function_name: &str,
-//    ) -> Result<Rc<AggregateFunction>> {
-//        match self.aggregate_functions.borrow().get(&function_name.to_lowercase()) {
-//            Some(f) => Ok(f.clone()),
-//            _ => Err(ExecutionError::Custom(format!(
-//                "Unknown aggregate function {}",
-//                function_name
-//            ))),
-//        }
-//    }
+    //    fn load_aggregate_function(
+    //        &self,
+    //        function_name: &str,
+    //    ) -> Result<Rc<AggregateFunction>> {
+    //        match self.aggregate_functions.borrow().get(&function_name.to_lowercase()) {
+    //            Some(f) => Ok(f.clone()),
+    //            _ => Err(ExecutionError::Custom(format!(
+    //                "Unknown aggregate function {}",
+    //                function_name
+    //            ))),
+    //        }
+    //    }
 
     pub fn udf(&self, name: &str, args: Vec<Expr>) -> Expr {
         Expr::ScalarFunction {
@@ -1175,10 +1196,7 @@ impl ExecutionContext {
         }
     }
 
-    fn execute_local(
-        &self,
-        physical_plan: &PhysicalPlan,
-    ) -> Result<ExecutionResult> {
+    fn execute_local(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult> {
         //println!("execute_local()");
 
         match physical_plan {
@@ -1693,7 +1711,6 @@ mod tests {
     fn test_sql_min_max() {
         // create execution context
         let mut ctx = ExecutionContext::local();
-        ctx.register_aggregate_function(Rc::new(MinFunction::new(DataType::Float64)));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1701,7 +1718,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false).unwrap();
+        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false)
+            .unwrap();
         ctx.register("uk_cities", df);
 
         // define the SQL statement

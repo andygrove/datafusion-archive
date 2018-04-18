@@ -121,7 +121,7 @@ impl fmt::Debug for Value {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             Value::Scalar(v) => write!(f, "{:?}", v)?,
-            _ => write!(f, "???")?
+            _ => write!(f, "???")?,
         }
         Ok(())
     }

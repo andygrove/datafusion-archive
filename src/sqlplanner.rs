@@ -52,7 +52,6 @@ impl SqlToRel {
                 ref having,
                 ..
             } => {
-
                 // parse the input relation so we have access to the row type
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
@@ -69,10 +68,13 @@ impl SqlToRel {
                     .collect::<Result<Vec<Expr>, String>>()?;
 
                 // collect aggregate expressions
-                let aggr_expr: Vec<Expr> = expr.iter().filter(|e| match e {
-                    Expr::AggregateFunction { .. } => true,
-                    _ => false
-                }).map(|e| e.clone()).collect();
+                let aggr_expr: Vec<Expr> = expr.iter()
+                    .filter(|e| match e {
+                        Expr::AggregateFunction { .. } => true,
+                        _ => false,
+                    })
+                    .map(|e| e.clone())
+                    .collect();
 
                 if aggr_expr.len() > 0 {
                     let aggr_schema = Schema::new(expr_to_field(&aggr_expr, input_schema));
@@ -84,7 +86,7 @@ impl SqlToRel {
                     }))
                 } else {
                     let projection_schema = Rc::new(Schema {
-                        columns: expr_to_field(&expr, input_schema.as_ref())
+                        columns: expr_to_field(&expr, input_schema.as_ref()),
                     });
 
                     let selection_plan = match selection {
@@ -109,10 +111,10 @@ impl SqlToRel {
                     };
 
                     // aggregate queries
-//                    match group_by {
-//                        Some(g) => Err(String::from("GROUP BY is not implemented yet")),
-//                        None => {}
-//                    }
+                    //                    match group_by {
+                    //                        Some(g) => Err(String::from("GROUP BY is not implemented yet")),
+                    //                        None => {}
+                    //                    }
 
                     if let &Some(_) = having {
                         return Err(String::from("HAVING is not implemented yet"));
@@ -192,7 +194,6 @@ impl SqlToRel {
                 ref op,
                 ref right,
             } => {
-                //TODO: we have this implemented somewhere else already
                 let operator = match op {
                     &SQLOperator::Gt => Operator::Gt,
                     &SQLOperator::GtEq => Operator::GtEq,
@@ -205,6 +206,8 @@ impl SqlToRel {
                     &SQLOperator::Multiply => Operator::Multiply,
                     &SQLOperator::Divide => Operator::Divide,
                     &SQLOperator::Modulus => Operator::Modulus,
+                    &SQLOperator::And => Operator::And,
+                    &SQLOperator::Or=> Operator::Or,
                 };
                 Ok(Expr::BinaryExpr {
                     left: Rc::new(self.sql_to_rex(&left, &schema)?),
@@ -232,7 +235,7 @@ impl SqlToRel {
                     _ => Ok(Expr::ScalarFunction {
                         name: id.clone(),
                         args: rex_args,
-                    })
+                    }),
                 }
             }
 
@@ -254,7 +257,6 @@ pub fn convert_data_type(sql: &SQLType) -> DataType {
         &SQLType::Double => DataType::Float64,
     }
 }
-
 
 //pub fn create_projection(expr: Vec<Expr>, input: &LogicalPlan) -> LogicalPlan {
 //    LogicalPlan::Projection {
