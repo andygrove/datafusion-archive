@@ -165,8 +165,7 @@ impl Value {
                     (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
                         let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
                         for i in 0..list.len() as usize {
-                            let a = str::from_utf8(list.slice(i)).unwrap();
-                            v.push(a == b);
+                            v.push(list.slice(i) == b.as_bytes());
                         }
                         Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
                     }
@@ -190,8 +189,7 @@ impl Value {
                     (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
                         let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
                         for i in 0..list.len() as usize {
-                            let a = str::from_utf8(list.slice(i)).unwrap();
-                            v.push(a != b);
+                            v.push(list.slice(i) != b.as_bytes());
                         }
                         Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
                     }
@@ -286,9 +284,9 @@ impl Value {
                 match (v1.data(), v2.data()) {
                     (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
                         let bools = l.iter().zip(r.iter()).map(|(ll, rr)| ll && rr).collect::<Vec<bool>>();
-                        println!("AND: left = {:?}", l.iter().collect::<Vec<bool>>());
-                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
-                        println!("AND: bools = {:?}", bools);
+//                        println!("AND: left = {:?}", l.iter().collect::<Vec<bool>>());
+//                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
+//                        println!("AND: bools = {:?}", bools);
                         let bools = Array::from(bools);
                         Ok(Rc::new(Value::Column(Rc::new(bools))))
                     },
@@ -684,15 +682,34 @@ impl SimpleRelation for AggregateRelation {
             match batch {
                 Ok(ref b) => {
 
-                    //println!("Processing aggregates for batch with {} rows", b.num_rows());
+                   // println!("Processing aggregates for batch with {} rows", b.num_rows());
 
-                    // evaluate the grouping expressions
+                    let mut aggr_col_args: Vec<Vec<Rc<Value>>> = vec![];
+                    for i in 0..aggr_expr.len() {
+                        match aggr_expr[i] {
+                            RuntimeExpr::AggregateFunction { ref args, .. } => {
+
+                                // arguments to the aggregate function
+                                let aggr_func_args: Result<Vec<Rc<Value>>> = args.iter()
+                                    .map(|e| (*e)(b.as_ref()))
+                                    .collect();
+
+                                aggr_col_args.push(aggr_func_args.unwrap());
+                            }
+                            _ => panic!()
+                        }
+                    }
+
+                                // evaluate the grouping expressions
                     let group_values_result: Result<Vec<Rc<Value>>> =
                         group_expr.iter().map(|e| (*e)(b.as_ref())).collect();
 
                     let group_values: Vec<Rc<Value>> = group_values_result.unwrap(); //TODO
 
                     for i in 0..b.num_rows() {
+
+                        //print!(".");
+
                         // create a key for use in the HashMap for this grouping (could be empty
                         // if there is no GROUP BY)
                         let key: Vec<String> = group_values
@@ -722,52 +739,58 @@ impl SimpleRelation for AggregateRelation {
                         //println!("key: {:?}", key);
 
                         // initialize all the aggregate functions
-                        let functions: Vec<Box<AggregateFunction>> = aggr_expr
-                            .iter()
-                            .map(|e| match e {
-                                RuntimeExpr::AggregateFunction {
-                                    ref func,
-                                    ref return_type,
-                                    ..
-                                } => match func {
-                                    AggregateType::Min => Box::new(MinFunction::new(return_type))
-                                        as Box<AggregateFunction>,
-                                    AggregateType::Max => Box::new(MaxFunction::new(return_type))
-                                        as Box<AggregateFunction>,
-                                    _ => panic!(),
-                                },
-                                _ => panic!(),
-                            })
-                            .collect();
+
+                        //print!(".");
 
                         let entry = map.entry(key).or_insert_with(|| {
+
+                            //println!("New map entry");
+
+                            let functions: Vec<Box<AggregateFunction>> = aggr_expr
+                                .iter()
+                                .map(|e| match e {
+                                    RuntimeExpr::AggregateFunction {
+                                        ref func,
+                                        ref return_type,
+                                        ..
+                                    } => match func {
+                                        AggregateType::Min => Box::new(MinFunction::new(return_type))
+                                            as Box<AggregateFunction>,
+                                        AggregateType::Max => Box::new(MaxFunction::new(return_type))
+                                            as Box<AggregateFunction>,
+                                        _ => panic!(),
+                                    },
+                                    _ => panic!(),
+                                })
+                                .collect();
+
                             Rc::new(RefCell::new(AggregateEntry {
                                 group_values: vec![],
                                 aggr_values: functions,
                             }))
                         });
+
+                        //print!(".");
                         let mut entry_mut = entry.borrow_mut();
 
                         for i in 0..aggr_expr.len() {
                             match aggr_expr[i] {
                                 RuntimeExpr::AggregateFunction { ref args, .. } => {
-                                    // arguments to the aggregate function
-                                    let aggr_func_args: Result<
-                                        Vec<Rc<Value>>,
-                                    > = args.iter().map(|e| (*e)(b.as_ref())).collect();
-
                                     (*entry_mut).aggr_values[i]
-                                        .execute(aggr_func_args.unwrap())
+                                        .execute(&aggr_col_args[i])
                                         .unwrap();
                                 }
                                 _ => panic!(),
                             }
                         }
+//                        println!("!");
                     }
                 }
                 Err(e) => panic!("Error aggregating batch: {:?}", e),
             }
         });
+
+//        println!("Preparing results");
 
         let mut result_columns: Vec<Vec<ScalarValue>> = Vec::new();
         for _ in 0..aggr_expr.len() {
@@ -783,7 +806,7 @@ impl SimpleRelation for AggregateRelation {
                 .map(|v| v.finish().unwrap())
                 .collect();
 
-            println!("aggregate entry: {:?}", g);
+//            println!("aggregate entry: {:?}", g);
 
             for col_index in 0..g.len() {
                 result_columns[col_index].push(match g[col_index].as_ref() {

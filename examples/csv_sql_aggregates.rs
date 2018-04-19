@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fs::File;
-use std::io::prelude::*;
 use std::rc::Rc;
 
 extern crate arrow;
@@ -59,8 +58,7 @@ fn main() {
             // define the SQL statement
             let sql = "SELECT MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
                             FROM salaries \
-                            WHERE base_pay != 'Not Provided'";
-                            //AND base_pay != ''";
+                            WHERE base_pay != 'Not Provided' AND base_pay != ''";
 
             // create a data frame
             let df = ctx.sql(&sql).unwrap();

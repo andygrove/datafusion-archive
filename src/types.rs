@@ -140,7 +140,7 @@ pub trait AggregateFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&mut self, args: Vec<Rc<Value>>) -> Result<(), ExecutionError>;
+    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<(), ExecutionError>;
     fn finish(&self) -> Result<Rc<Value>, ExecutionError>;
 }
 

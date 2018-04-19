@@ -48,7 +48,7 @@ impl AggregateFunction for MaxFunction {
         self.data_type.clone()
     }
 
-    fn execute(&mut self, args: Vec<Rc<Value>>) -> Result<(), ExecutionError> {
+    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<(), ExecutionError> {
         assert_eq!(1, args.len());
         match args[0].as_ref() {
             Value::Column(ref array) => {
@@ -90,7 +90,7 @@ mod tests {
         assert_eq!(DataType::Float64, max.return_type());
         let values: Vec<f64> = vec![12.0, 22.0, 32.0, 6.0, 58.1];
 
-        max.execute(vec![Rc::new(Value::Column(Rc::new(Array::from(values))))])
+        max.execute(&vec![Rc::new(Value::Column(Rc::new(Array::from(values))))])
             .unwrap();
         let result = max.finish().unwrap();
 
