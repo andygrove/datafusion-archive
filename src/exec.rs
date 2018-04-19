@@ -161,7 +161,17 @@ impl Value {
                 compare_arrays!(v1, v2, |(aa, bb)| aa == bb)
             }
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
-                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa == bb)
+                match (v1.data(), v2.as_ref()) {
+                    (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
+                        let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
+                        for i in 0..list.len() as usize {
+                            let a = str::from_utf8(list.slice(i)).unwrap();
+                            v.push(a == b);
+                        }
+                        Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+                    }
+                    _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb)
+                }
             }
             (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
                 compare_array_with_scalar!(v2, v1, |(aa, bb)| aa == bb)
@@ -176,12 +186,24 @@ impl Value {
                 compare_arrays!(v1, v2, |(aa, bb)| aa != bb)
             }
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
-                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb)
+                match (v1.data(), v2.as_ref()) {
+                    (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
+                        let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
+                        for i in 0..list.len() as usize {
+                            let a = str::from_utf8(list.slice(i)).unwrap();
+                            v.push(a != b);
+                        }
+                        Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+                    }
+                    _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb)
+                }
             }
             (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
                 compare_array_with_scalar!(v2, v1, |(aa, bb)| aa != bb)
             }
-            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => {
+                unimplemented!()
+            },
         }
     }
 
@@ -257,6 +279,42 @@ impl Value {
     pub fn multiply(&self, _other: &Value) -> Result<Rc<Value>> {
         unimplemented!()
     }
+
+    pub fn and(&self, other: &Value) -> Result<Rc<Value>> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                match (v1.data(), v2.data()) {
+                    (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
+                        let bools = l.iter().zip(r.iter()).map(|(ll, rr)| ll && rr).collect::<Vec<bool>>();
+                        println!("AND: left = {:?}", l.iter().collect::<Vec<bool>>());
+                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
+                        println!("AND: bools = {:?}", bools);
+                        let bools = Array::from(bools);
+                        Ok(Rc::new(Value::Column(Rc::new(bools))))
+                    },
+                    _ => panic!()
+                }
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                match (v1.data(), v2.as_ref()) {
+                    (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
+                        let bools = Array::from(l.iter().map(|ll| ll && *r).collect::<Vec<bool>>());
+                        Ok(Rc::new(Value::Column(Rc::new(bools))))
+                    },
+                    _ => panic!()
+                }
+            }
+//            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+//                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa && bb)
+//            }
+//            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
+            _ => panic!()
+        }
+    }
+
+    pub fn or(&self, _other: &Value) -> Result<Rc<Value>> {
+        unimplemented!()
+    }
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
@@ -292,7 +350,7 @@ pub fn compile_expr(
             assert_eq!(1, args.len());
 
             let return_type = match args[0] {
-                Expr::Column(i) => input_schema.columns[i].data_type.clone(),
+                Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
                 _ => {
                     //TODO: fix this hack
                     DataType::Float64
@@ -391,7 +449,16 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
                     let right_values = right_expr(batch)?;
                     left_values.multiply(&right_values)
                 })),
-                //TODO: AND, OR
+                &Operator::And => Ok(Box::new(move |batch: &RecordBatch| {
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.and(&right_values)
+                })),
+                &Operator::Or => Ok(Box::new(move |batch: &RecordBatch| {
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.or(&right_values)
+                })),
                 _ => {
                     return Err(ExecutionError::Custom(format!(
                         "Unsupported binary operator '{:?}'",
@@ -508,12 +575,17 @@ impl SimpleRelation for FilterRelation {
         Box::new(self.input.scan().map(move |b| {
             match b {
                 Ok(ref batch) => {
+
+                    //println!("FilterRelation batch {} rows", batch.num_rows());
+
+                    assert!(batch.num_rows()>0);
                     // evaluate the filter expression for every row in the batch
                     let x = (*filter_expr)(batch.as_ref())?;
                     match x.as_ref() {
                         &Value::Column(ref filter_eval) => {
                             let filtered_columns: Vec<Rc<Value>> = (0..batch.num_columns())
                                 .map(move |column_index| {
+                                    //println!("Filtering column {}", column_index);
                                     let column = batch.column(column_index);
                                     Rc::new(Value::Column(Rc::new(filter(column, &filter_eval))))
                                 })
@@ -532,6 +604,8 @@ impl SimpleRelation for FilterRelation {
                                 None => 0,
                                 Some(n) => n,
                             };
+
+                            //println!("Filtered batch has {} rows out of original {}", row_count, batch.num_rows());
 
                             let filtered_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
                                 row_count,
@@ -560,6 +634,9 @@ impl SimpleRelation for ProjectRelation {
 
         let projection_iter = self.input.scan().map(move |r| match r {
             Ok(ref batch) => {
+
+                println!("ProjectRelation batch {} rows", batch.num_rows());
+
                 let projected_columns: Result<Vec<Rc<Value>>> =
                     project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
 
@@ -601,11 +678,14 @@ impl SimpleRelation for AggregateRelation {
         let aggr_expr = &self.aggr_expr;
         let group_expr = &self.group_expr;
 
-        //        println!("There are {} aggregate expressions", aggr_expr.len());
+        //println!("There are {} aggregate expressions", aggr_expr.len());
 
         self.input.scan().for_each(|batch| {
             match batch {
                 Ok(ref b) => {
+
+                    //println!("Processing aggregates for batch with {} rows", b.num_rows());
+
                     // evaluate the grouping expressions
                     let group_values_result: Result<Vec<Rc<Value>>> =
                         group_expr.iter().map(|e| (*e)(b.as_ref())).collect();
@@ -685,7 +765,7 @@ impl SimpleRelation for AggregateRelation {
                         }
                     }
                 }
-                _ => panic!(),
+                Err(e) => panic!("Error aggregating batch: {:?}", e),
             }
         });
 
@@ -703,7 +783,7 @@ impl SimpleRelation for AggregateRelation {
                 .map(|v| v.finish().unwrap())
                 .collect();
 
-            //println!("aggregate entry: {:?}", g);
+            println!("aggregate entry: {:?}", g);
 
             for col_index in 0..g.len() {
                 result_columns[col_index].push(match g[col_index].as_ref() {
@@ -889,6 +969,7 @@ impl ExecutionContext {
 
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
+        //println!("AST: {:?}", ast);
 
         match ast {
             SQLCreateTable { name, columns } => {
@@ -913,6 +994,7 @@ impl ExecutionContext {
 
                 // plan the query (create a logical relational plan)
                 let plan = query_planner.sql_to_rel(&ast)?;
+                //println!("Logical plan: {:?}", plan);
 
                 // return the DataFrame
                 Ok(Rc::new(DF {
@@ -1038,9 +1120,7 @@ impl ExecutionContext {
 
                 let project_columns: Vec<Field> = expr_to_field(&expr, &input_schema);
 
-                let project_schema = Schema {
-                    columns: project_columns,
-                };
+                let project_schema = Schema::new(project_columns);
 
                 let compiled_expr: Result<Vec<CompiledExpr>> =
                     expr.iter().map(|e| compile_scalar_expr(&self, e)).collect();
@@ -1429,6 +1509,7 @@ impl DataFrame for DF {
 }
 
 pub fn filter(column: &Value, bools: &Array) -> Array {
+    //println!("filter()");
     match column {
         &Value::Scalar(_) => unimplemented!(),
         &Value::Column(ref arr) => match bools.data() {
@@ -1511,9 +1592,11 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
                         .collect::<Vec<i64>>(),
                 ),
                 &ArrayData::Utf8(ref v) => {
+                    //println!("utf8 len = {}, bools len = {}", v.len(), b.len());
                     let mut x: Vec<String> = Vec::with_capacity(b.len() as usize);
                     for i in 0..b.len() as usize {
                         if *b.get(i) {
+                            //println!("i = {}", i);
                             x.push(String::from_utf8(v.slice(i as usize).to_vec()).unwrap());
                         }
                     }

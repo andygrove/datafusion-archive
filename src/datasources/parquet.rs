@@ -44,9 +44,9 @@ impl ParquetFile {
         let metadata = reader.metadata();
         let file_type = ParquetFile::to_arrow(metadata.file_metadata().schema());
 
-        match file_type.data_type {
+        match file_type.data_type() {
             DataType::Struct(fields) => {
-                let schema = Schema::new(fields);
+                let schema = Schema::new(fields.clone());
                 //println!("Parquet schema: {:?}", schema);
                 Ok(ParquetFile {
                     reader: reader,
@@ -91,19 +91,16 @@ impl ParquetFile {
                     basic::Type::FIXED_LEN_BYTE_ARRAY => unimplemented!("No support for Parquet FIXED_LEN_BYTE_ARRAY yet")
                 };
 
-                Field {
-                    name: basic_info.name().to_string(),
-                    data_type: arrow_type,
-                    nullable: false,
-                }
+                Field::new(basic_info.name(), arrow_type, false)
             }
-            Type::GroupType { basic_info, fields } => Field {
-                name: basic_info.name().to_string(),
-                data_type: DataType::Struct(
-                    fields.iter().map(|f| ParquetFile::to_arrow(f)).collect(),
+            Type::GroupType { basic_info, fields } => {
+                Field::new(
+                basic_info.name(),
+                DataType::Struct(
+                    fields.iter().map(|f| ParquetFile::to_arrow(f)).collect()
                 ),
-                nullable: false,
-            },
+                false)
+            }
         }
     }
 }

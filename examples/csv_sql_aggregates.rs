@@ -39,13 +39,13 @@ fn main() {
                 Field::new("employee_name", DataType::Utf8, false),
                 Field::new("job_title", DataType::Utf8, false),
                 Field::new("base_pay", DataType::Utf8, false),
-                Field::new("overtime_pay", DataType::Float64, false),
-                Field::new("other_pay", DataType::Float64, false),
-                Field::new("benefits", DataType::Float64, false),
-                Field::new("total_pay", DataType::Float64, false),
-                Field::new("total_pay_benefits", DataType::Float64, false),
+                Field::new("overtime_pay", DataType::Utf8, false),
+                Field::new("other_pay", DataType::Utf8, false),
+                Field::new("benefits", DataType::Utf8, false),
+                Field::new("total_pay", DataType::Utf8, false),
+                Field::new("total_pay_benefits", DataType::Utf8, false),
                 Field::new("year", DataType::UInt16, false),
-                Field::new("notes", DataType::Utf8, false),
+                Field::new("notes", DataType::Utf8, true),
                 Field::new("agency", DataType::Utf8, false),
                 Field::new("satus", DataType::Utf8, false),
             ]);
@@ -59,8 +59,8 @@ fn main() {
             // define the SQL statement
             let sql = "SELECT MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
                             FROM salaries \
-                            WHERE base_pay != 'Not Provided' \
-                            AND base_pay != ''";
+                            WHERE base_pay != 'Not Provided'";
+                            //AND base_pay != ''";
 
             // create a data frame
             let df = ctx.sql(&sql).unwrap();

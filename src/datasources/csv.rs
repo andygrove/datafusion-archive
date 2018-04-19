@@ -96,10 +96,10 @@ impl DataSource for CsvFile {
         }
 
         let columns: Vec<Rc<Value>> = self.schema
-            .columns
+            .columns()
             .iter()
             .enumerate()
-            .map(|(i, c)| match c.data_type {
+            .map(|(i, c)| match c.data_type() {
                 DataType::Boolean => collect_column!(rows, i, bool, rows.len(), false),
                 DataType::Int8 => collect_column!(rows, i, i8, rows.len(), 0),
                 DataType::Int16 => collect_column!(rows, i, i16, rows.len(), 0),
@@ -118,9 +118,10 @@ impl DataSource for CsvFile {
                         let s = row.get(i).unwrap_or("").to_string();
                         builder.push(s.as_bytes());
                     });
+                    let buffer = builder.finish();
                     Rc::new(Value::Column(Rc::new(Array::new(
                         rows.len(),
-                        ArrayData::Utf8(builder.finish()),
+                        ArrayData::Utf8(buffer),
                     ))))
                 }
                 _ => unimplemented!(),

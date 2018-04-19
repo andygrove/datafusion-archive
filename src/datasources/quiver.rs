@@ -70,10 +70,10 @@ where
     pub fn write_schema(&mut self, schema: &Schema) -> Result<()> {
         // write number of fields
         self.w
-            .write_i32::<LittleEndian>(schema.columns.len() as i32)?;
+            .write_i32::<LittleEndian>(schema.columns().len() as i32)?;
         // write field descriptors
-        for field in &schema.columns {
-            self.write_field(field)?;
+        for field in schema.columns().iter() {
+            self.write_field(&field)?;
         }
 
         Ok(())
@@ -81,10 +81,10 @@ where
 
     fn write_field(&mut self, field: &Field) -> Result<()> {
         // write field name
-        self.w.write_i32::<LittleEndian>(field.name.len() as i32)?;
-        self.w.write_all(field.name.as_bytes())?;
+        self.w.write_i32::<LittleEndian>(field.name().len() as i32)?;
+        self.w.write_all(field.name().as_bytes())?;
         // write data type
-        match field.data_type {
+        match field.data_type() {
             DataType::Boolean => self.w.write_u8(TYPE_ID_BOOL)?,
             DataType::UInt8 => self.w.write_u8(TYPE_ID_UINT8)?,
             DataType::UInt16 => self.w.write_u8(TYPE_ID_UINT16)?,
@@ -123,7 +123,7 @@ where
 
     fn write_array(&mut self, a: &Array) -> Result<()> {
         // write array length as i32
-        self.w.write_i32::<LittleEndian>(a.len)?;
+        self.w.write_i32::<LittleEndian>(a.len() as i32)?;
         // write the data
         match a.data() {
             ArrayData::Boolean(buf) => {
@@ -194,12 +194,12 @@ where
             }
             ArrayData::Utf8(ref list) => {
                 self.w.write_u8(TYPE_ID_UTF8)?;
-                self.w.write_i32::<LittleEndian>(list.offsets.len())?;
-                for v in list.offsets.iter() {
+                self.w.write_i32::<LittleEndian>(list.offsets().len())?;
+                for v in list.offsets().iter() {
                     self.w.write_i32::<LittleEndian>(v)?;
                 }
-                self.w.write_i32::<LittleEndian>(list.data.len())?;
-                for v in list.data.iter() {
+                self.w.write_i32::<LittleEndian>(list.data().len())?;
+                for v in list.data().iter() {
                     self.w.write_u8(v)?;
                 }
             }
@@ -407,13 +407,8 @@ where
                 data_builder.push(self.r.read_u8()?);
             }
             let data = data_builder.finish();
-            let list = List { data, offsets };
-            Array {
-                len: (offsets_count - 1) as i32,
-                data: ArrayData::Utf8(list),
-                null_count: 0,
-                validity_bitmap: None,
-            }
+            let list = List::from_raw_parts(data, offsets);
+            Array::new(offsets_count - 1, ArrayData::Utf8(list))
         } else if type_id == TYPE_ID_STRUCT {
             println!("Reading STRUCT");
             let array_count = self.r.read_i32::<LittleEndian>()? as usize;
@@ -488,7 +483,7 @@ mod tests {
         let file = File::open("_uk_cities.quiver").unwrap();
         let mut r = QuiverReader::new(file);
         let schema = r.read_schema().unwrap();
-        assert_eq!(3, schema.columns.len());
+        assert_eq!(3, schema.columns().len());
 
         let data = r.read_row_group().unwrap();
         assert_eq!(3, data.len());
