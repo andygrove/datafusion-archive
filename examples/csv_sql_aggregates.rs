@@ -23,7 +23,6 @@ use datafusion::exec::*;
 use datafusion::functions::conversions::*;
 
 fn main() {
-
     // download data file from https://www.kaggle.com/kaggle/sf-salaries/discussion/18736
     let path = "datasets/Salaries.csv";
     match File::open(path) {
@@ -68,5 +67,4 @@ fn main() {
         }
         _ => println!("Could not locate {} - try downloading it from https://www.kaggle.com/kaggle/sf-salaries/discussion/18736", path)
     }
-
 }

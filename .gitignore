@@ -15,3 +15,8 @@ Cargo.lock
 # test output
 _*.csv
 _*.txt
+_*.quiver
+temp
+
+# test data
+datasets

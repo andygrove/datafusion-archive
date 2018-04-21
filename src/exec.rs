@@ -41,6 +41,7 @@ use super::datasources::common::*;
 use super::datasources::csv::*;
 use super::datasources::parquet::*;
 use super::errors::*;
+use super::functions::count::*;
 use super::functions::max::*;
 use super::functions::min::*;
 use super::logical::*;
@@ -356,6 +357,7 @@ pub fn compile_expr(
             let func = match name.to_lowercase().as_ref() {
                 "min" => AggregateType::Min,
                 "max" => AggregateType::Max,
+                "count" => AggregateType::Count,
                 _ => unimplemented!("Unsupported aggregate function '{}'", name),
             };
 
@@ -654,6 +656,8 @@ pub struct AggregateRelation {
     input: Box<SimpleRelation>,
     group_expr: Vec<CompiledExpr>,
     aggr_expr: Vec<RuntimeExpr>,
+    //map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>>
+
 }
 
 struct AggregateEntry {
@@ -661,12 +665,91 @@ struct AggregateEntry {
     aggr_values: Vec<Box<AggregateFunction>>,
 }
 
+impl AggregateRelation {
+
+    fn new(schema: Rc<Schema>,
+           input: Box<SimpleRelation>,
+           group_expr: Vec<CompiledExpr>,
+           aggr_expr: Vec<RuntimeExpr>) -> Self {
+
+        AggregateRelation {
+            schema,
+            input,
+            group_expr,
+            aggr_expr,
+  //          map: HashMap::new()
+        }
+    }
+}
+
+/// Make a hash map key from a list of values
+fn make_key(group_values: &Vec<Rc<Value>>, i: usize) -> Vec<String> {
+    group_values
+        .iter()
+        .map(|v| match v.as_ref() {
+            Value::Scalar(ref vv) => format!("{:?}", vv),
+            Value::Column(ref array) => match array.data() {
+                ArrayData::Boolean(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::Int8(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::Int16(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::Int32(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::Int64(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::UInt8(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::UInt16(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::UInt32(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::UInt64(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::Float32(ref buf) => format!("{:?}", buf.get(i)),
+                ArrayData::Float64(ref buf) => format!("{:?}", buf.get(i)),
+                //TODO: String
+                _ => unimplemented!(
+                    "Unsupported datatype for aggregate grouping expression"
+                ),
+            },
+        })
+        .collect()
+}
+
+/// Create an initial aggregate entry
+fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
+    let functions = aggr_expr
+        .iter()
+        .map(|e| match e {
+            RuntimeExpr::AggregateFunction {
+                ref func,
+                ref return_type,
+                ..
+            } => match func {
+                AggregateType::Min => {
+                    Box::new(MinFunction::new(return_type))
+                        as Box<AggregateFunction>
+                }
+                AggregateType::Max => {
+                    Box::new(MaxFunction::new(return_type))
+                        as Box<AggregateFunction>
+                }
+                AggregateType::Count => {
+                    Box::new(CountFunction::new(return_type))
+                        as Box<AggregateFunction>
+                }
+                _ => panic!(),
+            },
+            _ => panic!(),
+        })
+        .collect();
+
+    Rc::new(RefCell::new(AggregateEntry {
+        group_values: vec![],
+        aggr_values: functions,
+    }))
+
+}
+
 impl SimpleRelation for AggregateRelation {
     fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-        let mut map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
 
         let aggr_expr = &self.aggr_expr;
         let group_expr = &self.group_expr;
+        let mut map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
 
         //println!("There are {} aggregate expressions", aggr_expr.len());
 
@@ -675,15 +758,17 @@ impl SimpleRelation for AggregateRelation {
                 Ok(ref b) => {
                     // println!("Processing aggregates for batch with {} rows", b.num_rows());
 
-                    let mut aggr_col_args: Vec<Vec<Rc<Value>>> = vec![];
+                    // evaluate the single argument to each aggregate function
+                    let mut aggr_col_args: Vec<Vec<Rc<Value>>> = Vec::with_capacity(aggr_expr.len());
                     for i in 0..aggr_expr.len() {
                         match aggr_expr[i] {
                             RuntimeExpr::AggregateFunction { ref args, .. } => {
                                 // arguments to the aggregate function
-                                let aggr_func_args: Result<
-                                    Vec<Rc<Value>>,
-                                > = args.iter().map(|e| (*e)(b.as_ref())).collect();
+                                let aggr_func_args: Result<Vec<Rc<Value>>> = args.iter()
+                                    .map(|e| (*e)(b.as_ref()))
+                                    .collect();
 
+                                // push the column onto the vector
                                 aggr_col_args.push(aggr_func_args.unwrap());
                             }
                             _ => panic!(),
@@ -696,73 +781,13 @@ impl SimpleRelation for AggregateRelation {
 
                     let group_values: Vec<Rc<Value>> = group_values_result.unwrap(); //TODO
 
-                    for i in 0..b.num_rows() {
-                        //print!(".");
+                    if group_values.len() == 0 {
+                        // aggregate columns directly
 
-                        // create a key for use in the HashMap for this grouping (could be empty
-                        // if there is no GROUP BY)
-                        let key: Vec<String> = group_values
-                            .iter()
-                            .map(|v| match v.as_ref() {
-                                Value::Scalar(ref vv) => format!("{:?}", vv),
-                                Value::Column(ref array) => match array.data() {
-                                    ArrayData::Boolean(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::Int8(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::Int16(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::Int32(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::Int64(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::UInt8(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::UInt16(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::UInt32(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::UInt64(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::Float32(ref buf) => format!("{:?}", buf.get(i)),
-                                    ArrayData::Float64(ref buf) => format!("{:?}", buf.get(i)),
-                                    //TODO: String
-                                    _ => unimplemented!(
-                                        "Unsupported datatype for aggregate grouping expression"
-                                    ),
-                                },
-                            })
-                            .collect();
+                        let key: Vec<String> = Vec::with_capacity(0);
 
-                        //println!("key: {:?}", key);
-
-                        // initialize all the aggregate functions
-
-                        //print!(".");
-
-                        let entry = map.entry(key).or_insert_with(|| {
-                            //println!("New map entry");
-
-                            let functions: Vec<Box<AggregateFunction>> = aggr_expr
-                                .iter()
-                                .map(|e| match e {
-                                    RuntimeExpr::AggregateFunction {
-                                        ref func,
-                                        ref return_type,
-                                        ..
-                                    } => match func {
-                                        AggregateType::Min => {
-                                            Box::new(MinFunction::new(return_type))
-                                                as Box<AggregateFunction>
-                                        }
-                                        AggregateType::Max => {
-                                            Box::new(MaxFunction::new(return_type))
-                                                as Box<AggregateFunction>
-                                        }
-                                        _ => panic!(),
-                                    },
-                                    _ => panic!(),
-                                })
-                                .collect();
-
-                            Rc::new(RefCell::new(AggregateEntry {
-                                group_values: vec![],
-                                aggr_values: functions,
-                            }))
-                        });
-
-                        //print!(".");
+                        let entry = map.entry(key)
+                            .or_insert_with(|| create_aggregate_entry(aggr_expr));
                         let mut entry_mut = entry.borrow_mut();
 
                         for i in 0..aggr_expr.len() {
@@ -775,7 +800,28 @@ impl SimpleRelation for AggregateRelation {
                                 _ => panic!(),
                             }
                         }
-                        //                        println!("!");
+
+                    } else {
+
+                        // expensive row-based aggregation by group
+                        for i in 0..b.num_rows() {
+                            let key = make_key(&group_values, i);
+
+                            let entry = map.entry(key)
+                                .or_insert_with(|| create_aggregate_entry(aggr_expr));
+                            let mut entry_mut = entry.borrow_mut();
+
+                            for i in 0..aggr_expr.len() {
+                                match aggr_expr[i] {
+                                    RuntimeExpr::AggregateFunction { ref args, .. } => {
+                                        (*entry_mut).aggr_values[i]
+                                            .execute(&aggr_col_args[i]) //TODO: pass scalar value not column
+                                            .unwrap();
+                                    }
+                                    _ => panic!(),
+                                }
+                            }
+                        }
                     }
                 }
                 Err(e) => panic!("Error aggregating batch: {:?}", e),
@@ -825,6 +871,7 @@ impl SimpleRelation for AggregateRelation {
                         for v in &result_columns[i] {
                             match v {
                                 ScalarValue::Float64(vv) => b.push(*vv),
+                                ScalarValue::UInt64(vv) => b.push(*vv as f64), // hack for testing
                                 _ => panic!("type mismatch"),
                             }
                         }
@@ -1170,12 +1217,11 @@ impl ExecutionContext {
                     .collect();
                 let compiled_aggr_expr = compiled_aggr_expr_result?;
 
-                let rel = AggregateRelation {
-                    schema: Rc::new(Schema::empty()), //(expr_to_field(&compiled_group_expr, &input_schema))),
-                    input: input_rel,
-                    group_expr: compiled_group_expr,
-                    aggr_expr: compiled_aggr_expr,
-                };
+                let rel = AggregateRelation::new(
+                    Rc::new(Schema::empty()), //(expr_to_field(&compiled_group_expr, &input_schema))),
+                    input_rel,
+                    compiled_group_expr,
+                    compiled_aggr_expr);
 
                 Ok(Box::new(rel))
             }
