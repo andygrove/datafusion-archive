@@ -87,18 +87,34 @@ impl SqlToRel {
                     .collect();
 
                 if aggr_expr.len() > 0 {
-                    let aggr_schema = Schema::new(expr_to_field(&aggr_expr, input_schema));
+
 
                     let aggregate_input: Rc<LogicalPlan> = match selection_plan {
                         Some(s) => Rc::new(s),
                         _ => input.clone(),
                     };
 
+                    let group_expr: Vec<Expr> = match group_by {
+                        Some(gbe) => gbe
+                        .iter()
+                        .map(|e| self.sql_to_rex(&e, &input_schema))
+                        .collect::<Result<Vec<Expr>, String>>()?,
+                        None => vec![]
+                    };
+                    //println!("GROUP BY: {:?}", group_expr);
+
+                    let mut all_fields: Vec<Expr> = group_expr.clone();
+                    aggr_expr.iter().for_each(|x| all_fields.push(x.clone()));
+
+                    let aggr_schema = Schema::new(expr_to_field(&all_fields, input_schema));
+
+
+
                     //TODO: selection, projection, everything else
                     Ok(Rc::new(LogicalPlan::Aggregate {
                         input: aggregate_input,
-                        group_expr: Vec::new(),
-                        aggr_expr: aggr_expr,
+                        group_expr,
+                        aggr_expr,
                         schema: Rc::new(aggr_schema),
                     }))
                 } else {

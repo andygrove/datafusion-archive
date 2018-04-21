@@ -55,9 +55,14 @@ fn main() {
             ctx.register("salaries", salaries);
 
             // define the SQL statement
-            let sql = "SELECT MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
+            let sql = "SELECT year, MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
                             FROM salaries \
-                            WHERE base_pay != 'Not Provided' AND base_pay != ''";
+                            WHERE base_pay != 'Not Provided' AND base_pay != '' \
+                            GROUP BY year";
+
+//            let sql = "SELECT MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
+//                            FROM salaries \
+//                            WHERE base_pay != 'Not Provided' AND base_pay != ''";
 
             // create a data frame
             let df = ctx.sql(&sql).unwrap();

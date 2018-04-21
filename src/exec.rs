@@ -711,6 +711,9 @@ fn make_key(group_values: &Vec<Rc<Value>>, i: usize) -> Vec<String> {
 
 /// Create an initial aggregate entry
 fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
+
+    println!("Creating new aggregate entry");
+
     let functions = aggr_expr
         .iter()
         .map(|e| match e {
@@ -806,6 +809,7 @@ impl SimpleRelation for AggregateRelation {
                         // expensive row-based aggregation by group
                         for i in 0..b.num_rows() {
                             let key = make_key(&group_values, i);
+                            //println!("key = {:?}", key);
 
                             let entry = map.entry(key)
                                 .or_insert_with(|| create_aggregate_entry(aggr_expr));
@@ -830,13 +834,19 @@ impl SimpleRelation for AggregateRelation {
 
         //        println!("Preparing results");
 
-        let mut result_columns: Vec<Vec<ScalarValue>> = Vec::new();
+        let mut result_columns: Vec<Vec<ScalarValue>> = Vec::with_capacity(group_expr.len() + aggr_expr.len());
+        for _ in 0..group_expr.len() {
+            result_columns.push(Vec::new());
+        }
         for _ in 0..aggr_expr.len() {
             result_columns.push(Vec::new());
         }
 
         for (k, v) in map.iter() {
-            //TODO: include group by key in result set, if there is one
+
+            for col_index in 0..k.len() {
+                result_columns[col_index].push(ScalarValue::Utf8(k[col_index].clone()));
+            }
 
             let g: Vec<Rc<Value>> = v.borrow()
                 .aggr_values
@@ -847,7 +857,7 @@ impl SimpleRelation for AggregateRelation {
             //            println!("aggregate entry: {:?}", g);
 
             for col_index in 0..g.len() {
-                result_columns[col_index].push(match g[col_index].as_ref() {
+                result_columns[col_index + group_expr.len()].push(match g[col_index].as_ref() {
                     Value::Scalar(ref v) => v.as_ref().clone(),
                     _ => panic!(),
                 });
@@ -872,7 +882,7 @@ impl SimpleRelation for AggregateRelation {
                             match v {
                                 ScalarValue::Float64(vv) => b.push(*vv),
                                 ScalarValue::UInt64(vv) => b.push(*vv as f64), // hack for testing
-                                _ => panic!("type mismatch"),
+                                _ => panic!("type mismatch: {:?}", v),
                             }
                         }
                         aggr_batch
