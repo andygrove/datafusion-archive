@@ -64,14 +64,12 @@ impl SqlToRel {
 
                 // selection first
                 let selection_plan = match selection {
-                    &Some(ref filter_expr) => {
-                        Some(LogicalPlan::Selection {
-                            expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
-                            input: input.clone(),
-                            schema: input_schema.clone(),
-                        })
-                    }
-                    _ => None
+                    &Some(ref filter_expr) => Some(LogicalPlan::Selection {
+                        expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
+                        input: input.clone(),
+                        schema: input_schema.clone(),
+                    }),
+                    _ => None,
                 };
 
                 let expr: Vec<Expr> = projection
@@ -93,7 +91,7 @@ impl SqlToRel {
 
                     let aggregate_input: Rc<LogicalPlan> = match selection_plan {
                         Some(s) => Rc::new(s),
-                        _ => input.clone()
+                        _ => input.clone(),
                     };
 
                     //TODO: selection, projection, everything else
@@ -103,17 +101,14 @@ impl SqlToRel {
                         aggr_expr: aggr_expr,
                         schema: Rc::new(aggr_schema),
                     }))
-
-
                 } else {
                     let projection_input: Rc<LogicalPlan> = match selection_plan {
                         Some(s) => Rc::new(s),
-                        _ => input.clone()
+                        _ => input.clone(),
                     };
 
-                    let projection_schema = Rc::new(Schema::new(
-                        expr_to_field(&expr, input_schema.as_ref())
-                    ));
+                    let projection_schema =
+                        Rc::new(Schema::new(expr_to_field(&expr, input_schema.as_ref())));
 
                     let projection = LogicalPlan::Projection {
                         expr: expr,
@@ -219,7 +214,7 @@ impl SqlToRel {
                     &SQLOperator::Divide => Operator::Divide,
                     &SQLOperator::Modulus => Operator::Modulus,
                     &SQLOperator::And => Operator::And,
-                    &SQLOperator::Or=> Operator::Or,
+                    &SQLOperator::Or => Operator::Or,
                 };
                 Ok(Expr::BinaryExpr {
                     left: Rc::new(self.sql_to_rex(&left, &schema)?),
@@ -285,12 +280,12 @@ pub fn expr_to_field(expr: &Vec<Expr>, input_schema: &Schema) -> Vec<Field> {
             &Expr::ScalarFunction { ref name, .. } => Field::new(
                 name,
                 DataType::Float64, //TODO: hard-coded until I have function metadata in place
-                true
+                true,
             ),
             &Expr::AggregateFunction { ref name, .. } => Field::new(
                 name,
                 DataType::Float64, //TODO: hard-coded until I have function metadata in place
-                true
+                true,
             ),
             _ => unimplemented!(),
         })

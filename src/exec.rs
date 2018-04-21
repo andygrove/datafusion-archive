@@ -40,6 +40,7 @@ use arrow::datatypes::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
 use super::datasources::parquet::*;
+use super::errors::*;
 use super::functions::max::*;
 use super::functions::min::*;
 use super::logical::*;
@@ -48,8 +49,6 @@ use super::sqlparser::*;
 use super::sqlplanner::*;
 use super::types::*;
 //use super::cluster::*;
-
-pub type Result<T> = result::Result<T, ExecutionError>;
 
 #[derive(Debug, Clone)]
 pub enum DFConfig {
@@ -117,7 +116,7 @@ macro_rules! compare_arrays_inner {
             (&ArrayData::Int64(ref a), &ArrayData::Int64(ref b)) =>
                 Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
             //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
-            _ => Err(ExecutionError::Custom("Unsupported types in compare_arrays_inner".to_string()))
+            _ => Err(ExecutionError::General("Unsupported types in compare_arrays_inner".to_string()))
         }
     }
 }
@@ -139,7 +138,7 @@ macro_rules! compare_array_with_scalar_inner {
             (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => {
                 Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
             }
-            _ => Err(ExecutionError::Custom(
+            _ => Err(ExecutionError::General(
                 "Unsupported types in compare_array_with_scalar_inner".to_string(),
             )),
         }
@@ -160,18 +159,16 @@ impl Value {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa == bb)
             }
-            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
-                match (v1.data(), v2.as_ref()) {
-                    (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
-                        let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
-                        for i in 0..list.len() as usize {
-                            v.push(list.slice(i) == b.as_bytes());
-                        }
-                        Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
+                (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
+                    let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
+                    for i in 0..list.len() as usize {
+                        v.push(list.slice(i) == b.as_bytes());
                     }
-                    _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb)
+                    Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
                 }
-            }
+                _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb),
+            },
             (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
                 compare_array_with_scalar!(v2, v1, |(aa, bb)| aa == bb)
             }
@@ -184,24 +181,20 @@ impl Value {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa != bb)
             }
-            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
-                match (v1.data(), v2.as_ref()) {
-                    (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
-                        let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
-                        for i in 0..list.len() as usize {
-                            v.push(list.slice(i) != b.as_bytes());
-                        }
-                        Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
+                (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
+                    let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
+                    for i in 0..list.len() as usize {
+                        v.push(list.slice(i) != b.as_bytes());
                     }
-                    _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb)
+                    Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
                 }
-            }
+                _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb),
+            },
             (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
                 compare_array_with_scalar!(v2, v1, |(aa, bb)| aa != bb)
             }
-            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => {
-                unimplemented!()
-            },
+            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
         }
     }
 
@@ -283,30 +276,31 @@ impl Value {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 match (v1.data(), v2.data()) {
                     (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
-                        let bools = l.iter().zip(r.iter()).map(|(ll, rr)| ll && rr).collect::<Vec<bool>>();
-//                        println!("AND: left = {:?}", l.iter().collect::<Vec<bool>>());
-//                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
-//                        println!("AND: bools = {:?}", bools);
+                        let bools = l.iter()
+                            .zip(r.iter())
+                            .map(|(ll, rr)| ll && rr)
+                            .collect::<Vec<bool>>();
+                        //                        println!("AND: left = {:?}", l.iter().collect::<Vec<bool>>());
+                        //                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
+                        //                        println!("AND: bools = {:?}", bools);
                         let bools = Array::from(bools);
                         Ok(Rc::new(Value::Column(Rc::new(bools))))
-                    },
-                    _ => panic!()
+                    }
+                    _ => panic!(),
                 }
             }
-            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
-                match (v1.data(), v2.as_ref()) {
-                    (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
-                        let bools = Array::from(l.iter().map(|ll| ll && *r).collect::<Vec<bool>>());
-                        Ok(Rc::new(Value::Column(Rc::new(bools))))
-                    },
-                    _ => panic!()
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
+                (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
+                    let bools = Array::from(l.iter().map(|ll| ll && *r).collect::<Vec<bool>>());
+                    Ok(Rc::new(Value::Column(Rc::new(bools))))
                 }
-            }
-//            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
-//                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa && bb)
-//            }
-//            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
-            _ => panic!()
+                _ => panic!(),
+            },
+            //            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+            //                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa && bb)
+            //            }
+            //            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
+            _ => panic!(),
         }
     }
 
@@ -353,7 +347,7 @@ pub fn compile_expr(
                     //TODO: fix this hack
                     DataType::Float64
                     //panic!("Aggregate expressions currently only support simple arguments")
-                },
+                }
             };
 
             let compiled_args: Result<Vec<CompiledExpr>> =
@@ -458,7 +452,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
                     left_values.or(&right_values)
                 })),
                 _ => {
-                    return Err(ExecutionError::Custom(format!(
+                    return Err(ExecutionError::General(format!(
                         "Unsupported binary operator '{:?}'",
                         op
                     )))
@@ -573,10 +567,9 @@ impl SimpleRelation for FilterRelation {
         Box::new(self.input.scan().map(move |b| {
             match b {
                 Ok(ref batch) => {
-
                     //println!("FilterRelation batch {} rows", batch.num_rows());
 
-                    assert!(batch.num_rows()>0);
+                    assert!(batch.num_rows() > 0);
                     // evaluate the filter expression for every row in the batch
                     let x = (*filter_expr)(batch.as_ref())?;
                     match x.as_ref() {
@@ -632,7 +625,6 @@ impl SimpleRelation for ProjectRelation {
 
         let projection_iter = self.input.scan().map(move |r| match r {
             Ok(ref batch) => {
-
                 println!("ProjectRelation batch {} rows", batch.num_rows());
 
                 let projected_columns: Result<Vec<Rc<Value>>> =
@@ -681,33 +673,30 @@ impl SimpleRelation for AggregateRelation {
         self.input.scan().for_each(|batch| {
             match batch {
                 Ok(ref b) => {
-
-                   // println!("Processing aggregates for batch with {} rows", b.num_rows());
+                    // println!("Processing aggregates for batch with {} rows", b.num_rows());
 
                     let mut aggr_col_args: Vec<Vec<Rc<Value>>> = vec![];
                     for i in 0..aggr_expr.len() {
                         match aggr_expr[i] {
                             RuntimeExpr::AggregateFunction { ref args, .. } => {
-
                                 // arguments to the aggregate function
-                                let aggr_func_args: Result<Vec<Rc<Value>>> = args.iter()
-                                    .map(|e| (*e)(b.as_ref()))
-                                    .collect();
+                                let aggr_func_args: Result<
+                                    Vec<Rc<Value>>,
+                                > = args.iter().map(|e| (*e)(b.as_ref())).collect();
 
                                 aggr_col_args.push(aggr_func_args.unwrap());
                             }
-                            _ => panic!()
+                            _ => panic!(),
                         }
                     }
 
-                                // evaluate the grouping expressions
+                    // evaluate the grouping expressions
                     let group_values_result: Result<Vec<Rc<Value>>> =
                         group_expr.iter().map(|e| (*e)(b.as_ref())).collect();
 
                     let group_values: Vec<Rc<Value>> = group_values_result.unwrap(); //TODO
 
                     for i in 0..b.num_rows() {
-
                         //print!(".");
 
                         // create a key for use in the HashMap for this grouping (could be empty
@@ -743,7 +732,6 @@ impl SimpleRelation for AggregateRelation {
                         //print!(".");
 
                         let entry = map.entry(key).or_insert_with(|| {
-
                             //println!("New map entry");
 
                             let functions: Vec<Box<AggregateFunction>> = aggr_expr
@@ -754,10 +742,14 @@ impl SimpleRelation for AggregateRelation {
                                         ref return_type,
                                         ..
                                     } => match func {
-                                        AggregateType::Min => Box::new(MinFunction::new(return_type))
-                                            as Box<AggregateFunction>,
-                                        AggregateType::Max => Box::new(MaxFunction::new(return_type))
-                                            as Box<AggregateFunction>,
+                                        AggregateType::Min => {
+                                            Box::new(MinFunction::new(return_type))
+                                                as Box<AggregateFunction>
+                                        }
+                                        AggregateType::Max => {
+                                            Box::new(MaxFunction::new(return_type))
+                                                as Box<AggregateFunction>
+                                        }
                                         _ => panic!(),
                                     },
                                     _ => panic!(),
@@ -783,14 +775,14 @@ impl SimpleRelation for AggregateRelation {
                                 _ => panic!(),
                             }
                         }
-//                        println!("!");
+                        //                        println!("!");
                     }
                 }
                 Err(e) => panic!("Error aggregating batch: {:?}", e),
             }
         });
 
-//        println!("Preparing results");
+        //        println!("Preparing results");
 
         let mut result_columns: Vec<Vec<ScalarValue>> = Vec::new();
         for _ in 0..aggr_expr.len() {
@@ -806,7 +798,7 @@ impl SimpleRelation for AggregateRelation {
                 .map(|v| v.finish().unwrap())
                 .collect();
 
-//            println!("aggregate entry: {:?}", g);
+            //            println!("aggregate entry: {:?}", g);
 
             for col_index in 0..g.len() {
                 result_columns[col_index].push(match g[col_index].as_ref() {
@@ -1072,7 +1064,7 @@ impl ExecutionContext {
         //println!("Logical plan: {:?}", plan);
 
         match *plan {
-            LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::Custom(String::from(
+            LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::General(String::from(
                 "empty relation is not implemented yet",
             ))),
 
@@ -1082,7 +1074,7 @@ impl ExecutionContext {
                 //println!("TableScan: {}", table_name);
                 match self.tables.borrow().get(table_name) {
                     Some(df) => df.create_execution_plan(),
-                    _ => Err(ExecutionError::Custom(format!(
+                    _ => Err(ExecutionError::General(format!(
                         "No table registered as '{}'",
                         table_name
                     ))),
@@ -1232,7 +1224,7 @@ impl ExecutionContext {
     fn load_scalar_function(&self, function_name: &str) -> Result<Rc<ScalarFunction>> {
         match self.functions.borrow().get(&function_name.to_lowercase()) {
             Some(f) => Ok(f.clone()),
-            _ => Err(ExecutionError::Custom(format!(
+            _ => Err(ExecutionError::General(format!(
                 "Unknown scalar function {}",
                 function_name
             ))),
@@ -1246,7 +1238,7 @@ impl ExecutionContext {
     //    ) -> Result<Rc<AggregateFunction>> {
     //        match self.aggregate_functions.borrow().get(&function_name.to_lowercase()) {
     //            Some(f) => Ok(f.clone()),
-    //            _ => Err(ExecutionError::Custom(format!(
+    //            _ => Err(>ExecutionError::General(format!(
     //                "Unknown aggregate function {}",
     //                function_name
     //            ))),
@@ -1292,7 +1284,10 @@ impl ExecutionContext {
                 //TODO error handling
                 match self.execute_local(physical_plan) {
                     Ok(r) => Ok(r),
-                    Err(e) => Err(ExecutionError::Custom(format!("execution failed: {:?}", e))),
+                    Err(e) => Err(ExecutionError::General(format!(
+                        "execution failed: {:?}",
+                        e
+                    ))),
                 }
             }
             &DFConfig::Remote { ref etcd } => self.execute_remote(physical_plan, etcd.clone()),
@@ -1304,7 +1299,7 @@ impl ExecutionContext {
 
         match physical_plan {
             &PhysicalPlan::Interactive { .. } => {
-                Err(ExecutionError::Custom(format!("not implemented")))
+                Err(ExecutionError::General(format!("not implemented")))
             }
             &PhysicalPlan::Write {
                 ref plan,
@@ -1408,7 +1403,7 @@ impl ExecutionContext {
         _physical_plan: &PhysicalPlan,
         _etcd: String,
     ) -> Result<ExecutionResult> {
-        Err(ExecutionError::Custom(format!(
+        Err(ExecutionError::General(format!(
             "Remote execution needs re-implementing since moving to Arrow"
         )))
     }
@@ -1444,19 +1439,19 @@ impl ExecutionContext {
     //                                        //println!("{}", result);
     //                                        Ok(ExecutionResult::Unit)
     //                                    }
-    //                                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+    //                                    Err(e) => Err(>ExecutionError::General(format!("error: {}", e)))
     //                                }
     //                            }
-    //                            Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+    //                            Err(e) => Err(>ExecutionError::General(format!("error: {}", e)))
     //                        }
     //
     //
     //                    }
-    //                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+    //                    Err(e) => Err(>ExecutionError::General(format!("error: {}", e)))
     //                }
     //            }
-    //            Ok(_) => Err(ExecutionError::Custom(format!("No workers found in cluster"))),
-    //            Err(e) => Err(ExecutionError::Custom(format!("Failed to find a worker node: {}", e)))
+    //            Ok(_) => Err(>ExecutionError::General(format!("No workers found in cluster"))),
+    //            Err(e) => Err(>ExecutionError::General(format!("Failed to find a worker node: {}", e)))
     //        }
     //    }
 }

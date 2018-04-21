@@ -26,6 +26,7 @@ use arrow::list_builder::ListBuilder;
 use csv;
 use csv::{StringRecord, StringRecordsIntoIter};
 
+use super::super::errors::*;
 use super::super::types::*;
 use super::common::*;
 
@@ -36,7 +37,7 @@ pub struct CsvFile {
 }
 
 impl CsvFile {
-    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool) -> Result<Self, ExecutionError> {
+    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool) -> Result<Self> {
         let csv_reader = csv::ReaderBuilder::new()
             .has_headers(has_headers)
             .from_reader(BufReader::new(file));
@@ -61,13 +62,19 @@ macro_rules! collect_column {
             b.push(match $ROWS[row_index].get($COL_INDEX) {
                 Some(s) => if s.len() == 0 {
                     $DEFAULT_VALUE
-                } else { 
+                } else {
                     match s.parse::<$TY>() {
                         Ok(v) => v,
-                        Err(e) => panic!("Failed to parse value '{}' as {} at batch row {} column {}: {:?}",
-                        s, stringify!($TY), row_index, $COL_INDEX, e)
+                        Err(e) => panic!(
+                            "Failed to parse value '{}' as {} at batch row {} column {}: {:?}",
+                            s,
+                            stringify!($TY),
+                            row_index,
+                            $COL_INDEX,
+                            e
+                        ),
                     }
-                }
+                },
                 None => panic!(
                     "CSV file missing value at batch  row {}, column {}",
                     row_index, $COL_INDEX
@@ -79,7 +86,7 @@ macro_rules! collect_column {
 }
 
 impl DataSource for CsvFile {
-    fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>> {
+    fn next(&mut self) -> Option<Result<Rc<RecordBatch>>> {
         // read a batch of rows into memory
         let mut rows: Vec<StringRecord> = Vec::with_capacity(self.batch_size);
         for _ in 0..self.batch_size {

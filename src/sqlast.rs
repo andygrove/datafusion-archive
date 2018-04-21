@@ -88,5 +88,5 @@ pub enum SQLOperator {
     Eq,
     NotEq,
     And,
-    Or
+    Or,
 }

@@ -18,10 +18,12 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::io::Error;
 use std::rc::Rc;
+use std::result;
 
 use arrow::array::Array;
 use arrow::datatypes::{DataType, Field};
 
+use super::errors::*;
 use super::sqlparser::ParserError;
 
 /// ScalarValue enumeration
@@ -45,10 +47,10 @@ pub enum ScalarValue {
 
 macro_rules! primitive_accessor {
     ($NAME:ident, $VARIANT:ident, $TY:ty) => {
-        pub fn $NAME(&self) -> Result<$TY, ()> {
+        pub fn $NAME(&self) -> Result<$TY> {
             match *self {
                 ScalarValue::$VARIANT(v) => Ok(v),
-                _ => Err(())
+                _ => Err(df_error!("type mismatch".to_string()))
             }
         }
     }
@@ -67,17 +69,17 @@ impl ScalarValue {
     primitive_accessor!(get_f32, Float32, f32);
     primitive_accessor!(get_f64, Float64, f64);
 
-    pub fn get_string(&self) -> Result<&String, ()> {
+    pub fn get_string(&self) -> Result<&String> {
         match *self {
             ScalarValue::Utf8(ref v) => Ok(v),
-            _ => Err(()),
+            _ => Err(df_error!("TBD")),
         }
     }
 
-    pub fn get_struct(&self) -> Result<&Vec<ScalarValue>, ()> {
+    pub fn get_struct(&self) -> Result<&Vec<ScalarValue>> {
         match *self {
             ScalarValue::Struct(ref v) => Ok(v),
-            _ => Err(()),
+            _ => Err(df_error!("TBD")),
         }
     }
 }
@@ -118,7 +120,7 @@ pub enum Value {
 }
 
 impl fmt::Debug for Value {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> result::Result<(), fmt::Error> {
         match self {
             Value::Scalar(v) => write!(f, "{:?}", v)?,
             _ => write!(f, "???")?,
@@ -132,7 +134,7 @@ pub trait ScalarFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError>;
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>>;
 }
 
 /// Aggregate function
@@ -140,33 +142,6 @@ pub trait AggregateFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<(), ExecutionError>;
-    fn finish(&self) -> Result<Rc<Value>, ExecutionError>;
-}
-
-#[derive(Debug)]
-pub enum ExecutionError {
-    IoError(Error),
-    ParserError(ParserError),
-    Custom(String),
-    InvalidColumn(String),
-    NotImplemented,
-}
-
-impl From<Error> for ExecutionError {
-    fn from(e: Error) -> Self {
-        ExecutionError::IoError(e)
-    }
-}
-
-impl From<String> for ExecutionError {
-    fn from(e: String) -> Self {
-        ExecutionError::Custom(e)
-    }
-}
-
-impl From<ParserError> for ExecutionError {
-    fn from(e: ParserError) -> Self {
-        ExecutionError::ParserError(e)
-    }
+    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<()>;
+    fn finish(&self) -> Result<Rc<Value>>;
 }

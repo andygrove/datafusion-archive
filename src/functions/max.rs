@@ -16,6 +16,7 @@
 
 use std::rc::Rc;
 
+use super::super::errors::*;
 use super::super::types::*;
 
 use arrow::array::*;
@@ -48,7 +49,7 @@ impl AggregateFunction for MaxFunction {
         self.data_type.clone()
     }
 
-    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<(), ExecutionError> {
+    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<()> {
         assert_eq!(1, args.len());
         match args[0].as_ref() {
             Value::Column(ref array) => {
@@ -74,7 +75,7 @@ impl AggregateFunction for MaxFunction {
         }
     }
 
-    fn finish(&self) -> Result<Rc<Value>, ExecutionError> {
+    fn finish(&self) -> Result<Rc<Value>> {
         Ok(Rc::new(Value::Scalar(Rc::new(self.value.clone()))))
     }
 }

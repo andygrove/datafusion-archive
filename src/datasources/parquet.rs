@@ -27,6 +27,7 @@ use parquet::data_type::ByteArray;
 use parquet::file::reader::*;
 use parquet::schema::types::Type;
 
+use super::super::errors::*;
 use super::super::types::*;
 use super::common::*;
 
@@ -38,7 +39,7 @@ pub struct ParquetFile {
 }
 
 impl ParquetFile {
-    pub fn open(file: File) -> Result<Self, ExecutionError> {
+    pub fn open(file: File) -> Result<Self> {
         let reader = SerializedFileReader::new(file).unwrap();
 
         let metadata = reader.metadata();
@@ -55,7 +56,7 @@ impl ParquetFile {
                     batch_size: 1024,
                 })
             }
-            _ => Err(ExecutionError::Custom(
+            _ => Err(ExecutionError::General(
                 "Failed to read Parquet schema".to_string(),
             )),
         }
@@ -106,10 +107,12 @@ impl ParquetFile {
 }
 
 impl DataSource for ParquetFile {
-    fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>> {
+    fn next(&mut self) -> Option<Result<Rc<RecordBatch>>> {
         if self.row_index < self.reader.num_row_groups() {
             match self.reader.get_row_group(self.row_index) {
-                Err(_) => Some(Err(ExecutionError::Custom(format!("parquet reader error")))),
+                Err(_) => Some(Err(ExecutionError::General(
+                    "parquet reader error".to_string(),
+                ))),
                 Ok(row_group_reader) => {
                     self.row_index += 1;
 

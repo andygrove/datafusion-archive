@@ -17,6 +17,7 @@
 use std::rc::Rc;
 use std::str;
 
+use super::super::errors::*;
 use super::super::types::*;
 
 use arrow::array::*;
@@ -30,7 +31,7 @@ impl ScalarFunction for ToFloat64Function {
         "to_float64".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>> {
         match args[0].as_ref() {
             &Value::Column(ref arr) => match arr.data() {
                 &ArrayData::Utf8(ref v) => {
@@ -39,26 +40,31 @@ impl ScalarFunction for ToFloat64Function {
                         let x = str::from_utf8(v.slice(i)).unwrap();
                         match x.parse::<f64>() {
                             Ok(v) => b.push(v),
-                            Err(_) => return Err(ExecutionError::Custom(format!("to_float64 called with invalid value '{}'", x)))
+                            Err(_) => {
+                                return Err(ExecutionError::General(format!(
+                                    "to_float64 called with invalid value '{}'",
+                                    x
+                                )))
+                            }
                         }
                     }
                     Ok(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))))
-                },
+                }
                 //TODO: other types
-//                &ArrayData::Float64(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
-//                    v.iter().map(|v| v.sqrt()).collect::<Vec<f64>>(),
-//                ))))),
-//                &ArrayData::Int32(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
-//                    v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
-//                ))))),
-//                &ArrayData::Int64(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
-//                    v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
-//                ))))),
-                _ => Err(ExecutionError::Custom(
+                //                &ArrayData::Float64(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
+                //                    v.iter().map(|v| v.sqrt()).collect::<Vec<f64>>(),
+                //                ))))),
+                //                &ArrayData::Int32(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
+                //                    v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
+                //                ))))),
+                //                &ArrayData::Int64(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
+                //                    v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
+                //                ))))),
+                _ => Err(ExecutionError::General(
                     "Unsupported arg type for to_float".to_string(),
                 )),
             },
-            _ => Err(ExecutionError::Custom(
+            _ => Err(ExecutionError::General(
                 "Unsupported arg type for to_float".to_string(),
             )),
         }

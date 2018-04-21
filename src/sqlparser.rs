@@ -580,8 +580,10 @@ mod tests {
 
     #[test]
     fn parse_select_string_predicate() {
-        let sql = String::from("SELECT id, fname, lname FROM customer \
-        WHERE salary != 'Not Provided' AND salary != ''");
+        let sql = String::from(
+            "SELECT id, fname, lname FROM customer \
+             WHERE salary != 'Not Provided' AND salary != ''",
+        );
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);

@@ -147,8 +147,8 @@ impl Tokenizer {
                         match ch {
                             '\'' => {
                                 chars.next(); // consume
-                                break
-                            },
+                                break;
+                            }
                             _ => {
                                 chars.next(); // consume
                                 s.push(ch);
@@ -156,7 +156,7 @@ impl Tokenizer {
                         }
                     }
                     Ok(Some(Token::String(s)))
-                },
+                }
                 // numbers
                 '0'...'9' => {
                     let mut s = String::new();
@@ -217,9 +217,9 @@ impl Tokenizer {
                                 chars.next();
                                 Ok(Some(Token::Neq))
                             }
-                            _ => Err(TokenizerError(format!("TBD")))
+                            _ => Err(TokenizerError(format!("TBD"))),
                         },
-                        None => Err(TokenizerError(format!("TBD")))
+                        None => Err(TokenizerError(format!("TBD"))),
                     }
                 }
                 '<' => {
