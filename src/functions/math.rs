@@ -16,6 +16,7 @@
 
 use std::rc::Rc;
 
+use super::super::errors::*;
 use super::super::types::*;
 
 use arrow::array::*;
@@ -28,7 +29,7 @@ impl ScalarFunction for SqrtFunction {
         "sqrt".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>> {
         match args[0].as_ref() {
             &Value::Column(ref arr) => match arr.data() {
                 &ArrayData::Float32(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
@@ -43,11 +44,11 @@ impl ScalarFunction for SqrtFunction {
                 &ArrayData::Int64(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
                     v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
                 ))))),
-                _ => Err(ExecutionError::Custom(
+                _ => Err(ExecutionError::General(
                     "Unsupported arg type for sqrt".to_string(),
                 )),
             },
-            _ => Err(ExecutionError::Custom(
+            _ => Err(ExecutionError::General(
                 "Unsupported arg type for sqrt".to_string(),
             )),
         }

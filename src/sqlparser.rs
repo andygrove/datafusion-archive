@@ -138,6 +138,7 @@ impl Parser {
                             n, e
                         ))),
                     },
+                    Token::String(ref s) => Ok(ASTNode::SQLLiteralString(s.to_string())),
                     _ => Err(ParserError::ParserError(format!(
                         "Prefix parser expected a keyword but found {:?}",
                         t
@@ -164,6 +165,7 @@ impl Parser {
                     right: Box::new(self.parse_expr(precedence)?),
                 })),
                 Token::Eq
+                | Token::Neq
                 | Token::Gt
                 | Token::GtEq
                 | Token::Lt
@@ -189,6 +191,7 @@ impl Parser {
     fn to_sql_operator(&self, tok: &Token) -> Result<SQLOperator, ParserError> {
         match tok {
             &Token::Eq => Ok(SQLOperator::Eq),
+            &Token::Neq => Ok(SQLOperator::NotEq),
             &Token::Lt => Ok(SQLOperator::Lt),
             &Token::LtEq => Ok(SQLOperator::LtEq),
             &Token::Gt => Ok(SQLOperator::Gt),
@@ -197,6 +200,8 @@ impl Parser {
             &Token::Minus => Ok(SQLOperator::Minus),
             &Token::Mult => Ok(SQLOperator::Multiply),
             &Token::Div => Ok(SQLOperator::Divide),
+            &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
+            &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
             _ => Err(ParserError::ParserError(format!(
                 "Unsupported SQL operator {:?}",
                 tok
@@ -555,59 +560,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tokenize_select_1() {
-        let sql = String::from("SELECT 1");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-
-        let expected = vec![
-            Token::Keyword(String::from("SELECT")),
-            Token::Number(String::from("1")),
-        ];
-
-        compare(expected, tokens);
-    }
-
-    #[test]
-    fn tokenize_scalar_function() {
-        let sql = String::from("SELECT sqrt(1)");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-
-        let expected = vec![
-            Token::Keyword(String::from("SELECT")),
-            Token::Identifier(String::from("sqrt")),
-            Token::LParen,
-            Token::Number(String::from("1")),
-            Token::RParen,
-        ];
-
-        compare(expected, tokens);
-    }
-
-    #[test]
-    fn tokenize_simple_select() {
-        let sql = String::from("SELECT * FROM customer WHERE id = 1 LIMIT 5");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-
-        let expected = vec![
-            Token::Keyword(String::from("SELECT")),
-            Token::Mult,
-            Token::Keyword(String::from("FROM")),
-            Token::Identifier(String::from("customer")),
-            Token::Keyword(String::from("WHERE")),
-            Token::Identifier(String::from("id")),
-            Token::Eq,
-            Token::Number(String::from("1")),
-            Token::Keyword(String::from("LIMIT")),
-            Token::Number(String::from("5")),
-        ];
-
-        compare(expected, tokens);
-    }
-
-    #[test]
     fn parse_simple_select() {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5");
         let mut tokenizer = Tokenizer::new(&sql);
@@ -624,6 +576,20 @@ mod tests {
             }
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn parse_select_string_predicate() {
+        let sql = String::from(
+            "SELECT id, fname, lname FROM customer \
+             WHERE salary != 'Not Provided' AND salary != ''",
+        );
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        println!("{:?}", ast);
+        //TODO: add assertions
     }
 
     #[test]
@@ -789,25 +755,15 @@ mod tests {
         //println!("AST = {:?}", ast);
         if let ASTNode::SQLSelect { projection, .. } = ast {
             assert_eq!(
-                vec![
-                    ASTNode::SQLFunction {
-                        id: String::from("sqrt"),
-                        args: vec![ASTNode::SQLIdentifier(String::from("id"))],
-                    },
-                ],
+                vec![ASTNode::SQLFunction {
+                    id: String::from("sqrt"),
+                    args: vec![ASTNode::SQLIdentifier(String::from("id"))],
+                }],
                 projection
             );
         } else {
             assert!(false);
         }
-    }
-
-    fn compare(expected: Vec<Token>, actual: Vec<Token>) {
-        //println!("------------------------------");
-        //println!("tokens   = {:?}", actual);
-        //println!("expected = {:?}", expected);
-        //println!("------------------------------");
-        assert_eq!(expected, actual);
     }
 
 }

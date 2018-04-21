@@ -26,6 +26,7 @@ use arrow::list_builder::ListBuilder;
 use csv;
 use csv::{StringRecord, StringRecordsIntoIter};
 
+use super::super::errors::*;
 use super::super::types::*;
 use super::common::*;
 
@@ -36,7 +37,7 @@ pub struct CsvFile {
 }
 
 impl CsvFile {
-    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool) -> Result<Self, ExecutionError> {
+    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool) -> Result<Self> {
         let csv_reader = csv::ReaderBuilder::new()
             .has_headers(has_headers)
             .from_reader(BufReader::new(file));
@@ -55,13 +56,27 @@ impl CsvFile {
 }
 
 macro_rules! collect_column {
-    ($ROWS:expr, $COL_INDEX:expr, $TY:ty, $LEN:expr) => {{
+    ($ROWS:expr, $COL_INDEX:expr, $TY:ty, $LEN:expr, $DEFAULT_VALUE:expr) => {{
         let mut b: Builder<$TY> = Builder::with_capacity($LEN);
         for row_index in 0..$LEN {
             b.push(match $ROWS[row_index].get($COL_INDEX) {
-                Some(s) => s.parse::<$TY>().unwrap(),
+                Some(s) => if s.len() == 0 {
+                    $DEFAULT_VALUE
+                } else {
+                    match s.parse::<$TY>() {
+                        Ok(v) => v,
+                        Err(e) => panic!(
+                            "Failed to parse value '{}' as {} at batch row {} column {}: {:?}",
+                            s,
+                            stringify!($TY),
+                            row_index,
+                            $COL_INDEX,
+                            e
+                        ),
+                    }
+                },
                 None => panic!(
-                    "CSV file missing value at row {}, column {}",
+                    "CSV file missing value at batch  row {}, column {}",
                     row_index, $COL_INDEX
                 ),
             })
@@ -71,7 +86,7 @@ macro_rules! collect_column {
 }
 
 impl DataSource for CsvFile {
-    fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>> {
+    fn next(&mut self) -> Option<Result<Rc<RecordBatch>>> {
         // read a batch of rows into memory
         let mut rows: Vec<StringRecord> = Vec::with_capacity(self.batch_size);
         for _ in 0..self.batch_size {
@@ -88,31 +103,32 @@ impl DataSource for CsvFile {
         }
 
         let columns: Vec<Rc<Value>> = self.schema
-            .columns
+            .columns()
             .iter()
             .enumerate()
-            .map(|(i, c)| match c.data_type {
-                DataType::Boolean => collect_column!(rows, i, bool, rows.len()),
-                DataType::Int8 => collect_column!(rows, i, i8, rows.len()),
-                DataType::Int16 => collect_column!(rows, i, i16, rows.len()),
-                DataType::Int32 => collect_column!(rows, i, i32, rows.len()),
-                DataType::Int64 => collect_column!(rows, i, i64, rows.len()),
-                DataType::UInt8 => collect_column!(rows, i, u8, rows.len()),
-                DataType::UInt16 => collect_column!(rows, i, u16, rows.len()),
-                DataType::UInt32 => collect_column!(rows, i, u32, rows.len()),
-                DataType::UInt64 => collect_column!(rows, i, u64, rows.len()),
-                DataType::Float16 => collect_column!(rows, i, f32, rows.len()),
-                DataType::Float32 => collect_column!(rows, i, f32, rows.len()),
-                DataType::Float64 => collect_column!(rows, i, f64, rows.len()),
+            .map(|(i, c)| match c.data_type() {
+                DataType::Boolean => collect_column!(rows, i, bool, rows.len(), false),
+                DataType::Int8 => collect_column!(rows, i, i8, rows.len(), 0),
+                DataType::Int16 => collect_column!(rows, i, i16, rows.len(), 0),
+                DataType::Int32 => collect_column!(rows, i, i32, rows.len(), 0),
+                DataType::Int64 => collect_column!(rows, i, i64, rows.len(), 0),
+                DataType::UInt8 => collect_column!(rows, i, u8, rows.len(), 0),
+                DataType::UInt16 => collect_column!(rows, i, u16, rows.len(), 0),
+                DataType::UInt32 => collect_column!(rows, i, u32, rows.len(), 0),
+                DataType::UInt64 => collect_column!(rows, i, u64, rows.len(), 0),
+                DataType::Float16 => collect_column!(rows, i, f32, rows.len(), 0_f32),
+                DataType::Float32 => collect_column!(rows, i, f32, rows.len(), 0_f32),
+                DataType::Float64 => collect_column!(rows, i, f64, rows.len(), 0_f64),
                 DataType::Utf8 => {
                     let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(rows.len());
                     rows.iter().for_each(|row| {
                         let s = row.get(i).unwrap_or("").to_string();
                         builder.push(s.as_bytes());
                     });
+                    let buffer = builder.finish();
                     Rc::new(Value::Column(Rc::new(Array::new(
                         rows.len(),
-                        ArrayData::Utf8(builder.finish()),
+                        ArrayData::Utf8(buffer),
                     ))))
                 }
                 _ => unimplemented!(),

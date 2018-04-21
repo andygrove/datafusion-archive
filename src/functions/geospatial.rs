@@ -20,6 +20,7 @@ use std::rc::Rc;
 use arrow::array::*;
 use arrow::datatypes::*;
 
+use super::super::errors::*;
 use super::super::types::*;
 
 /// create a point from two doubles
@@ -30,9 +31,9 @@ impl ScalarFunction for STPointFunc {
         "ST_Point".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>> {
         if args.len() != 2 {
-            return Err(ExecutionError::Custom(
+            return Err(ExecutionError::General(
                 "Wrong argument count for ST_Point".to_string(),
             ));
         }
@@ -44,12 +45,12 @@ impl ScalarFunction for STPointFunc {
                         let new_array = Array::new(arr1.len() as usize, ArrayData::Struct(nested));
                         Ok(Rc::new(Value::Column(Rc::new(new_array))))
                     }
-                    _ => Err(ExecutionError::Custom(
+                    _ => Err(ExecutionError::General(
                         "Unsupported type for ST_Point".to_string(),
                     )),
                 }
             }
-            _ => Err(ExecutionError::Custom(
+            _ => Err(ExecutionError::General(
                 "Unsupported type for ST_Point".to_string(),
             )),
         }
@@ -78,9 +79,9 @@ impl ScalarFunction for STAsText {
         "ST_AsText".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>, ExecutionError> {
+    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>> {
         if args.len() != 1 {
-            return Err(ExecutionError::Custom(
+            return Err(ExecutionError::General(
                 "Wrong argument count for ST_AsText".to_string(),
             ));
         }
@@ -97,32 +98,30 @@ impl ScalarFunction for STAsText {
                                 .collect();
                             Ok(Rc::new(Value::Column(Rc::new(Array::from(wkt)))))
                         }
-                        _ => Err(ExecutionError::Custom(
+                        _ => Err(ExecutionError::General(
                             "Unsupported type for ST_AsText".to_string(),
                         )),
                     }
                 }
-                _ => Err(ExecutionError::Custom(
+                _ => Err(ExecutionError::General(
                     "Unsupported type for ST_AsText".to_string(),
                 )),
             },
-            _ => Err(ExecutionError::Custom(
+            _ => Err(ExecutionError::General(
                 "Unsupported type for ST_AsText".to_string(),
             )),
         }
     }
 
     fn args(&self) -> Vec<Field> {
-        vec![
-            Field::new(
-                "point",
-                DataType::Struct(vec![
-                    Field::new("x", DataType::Float64, false),
-                    Field::new("y", DataType::Float64, false),
-                ]),
-                false,
-            ),
-        ]
+        vec![Field::new(
+            "point",
+            DataType::Struct(vec![
+                Field::new("x", DataType::Float64, false),
+                Field::new("y", DataType::Float64, false),
+            ]),
+            false,
+        )]
     }
 
     fn return_type(&self) -> DataType {

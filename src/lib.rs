@@ -32,6 +32,8 @@ extern crate parquet;
 
 //pub mod cluster;
 pub mod datasources;
+#[macro_use]
+pub mod errors;
 pub mod exec;
 pub mod functions;
 pub mod sqlast;

@@ -62,87 +62,104 @@ impl SqlToRel {
 
                 let input_schema = input.schema();
 
+                // selection first
+                let selection_plan = match selection {
+                    &Some(ref filter_expr) => Some(LogicalPlan::Selection {
+                        expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
+                        input: input.clone(),
+                        schema: input_schema.clone(),
+                    }),
+                    _ => None,
+                };
+
                 let expr: Vec<Expr> = projection
                     .iter()
                     .map(|e| self.sql_to_rex(&e, &input_schema))
                     .collect::<Result<Vec<Expr>, String>>()?;
 
-                let projection_schema = Rc::new(Schema {
-                    columns: expr.iter()
-                        .map(|e| match e {
-                            &Expr::Column(i) => input_schema.columns[i].clone(),
-                            &Expr::ScalarFunction { ref name, .. } => Field {
-                                name: name.clone(),
-                                data_type: DataType::Float64, //TODO: hard-coded until I have function metadata in place
-                                nullable: true,
-                            },
-                            _ => unimplemented!(),
-                        })
-                        .collect(),
-                });
+                // collect aggregate expressions
+                let aggr_expr: Vec<Expr> = expr.iter()
+                    .filter(|e| match e {
+                        Expr::AggregateFunction { .. } => true,
+                        _ => false,
+                    })
+                    .map(|e| e.clone())
+                    .collect();
 
-                let selection_plan = match selection {
-                    &Some(ref filter_expr) => {
-                        let selection_rel = LogicalPlan::Selection {
-                            expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
-                            input: input.clone(),
-                            schema: input_schema.clone(),
-                        };
+                if aggr_expr.len() > 0 {
+                    let aggr_schema = Schema::new(expr_to_field(&aggr_expr, input_schema));
 
-                        LogicalPlan::Projection {
-                            expr: expr,
-                            input: Rc::new(selection_rel),
-                            schema: projection_schema.clone(),
-                        }
-                    }
-                    _ => LogicalPlan::Projection {
+                    let aggregate_input: Rc<LogicalPlan> = match selection_plan {
+                        Some(s) => Rc::new(s),
+                        _ => input.clone(),
+                    };
+
+                    //TODO: selection, projection, everything else
+                    Ok(Rc::new(LogicalPlan::Aggregate {
+                        input: aggregate_input,
+                        group_expr: Vec::new(),
+                        aggr_expr: aggr_expr,
+                        schema: Rc::new(aggr_schema),
+                    }))
+                } else {
+                    let projection_input: Rc<LogicalPlan> = match selection_plan {
+                        Some(s) => Rc::new(s),
+                        _ => input.clone(),
+                    };
+
+                    let projection_schema =
+                        Rc::new(Schema::new(expr_to_field(&expr, input_schema.as_ref())));
+
+                    let projection = LogicalPlan::Projection {
                         expr: expr,
-                        input: input.clone(),
+                        input: projection_input,
                         schema: projection_schema.clone(),
-                    },
-                };
+                    };
 
-                if let &Some(_) = group_by {
-                    return Err(String::from("GROUP BY is not implemented yet"));
-                }
+                    // aggregate queries
+                    //                    match group_by {
+                    //                        Some(g) => Err(String::from("GROUP BY is not implemented yet")),
+                    //                        None => {}
+                    //                    }
 
-                if let &Some(_) = having {
-                    return Err(String::from("HAVING is not implemented yet"));
-                }
-
-                let order_by_plan = match order_by {
-                    &Some(ref order_by_expr) => {
-                        let input_schema = selection_plan.schema();
-                        let order_by_rex: Result<Vec<Expr>, String> = order_by_expr
-                            .iter()
-                            .map(|e| self.sql_to_rex(e, &input_schema))
-                            .collect();
-
-                        LogicalPlan::Sort {
-                            expr: order_by_rex?,
-                            input: Rc::new(selection_plan.clone()),
-                            schema: input_schema.clone(),
-                        }
+                    if let &Some(_) = having {
+                        return Err(String::from("HAVING is not implemented yet"));
                     }
-                    _ => selection_plan,
-                };
 
-                let limit_plan = match limit {
-                    &Some(ref limit_ast_node) => {
-                        let limit_count = match **limit_ast_node {
-                            ASTNode::SQLLiteralLong(n) => n,
-                            _ => return Err(String::from("LIMIT parameter is not a number")),
-                        };
-                        LogicalPlan::Limit {
-                            limit: limit_count as usize,
-                            schema: order_by_plan.schema().clone(),
-                            input: Rc::new(order_by_plan),
+                    let order_by_plan = match order_by {
+                        &Some(ref order_by_expr) => {
+                            let input_schema = projection.schema();
+                            let order_by_rex: Result<Vec<Expr>, String> = order_by_expr
+                                .iter()
+                                .map(|e| self.sql_to_rex(e, &input_schema))
+                                .collect();
+
+                            LogicalPlan::Sort {
+                                expr: order_by_rex?,
+                                input: Rc::new(projection.clone()),
+                                schema: input_schema.clone(),
+                            }
                         }
-                    }
-                    _ => order_by_plan,
-                };
+                        _ => projection,
+                    };
 
-                Ok(Rc::new(limit_plan))
+                    let limit_plan = match limit {
+                        &Some(ref limit_ast_node) => {
+                            let limit_count = match **limit_ast_node {
+                                ASTNode::SQLLiteralLong(n) => n,
+                                _ => return Err(String::from("LIMIT parameter is not a number")),
+                            };
+                            LogicalPlan::Limit {
+                                limit: limit_count as usize,
+                                schema: order_by_plan.schema().clone(),
+                                input: Rc::new(order_by_plan),
+                            }
+                        }
+                        _ => order_by_plan,
+                    };
+
+                    Ok(Rc::new(limit_plan))
+                }
             }
 
             &ASTNode::SQLIdentifier(ref id) => match self.schemas.borrow().get(id) {
@@ -166,9 +183,10 @@ impl SqlToRel {
         match sql {
             &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(ScalarValue::Int64(n))),
             &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(ScalarValue::Float64(n))),
+            &ASTNode::SQLLiteralString(ref s) => Ok(Expr::Literal(ScalarValue::Utf8(s.clone()))),
 
             &ASTNode::SQLIdentifier(ref id) => {
-                match schema.columns.iter().position(|c| c.name.eq(id)) {
+                match schema.columns().iter().position(|c| c.name().eq(id)) {
                     Some(index) => Ok(Expr::Column(index)),
                     None => Err(format!(
                         "Invalid identifier '{}' for schema {}",
@@ -183,7 +201,6 @@ impl SqlToRel {
                 ref op,
                 ref right,
             } => {
-                //TODO: we have this implemented somewhere else already
                 let operator = match op {
                     &SQLOperator::Gt => Operator::Gt,
                     &SQLOperator::GtEq => Operator::GtEq,
@@ -196,6 +213,8 @@ impl SqlToRel {
                     &SQLOperator::Multiply => Operator::Multiply,
                     &SQLOperator::Divide => Operator::Divide,
                     &SQLOperator::Modulus => Operator::Modulus,
+                    &SQLOperator::And => Operator::And,
+                    &SQLOperator::Or => Operator::Or,
                 };
                 Ok(Expr::BinaryExpr {
                     left: Rc::new(self.sql_to_rex(&left, &schema)?),
@@ -214,10 +233,17 @@ impl SqlToRel {
                     .map(|a| self.sql_to_rex(a, schema))
                     .collect::<Result<Vec<Expr>, String>>()?;
 
-                Ok(Expr::ScalarFunction {
-                    name: id.clone(),
-                    args: rex_args,
-                })
+                //TODO: fix this hack
+                match id.to_lowercase().as_ref() {
+                    "min" | "max" | "count" | "sum" | "avg" => Ok(Expr::AggregateFunction {
+                        name: id.clone(),
+                        args: rex_args,
+                    }),
+                    _ => Ok(Expr::ScalarFunction {
+                        name: id.clone(),
+                        args: rex_args,
+                    }),
+                }
             }
 
             _ => Err(String::from(format!(
@@ -237,4 +263,31 @@ pub fn convert_data_type(sql: &SQLType) -> DataType {
         &SQLType::Float => DataType::Float64,
         &SQLType::Double => DataType::Float64,
     }
+}
+
+//pub fn create_projection(expr: Vec<Expr>, input: &LogicalPlan) -> LogicalPlan {
+//    LogicalPlan::Projection {
+//        expr: expr,
+//        input: input.clone(),
+//        schema: projection_schema.clone(),
+//    }
+//}
+
+pub fn expr_to_field(expr: &Vec<Expr>, input_schema: &Schema) -> Vec<Field> {
+    expr.iter()
+        .map(|e| match e {
+            &Expr::Column(i) => input_schema.columns()[i].clone(),
+            &Expr::ScalarFunction { ref name, .. } => Field::new(
+                name,
+                DataType::Float64, //TODO: hard-coded until I have function metadata in place
+                true,
+            ),
+            &Expr::AggregateFunction { ref name, .. } => Field::new(
+                name,
+                DataType::Float64, //TODO: hard-coded until I have function metadata in place
+                true,
+            ),
+            _ => unimplemented!(),
+        })
+        .collect()
 }

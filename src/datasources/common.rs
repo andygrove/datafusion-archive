@@ -21,6 +21,7 @@ use std::str;
 use arrow::array::*;
 use arrow::datatypes::*;
 
+use super::super::errors::*;
 use super::super::types::*;
 
 pub trait RecordBatch {
@@ -102,7 +103,7 @@ impl RecordBatch for DefaultRecordBatch {
 
 pub trait DataSource {
     fn schema(&self) -> &Rc<Schema>;
-    fn next(&mut self) -> Option<Result<Rc<RecordBatch>, ExecutionError>>;
+    fn next(&mut self) -> Option<Result<Rc<RecordBatch>>>;
 }
 
 pub struct DataSourceIterator {
@@ -116,7 +117,7 @@ impl DataSourceIterator {
 }
 
 impl Iterator for DataSourceIterator {
-    type Item = Result<Rc<RecordBatch>, ExecutionError>;
+    type Item = Result<Rc<RecordBatch>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.ds.borrow_mut().next()

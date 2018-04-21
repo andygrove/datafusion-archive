@@ -18,14 +18,17 @@ use std::cell::RefCell;
 use std::clone::Clone;
 use std::collections::HashMap;
 use std::convert::*;
+use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Error};
 use std::iter::Iterator;
 use std::rc::Rc;
+use std::result;
 use std::str;
 use std::string::String;
 
 use arrow::array::*;
+use arrow::builder::*;
 use arrow::datatypes::*;
 
 //use futures::{Future, Stream};
@@ -37,6 +40,9 @@ use arrow::datatypes::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
 use super::datasources::parquet::*;
+use super::errors::*;
+use super::functions::max::*;
+use super::functions::min::*;
 use super::logical::*;
 use super::sqlast::ASTNode::*;
 use super::sqlparser::*;
@@ -50,39 +56,39 @@ pub enum DFConfig {
     Remote { etcd: String },
 }
 
-#[derive(Debug)]
-pub enum DataFrameError {
-    IoError(Error),
-    ExecError(ExecutionError),
-    InvalidColumn(String),
-    NotImplemented,
-}
+//#[derive(Debug)]
+//pub enum ExecutionError {
+//    IoError(Error),
+//    ExecError(ExecutionError),
+//    InvalidColumn(String),
+//    NotImplemented,
+//}
 
-impl From<ExecutionError> for DataFrameError {
-    fn from(e: ExecutionError) -> Self {
-        DataFrameError::ExecError(e)
-    }
-}
-
-impl From<Error> for DataFrameError {
-    fn from(e: Error) -> Self {
-        DataFrameError::IoError(e)
-    }
-}
+//impl From<ExecutionError> for ExecutionError {
+//    fn from(e: ExecutionError) -> Self {
+//        ExecutionError::ExecError(e)
+//    }
+//}
+//
+//impl From<Error> for ExecutionError {
+//    fn from(e: Error) -> Self {
+//        ExecutionError::IoError(e)
+//    }
+//}
 
 /// DataFrame is an abstraction of a logical plan and a schema
 pub trait DataFrame {
     /// Projection
-    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
+    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>>;
 
     /// Selection
-    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>, DataFrameError>;
+    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>>;
 
     /// Sorting
-    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError>;
+    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>>;
 
     /// Return an expression representing the specified column
-    fn col(&self, column_name: &str) -> Result<Expr, DataFrameError>;
+    fn col(&self, column_name: &str) -> Result<Expr>;
 
     fn schema(&self) -> &Rc<Schema>;
 
@@ -91,7 +97,7 @@ pub trait DataFrame {
     /// show N rows (useful for debugging)
     fn show(&self, count: usize);
 
-    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>, ExecutionError>;
+    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>>;
 }
 
 macro_rules! compare_arrays_inner {
@@ -110,7 +116,7 @@ macro_rules! compare_arrays_inner {
             (&ArrayData::Int64(ref a), &ArrayData::Int64(ref b)) =>
                 Ok(a.iter().zip(b.iter()).map($F).collect::<Vec<bool>>()),
             //(&ArrayData::Utf8(ref a), &ScalarValue::Utf8(ref b)) => a.iter().map(|n| n > b).collect(),
-            _ => Err(ExecutionError::Custom("Unsupported types in compare_arrays_inner".to_string()))
+            _ => Err(ExecutionError::General("Unsupported types in compare_arrays_inner".to_string()))
         }
     }
 }
@@ -132,7 +138,7 @@ macro_rules! compare_array_with_scalar_inner {
             (&ArrayData::Float64(ref a), &ScalarValue::Float64(b)) => {
                 Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
             }
-            _ => Err(ExecutionError::Custom(
+            _ => Err(ExecutionError::General(
                 "Unsupported types in compare_array_with_scalar_inner".to_string(),
             )),
         }
@@ -148,14 +154,21 @@ macro_rules! compare_array_with_scalar {
 }
 
 impl Value {
-    pub fn eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn eq(&self, other: &Value) -> Result<Rc<Value>> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa == bb)
             }
-            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
-                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa == bb)
-            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
+                (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
+                    let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
+                    for i in 0..list.len() as usize {
+                        v.push(list.slice(i) == b.as_bytes());
+                    }
+                    Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+                }
+                _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb),
+            },
             (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
                 compare_array_with_scalar!(v2, v1, |(aa, bb)| aa == bb)
             }
@@ -163,14 +176,21 @@ impl Value {
         }
     }
 
-    pub fn not_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn not_eq(&self, other: &Value) -> Result<Rc<Value>> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa != bb)
             }
-            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
-                compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb)
-            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
+                (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
+                    let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
+                    for i in 0..list.len() as usize {
+                        v.push(list.slice(i) != b.as_bytes());
+                    }
+                    Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+                }
+                _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb),
+            },
             (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
                 compare_array_with_scalar!(v2, v1, |(aa, bb)| aa != bb)
             }
@@ -178,7 +198,7 @@ impl Value {
         }
     }
 
-    pub fn lt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn lt(&self, other: &Value) -> Result<Rc<Value>> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa < bb)
@@ -193,7 +213,7 @@ impl Value {
         }
     }
 
-    pub fn lt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn lt_eq(&self, other: &Value) -> Result<Rc<Value>> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa <= bb)
@@ -208,7 +228,7 @@ impl Value {
         }
     }
 
-    pub fn gt(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn gt(&self, other: &Value) -> Result<Rc<Value>> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa >= bb)
@@ -223,7 +243,7 @@ impl Value {
         }
     }
 
-    pub fn gt_eq(&self, other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn gt_eq(&self, other: &Value) -> Result<Rc<Value>> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa > bb)
@@ -238,25 +258,119 @@ impl Value {
         }
     }
 
-    pub fn add(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn add(&self, _other: &Value) -> Result<Rc<Value>> {
         unimplemented!()
     }
-    pub fn subtract(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn subtract(&self, _other: &Value) -> Result<Rc<Value>> {
         unimplemented!()
     }
-    pub fn divide(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn divide(&self, _other: &Value) -> Result<Rc<Value>> {
         unimplemented!()
     }
-    pub fn multiply(&self, _other: &Value) -> Result<Rc<Value>, ExecutionError> {
+    pub fn multiply(&self, _other: &Value) -> Result<Rc<Value>> {
+        unimplemented!()
+    }
+
+    pub fn and(&self, other: &Value) -> Result<Rc<Value>> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                match (v1.data(), v2.data()) {
+                    (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
+                        let bools = l.iter()
+                            .zip(r.iter())
+                            .map(|(ll, rr)| ll && rr)
+                            .collect::<Vec<bool>>();
+                        //                        println!("AND: left = {:?}", l.iter().collect::<Vec<bool>>());
+                        //                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
+                        //                        println!("AND: bools = {:?}", bools);
+                        let bools = Array::from(bools);
+                        Ok(Rc::new(Value::Column(Rc::new(bools))))
+                    }
+                    _ => panic!(),
+                }
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
+                (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
+                    let bools = Array::from(l.iter().map(|ll| ll && *r).collect::<Vec<bool>>());
+                    Ok(Rc::new(Value::Column(Rc::new(bools))))
+                }
+                _ => panic!(),
+            },
+            //            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+            //                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa && bb)
+            //            }
+            //            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
+            _ => panic!(),
+        }
+    }
+
+    pub fn or(&self, _other: &Value) -> Result<Rc<Value>> {
         unimplemented!()
     }
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Rc<Value>, ExecutionError>>;
+pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Rc<Value>>>;
 
-/// Compiles a relational expression into a closure
-pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr, ExecutionError> {
+pub enum AggregateType {
+    Min,
+    Max,
+    Sum,
+    Count,
+    Avg,
+    //CountDistinct()
+}
+
+/// Runtime expression
+pub enum RuntimeExpr {
+    Compiled(CompiledExpr),
+    AggregateFunction {
+        func: AggregateType,
+        args: Vec<CompiledExpr>,
+        return_type: DataType,
+    },
+}
+
+/// Compiles a scalar expression into a closure
+pub fn compile_expr(
+    ctx: &ExecutionContext,
+    expr: &Expr,
+    input_schema: &Schema,
+) -> Result<RuntimeExpr> {
+    match *expr {
+        Expr::AggregateFunction { ref name, ref args } => {
+            assert_eq!(1, args.len());
+
+            let return_type = match args[0] {
+                Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
+                _ => {
+                    //TODO: fix this hack
+                    DataType::Float64
+                    //panic!("Aggregate expressions currently only support simple arguments")
+                }
+            };
+
+            let compiled_args: Result<Vec<CompiledExpr>> =
+                args.iter().map(|e| compile_scalar_expr(ctx, e)).collect();
+
+            let func = match name.to_lowercase().as_ref() {
+                "min" => AggregateType::Min,
+                "max" => AggregateType::Max,
+                _ => unimplemented!("Unsupported aggregate function '{}'", name),
+            };
+
+            Ok(RuntimeExpr::AggregateFunction {
+                func,
+                args: compiled_args?,
+                return_type,
+            })
+        }
+        _ => Ok(RuntimeExpr::Compiled(compile_scalar_expr(ctx, expr)?)),
+    }
+}
+
+/// Compiles a scalar expression into a closure
+pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
     match expr {
         &Expr::Literal(ref lit) => {
             let literal_value = lit.clone();
@@ -274,8 +388,8 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
             ref op,
             ref right,
         } => {
-            let left_expr = compile_expr(ctx, left)?;
-            let right_expr = compile_expr(ctx, right)?;
+            let left_expr = compile_scalar_expr(ctx, left)?;
+            let right_expr = compile_scalar_expr(ctx, right)?;
             match op {
                 &Operator::Eq => Ok(Box::new(move |batch: &RecordBatch| {
                     let left_values = left_expr(batch)?;
@@ -327,8 +441,18 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
                     let right_values = right_expr(batch)?;
                     left_values.multiply(&right_values)
                 })),
+                &Operator::And => Ok(Box::new(move |batch: &RecordBatch| {
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.and(&right_values)
+                })),
+                &Operator::Or => Ok(Box::new(move |batch: &RecordBatch| {
+                    let left_values = left_expr(batch)?;
+                    let right_values = right_expr(batch)?;
+                    left_values.or(&right_values)
+                })),
                 _ => {
-                    return Err(ExecutionError::Custom(format!(
+                    return Err(ExecutionError::General(format!(
                         "Unsupported binary operator '{:?}'",
                         op
                     )))
@@ -337,28 +461,53 @@ pub fn compile_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr,
         }
         &Expr::Sort { ref expr, .. } => {
             //NOTE sort order is ignored here and is handled during sort execution
-            compile_expr(ctx, expr)
+            compile_scalar_expr(ctx, expr)
         }
         &Expr::ScalarFunction { ref name, ref args } => {
             ////println!("Executing function {}", name);
 
             // evaluate the arguments to the function
-            let compiled_args: Result<Vec<CompiledExpr>, ExecutionError> =
-                args.iter().map(|e| compile_expr(ctx, e)).collect();
+            let compiled_args: Result<Vec<CompiledExpr>> =
+                args.iter().map(|e| compile_scalar_expr(ctx, e)).collect();
 
             let compiled_args_ok = compiled_args?;
 
-            let func = ctx.load_function_impl(name.as_ref())?;
+            let func = ctx.load_scalar_function(name.as_ref())?;
 
             Ok(Box::new(move |batch| {
-                let arg_values: Result<Vec<Rc<Value>>, ExecutionError> =
+                let arg_values: Result<Vec<Rc<Value>>> =
                     compiled_args_ok.iter().map(|expr| expr(batch)).collect();
 
                 func.execute(arg_values?)
             }))
-        } //_ => Err(ExecutionError::Custom(format!("No compiler for {:?}", expr)))
+        }
+        // aggregate functions don't fit this pattern .. will need to rework this ..
+        &Expr::AggregateFunction { .. } => panic!("Aggregate expressions cannot be compiled yet"), //        &Expr::AggregateFunction { ref name, ref args } => {
+                                                                                                   //
+                                                                                                   //            // evaluate the arguments to the function
+                                                                                                   //            let compiled_args: Result<Vec<CompiledExpr>> =
+                                                                                                   //                args.iter().map(|e| compile_expr(ctx, e)).collect();
+                                                                                                   //
+                                                                                                   //            let compiled_args_ok = compiled_args?;
+                                                                                                   //
+                                                                                                   //            Ok(Box::new(move |batch| {
+                                                                                                   //                let arg_values: Result<Vec<Rc<Value>>> =
+                                                                                                   //                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
+                                                                                                   //
+                                                                                                   //                Ok(Rc::new(arg_values?))
+                                                                                                   //            }))
+                                                                                                   //        }
     }
 }
+
+///// Compiled Expression (basically just a closure to evaluate the expression at runtime)
+//pub type CompiledAggregatateExpr = Box<Fn(&RecordBatch, ScalarValue) -> Result<ScalarValue>>;
+//
+///// Compiles an aggregate expression into a closure
+//pub fn compile_aggregate_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
+//    match
+//
+//}
 
 pub struct FilterRelation {
     schema: Rc<Schema>,
@@ -389,8 +538,7 @@ pub struct LimitRelation {
 /// a known schema)
 pub trait SimpleRelation {
     /// scan all records in this relation
-    fn scan<'a>(&'a mut self)
-        -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a>;
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a>;
 
     /// get the schema for this relation
     fn schema<'a>(&'a self) -> &'a Schema;
@@ -402,9 +550,7 @@ struct DataSourceRelation {
 }
 
 impl SimpleRelation for DataSourceRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         Box::new(DataSourceIterator::new(self.ds.clone()))
     }
 
@@ -414,21 +560,23 @@ impl SimpleRelation for DataSourceRelation {
 }
 
 impl SimpleRelation for FilterRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         let filter_expr = &self.expr;
         let schema = self.schema.clone();
 
         Box::new(self.input.scan().map(move |b| {
             match b {
                 Ok(ref batch) => {
+                    //println!("FilterRelation batch {} rows", batch.num_rows());
+
+                    assert!(batch.num_rows() > 0);
                     // evaluate the filter expression for every row in the batch
                     let x = (*filter_expr)(batch.as_ref())?;
                     match x.as_ref() {
                         &Value::Column(ref filter_eval) => {
                             let filtered_columns: Vec<Rc<Value>> = (0..batch.num_columns())
                                 .map(move |column_index| {
+                                    //println!("Filtering column {}", column_index);
                                     let column = batch.column(column_index);
                                     Rc::new(Value::Column(Rc::new(filter(column, &filter_eval))))
                                 })
@@ -447,6 +595,8 @@ impl SimpleRelation for FilterRelation {
                                 None => 0,
                                 Some(n) => n,
                             };
+
+                            //println!("Filtered batch has {} rows out of original {}", row_count, batch.num_rows());
 
                             let filtered_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
                                 row_count,
@@ -470,14 +620,14 @@ impl SimpleRelation for FilterRelation {
 }
 
 impl SimpleRelation for ProjectRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         let project_expr = &self.expr;
 
         let projection_iter = self.input.scan().map(move |r| match r {
             Ok(ref batch) => {
-                let projected_columns: Result<Vec<Rc<Value>>, ExecutionError> =
+                println!("ProjectRelation batch {} rows", batch.num_rows());
+
+                let projected_columns: Result<Vec<Rc<Value>>> =
                     project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
 
                 let projected_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
@@ -495,19 +645,218 @@ impl SimpleRelation for ProjectRelation {
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
-        unimplemented!()
+        self.schema.as_ref()
+    }
+}
+
+pub struct AggregateRelation {
+    schema: Rc<Schema>,
+    input: Box<SimpleRelation>,
+    group_expr: Vec<CompiledExpr>,
+    aggr_expr: Vec<RuntimeExpr>,
+}
+
+struct AggregateEntry {
+    group_values: Vec<ScalarValue>,
+    aggr_values: Vec<Box<AggregateFunction>>,
+}
+
+impl SimpleRelation for AggregateRelation {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
+        let mut map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
+
+        let aggr_expr = &self.aggr_expr;
+        let group_expr = &self.group_expr;
+
+        //println!("There are {} aggregate expressions", aggr_expr.len());
+
+        self.input.scan().for_each(|batch| {
+            match batch {
+                Ok(ref b) => {
+                    // println!("Processing aggregates for batch with {} rows", b.num_rows());
+
+                    let mut aggr_col_args: Vec<Vec<Rc<Value>>> = vec![];
+                    for i in 0..aggr_expr.len() {
+                        match aggr_expr[i] {
+                            RuntimeExpr::AggregateFunction { ref args, .. } => {
+                                // arguments to the aggregate function
+                                let aggr_func_args: Result<
+                                    Vec<Rc<Value>>,
+                                > = args.iter().map(|e| (*e)(b.as_ref())).collect();
+
+                                aggr_col_args.push(aggr_func_args.unwrap());
+                            }
+                            _ => panic!(),
+                        }
+                    }
+
+                    // evaluate the grouping expressions
+                    let group_values_result: Result<Vec<Rc<Value>>> =
+                        group_expr.iter().map(|e| (*e)(b.as_ref())).collect();
+
+                    let group_values: Vec<Rc<Value>> = group_values_result.unwrap(); //TODO
+
+                    for i in 0..b.num_rows() {
+                        //print!(".");
+
+                        // create a key for use in the HashMap for this grouping (could be empty
+                        // if there is no GROUP BY)
+                        let key: Vec<String> = group_values
+                            .iter()
+                            .map(|v| match v.as_ref() {
+                                Value::Scalar(ref vv) => format!("{:?}", vv),
+                                Value::Column(ref array) => match array.data() {
+                                    ArrayData::Boolean(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int8(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int16(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int32(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Int64(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt8(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt16(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt32(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::UInt64(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Float32(ref buf) => format!("{:?}", buf.get(i)),
+                                    ArrayData::Float64(ref buf) => format!("{:?}", buf.get(i)),
+                                    //TODO: String
+                                    _ => unimplemented!(
+                                        "Unsupported datatype for aggregate grouping expression"
+                                    ),
+                                },
+                            })
+                            .collect();
+
+                        //println!("key: {:?}", key);
+
+                        // initialize all the aggregate functions
+
+                        //print!(".");
+
+                        let entry = map.entry(key).or_insert_with(|| {
+                            //println!("New map entry");
+
+                            let functions: Vec<Box<AggregateFunction>> = aggr_expr
+                                .iter()
+                                .map(|e| match e {
+                                    RuntimeExpr::AggregateFunction {
+                                        ref func,
+                                        ref return_type,
+                                        ..
+                                    } => match func {
+                                        AggregateType::Min => {
+                                            Box::new(MinFunction::new(return_type))
+                                                as Box<AggregateFunction>
+                                        }
+                                        AggregateType::Max => {
+                                            Box::new(MaxFunction::new(return_type))
+                                                as Box<AggregateFunction>
+                                        }
+                                        _ => panic!(),
+                                    },
+                                    _ => panic!(),
+                                })
+                                .collect();
+
+                            Rc::new(RefCell::new(AggregateEntry {
+                                group_values: vec![],
+                                aggr_values: functions,
+                            }))
+                        });
+
+                        //print!(".");
+                        let mut entry_mut = entry.borrow_mut();
+
+                        for i in 0..aggr_expr.len() {
+                            match aggr_expr[i] {
+                                RuntimeExpr::AggregateFunction { ref args, .. } => {
+                                    (*entry_mut).aggr_values[i]
+                                        .execute(&aggr_col_args[i])
+                                        .unwrap();
+                                }
+                                _ => panic!(),
+                            }
+                        }
+                        //                        println!("!");
+                    }
+                }
+                Err(e) => panic!("Error aggregating batch: {:?}", e),
+            }
+        });
+
+        //        println!("Preparing results");
+
+        let mut result_columns: Vec<Vec<ScalarValue>> = Vec::new();
+        for _ in 0..aggr_expr.len() {
+            result_columns.push(Vec::new());
+        }
+
+        for (k, v) in map.iter() {
+            //TODO: include group by key in result set, if there is one
+
+            let g: Vec<Rc<Value>> = v.borrow()
+                .aggr_values
+                .iter()
+                .map(|v| v.finish().unwrap())
+                .collect();
+
+            //            println!("aggregate entry: {:?}", g);
+
+            for col_index in 0..g.len() {
+                result_columns[col_index].push(match g[col_index].as_ref() {
+                    Value::Scalar(ref v) => v.as_ref().clone(),
+                    _ => panic!(),
+                });
+            }
+        }
+
+        let mut aggr_batch = DefaultRecordBatch {
+            schema: Rc::new(Schema::empty()),
+            data: Vec::new(),
+            row_count: map.len(),
+        };
+
+        for i in 0..result_columns.len() {
+            match aggr_expr[i] {
+                RuntimeExpr::AggregateFunction {
+                    ref return_type, ..
+                } => match return_type {
+                    //TODO: support all the types (use macros to make this less verbose)
+                    DataType::Float64 => {
+                        let mut b: Builder<f64> = Builder::new();
+                        for v in &result_columns[i] {
+                            match v {
+                                ScalarValue::Float64(vv) => b.push(*vv),
+                                _ => panic!("type mismatch"),
+                            }
+                        }
+                        aggr_batch
+                            .data
+                            .push(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))));
+                    }
+                    _ => panic!(),
+                },
+                _ => panic!(),
+            }
+        }
+
+        let tb: Rc<RecordBatch> = Rc::new(aggr_batch);
+
+        // create iterator over the single batch
+        let v = vec![Ok(tb)];
+        Box::new(v.into_iter())
+    }
+
+    fn schema<'a>(&'a self) -> &'a Schema {
+        self.schema.as_ref()
     }
 }
 
 impl SimpleRelation for LimitRelation {
-    fn scan<'a>(
-        &'a mut self,
-    ) -> Box<Iterator<Item = Result<Rc<RecordBatch>, ExecutionError>> + 'a> {
+    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
         unimplemented!()
     }
 
     fn schema<'a>(&'a self) -> &'a Schema {
-        unimplemented!()
+        self.schema.as_ref()
     }
 }
 
@@ -540,6 +889,7 @@ pub struct ExecutionContext {
     schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
     function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
     functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
+    aggregate_functions: Rc<RefCell<HashMap<String, Rc<AggregateFunction>>>>,
     config: Rc<DFConfig>,
     tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
 }
@@ -550,6 +900,7 @@ impl ExecutionContext {
             schemas: Rc::new(RefCell::new(HashMap::new())),
             function_meta: Rc::new(RefCell::new(HashMap::new())),
             functions: Rc::new(RefCell::new(HashMap::new())),
+            aggregate_functions: Rc::new(RefCell::new(HashMap::new())),
             tables: Rc::new(RefCell::new(HashMap::new())),
             config: Rc::new(DFConfig::Local),
         }
@@ -571,11 +922,12 @@ impl ExecutionContext {
             .insert(name.to_string(), Rc::new(schema.clone()));
     }
 
-    pub fn register_function(&mut self, func: Rc<ScalarFunction>) {
+    pub fn register_scalar_function(&mut self, func: Rc<ScalarFunction>) {
         let fm = FunctionMeta {
             name: func.name(),
             args: func.args(),
             return_type: func.return_type(),
+            function_type: FunctionType::Scalar,
         };
 
         self.function_meta
@@ -587,7 +939,24 @@ impl ExecutionContext {
             .insert(func.name().to_lowercase(), func.clone());
     }
 
-    pub fn create_logical_plan(&self, sql: &str) -> Result<Rc<LogicalPlan>, ExecutionError> {
+    pub fn register_aggregate_function(&mut self, func: Rc<AggregateFunction>) {
+        let fm = FunctionMeta {
+            name: func.name(),
+            args: func.args(),
+            return_type: func.return_type(),
+            function_type: FunctionType::Aggregate,
+        };
+
+        self.function_meta
+            .borrow_mut()
+            .insert(func.name().to_lowercase(), fm);
+
+        self.aggregate_functions
+            .borrow_mut()
+            .insert(func.name().to_lowercase(), func.clone());
+    }
+
+    pub fn create_logical_plan(&self, sql: &str) -> Result<Rc<LogicalPlan>> {
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
 
@@ -610,11 +979,12 @@ impl ExecutionContext {
             .insert(table_name.to_string(), df.schema().clone());
     }
 
-    pub fn sql(&mut self, sql: &str) -> Result<Rc<DataFrame>, ExecutionError> {
+    pub fn sql(&mut self, sql: &str) -> Result<Rc<DataFrame>> {
         //println!("sql() {}", sql);
 
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
+        //println!("AST: {:?}", ast);
 
         match ast {
             SQLCreateTable { name, columns } => {
@@ -639,6 +1009,7 @@ impl ExecutionContext {
 
                 // plan the query (create a logical relational plan)
                 let plan = query_planner.sql_to_rel(&ast)?;
+                //println!("Logical plan: {:?}", plan);
 
                 // return the DataFrame
                 Ok(Rc::new(DF {
@@ -656,7 +1027,7 @@ impl ExecutionContext {
         filename: &str,
         schema: &Schema,
         has_header: bool,
-    ) -> Result<Rc<DataFrame>, ExecutionError> {
+    ) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::CsvFile {
             filename: filename.to_string(),
             schema: Rc::new(schema.clone()),
@@ -668,7 +1039,7 @@ impl ExecutionContext {
         }))
     }
 
-    pub fn load_parquet(&self, filename: &str) -> Result<Rc<DataFrame>, ExecutionError> {
+    pub fn load_parquet(&self, filename: &str) -> Result<Rc<DataFrame>> {
         //TODO: can only get schema by assuming file is local and opening it - need catalog!!
         let file = File::open(filename)?;
         let p = ParquetFile::open(file)?;
@@ -689,14 +1060,11 @@ impl ExecutionContext {
             .insert(name, Rc::new(schema.clone()));
     }
 
-    pub fn create_execution_plan(
-        &self,
-        plan: &LogicalPlan,
-    ) -> Result<Box<SimpleRelation>, ExecutionError> {
+    pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>> {
         //println!("Logical plan: {:?}", plan);
 
         match *plan {
-            LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::Custom(String::from(
+            LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::General(String::from(
                 "empty relation is not implemented yet",
             ))),
 
@@ -706,7 +1074,7 @@ impl ExecutionContext {
                 //println!("TableScan: {}", table_name);
                 match self.tables.borrow().get(table_name) {
                     Some(df) => df.create_execution_plan(),
-                    _ => Err(ExecutionError::Custom(format!(
+                    _ => Err(ExecutionError::General(format!(
                         "No table registered as '{}'",
                         table_name
                     ))),
@@ -751,7 +1119,7 @@ impl ExecutionContext {
 
                 let rel = FilterRelation {
                     input: input_rel,
-                    expr: compile_expr(&self, expr)?,
+                    expr: compile_scalar_expr(&self, expr)?,
                     schema: schema.clone(),
                 };
                 Ok(Box::new(rel))
@@ -765,27 +1133,12 @@ impl ExecutionContext {
                 let input_rel = self.create_execution_plan(&input)?;
                 let input_schema = input_rel.schema().clone();
 
-                //TODO: seems to be duplicate of sql_to_rel code
-                let project_columns: Vec<Field> = expr.iter()
-                    .map(|e| {
-                        match e {
-                            &Expr::Column(i) => input_schema.columns[i].clone(),
-                            &Expr::ScalarFunction { ref name, .. } => Field {
-                                name: name.clone(),
-                                data_type: DataType::Float64, //TODO: hard-coded .. no function metadata yet
-                                nullable: true,
-                            },
-                            _ => unimplemented!("Unsupported projection expression"),
-                        }
-                    })
-                    .collect();
+                let project_columns: Vec<Field> = expr_to_field(&expr, &input_schema);
 
-                let project_schema = Schema {
-                    columns: project_columns,
-                };
+                let project_schema = Schema::new(project_columns);
 
-                let compiled_expr: Result<Vec<CompiledExpr>, ExecutionError> =
-                    expr.iter().map(|e| compile_expr(&self, e)).collect();
+                let compiled_expr: Result<Vec<CompiledExpr>> =
+                    expr.iter().map(|e| compile_scalar_expr(&self, e)).collect();
 
                 let rel = ProjectRelation {
                     input: input_rel,
@@ -796,10 +1149,41 @@ impl ExecutionContext {
                 Ok(Box::new(rel))
             }
 
-            //            LogicalPlan::Sort { ref expr, ref input, ref schema } => {
+            LogicalPlan::Aggregate {
+                ref input,
+                ref group_expr,
+                ref aggr_expr,
+                ..
+            } => {
+                let input_rel = self.create_execution_plan(&input)?;
+                let input_schema = input_rel.schema().clone();
+
+                let compiled_group_expr_result: Result<Vec<CompiledExpr>> = group_expr
+                    .iter()
+                    .map(|e| compile_scalar_expr(&self, e))
+                    .collect();
+                let compiled_group_expr = compiled_group_expr_result?;
+
+                let compiled_aggr_expr_result: Result<Vec<RuntimeExpr>> = aggr_expr
+                    .iter()
+                    .map(|e| compile_expr(&self, e, input.schema()))
+                    .collect();
+                let compiled_aggr_expr = compiled_aggr_expr_result?;
+
+                let rel = AggregateRelation {
+                    schema: Rc::new(Schema::empty()), //(expr_to_field(&compiled_group_expr, &input_schema))),
+                    input: input_rel,
+                    group_expr: compiled_group_expr,
+                    aggr_expr: compiled_aggr_expr,
+                };
+
+                Ok(Box::new(rel))
+            }
+            //LogicalPlan::Sort { .. /*ref expr, ref input, ref schema*/ } => {
+
             //                let input_rel = self.create_execution_plan(data_dir, input)?;
             //
-            //                let compiled_expr : Result<Vec<CompiledExpr>, ExecutionError> = expr.iter()
+            //                let compiled_expr : Result<Vec<CompiledExpr>> = expr.iter()
             //                    .map(|e| compile_expr(&self,e))
             //                    .collect();
             //
@@ -818,6 +1202,7 @@ impl ExecutionContext {
             //                };
             //                Ok(Box::new(rel))
             //            },
+            //}
             LogicalPlan::Limit {
                 limit,
                 ref input,
@@ -835,19 +1220,30 @@ impl ExecutionContext {
         }
     }
 
-    /// load a function implementation
-    fn load_function_impl(
-        &self,
-        function_name: &str,
-    ) -> Result<Rc<ScalarFunction>, ExecutionError> {
+    /// load a scalar function implementation
+    fn load_scalar_function(&self, function_name: &str) -> Result<Rc<ScalarFunction>> {
         match self.functions.borrow().get(&function_name.to_lowercase()) {
             Some(f) => Ok(f.clone()),
-            _ => Err(ExecutionError::Custom(format!(
-                "Unknown function {}",
+            _ => Err(ExecutionError::General(format!(
+                "Unknown scalar function {}",
                 function_name
             ))),
         }
     }
+
+    /// load an aggregate function implementation
+    //    fn load_aggregate_function(
+    //        &self,
+    //        function_name: &str,
+    //    ) -> Result<Rc<AggregateFunction>> {
+    //        match self.aggregate_functions.borrow().get(&function_name.to_lowercase()) {
+    //            Some(f) => Ok(f.clone()),
+    //            _ => Err(>ExecutionError::General(format!(
+    //                "Unknown aggregate function {}",
+    //                function_name
+    //            ))),
+    //        }
+    //    }
 
     pub fn udf(&self, name: &str, args: Vec<Expr>) -> Expr {
         Expr::ScalarFunction {
@@ -856,7 +1252,7 @@ impl ExecutionContext {
         }
     }
 
-    pub fn show(&self, df: &DataFrame, count: usize) -> Result<usize, DataFrameError> {
+    pub fn show(&self, df: &DataFrame, count: usize) -> Result<usize> {
         //println!("show()");
         let physical_plan = PhysicalPlan::Show {
             plan: df.plan().clone(),
@@ -865,11 +1261,11 @@ impl ExecutionContext {
 
         match self.execute(&physical_plan)? {
             ExecutionResult::Count(count) => Ok(count),
-            _ => Err(DataFrameError::NotImplemented), //TODO better error
+            _ => Err(ExecutionError::NotImplemented), //TODO better error
         }
     }
 
-    pub fn write_csv(&self, df: Rc<DataFrame>, filename: &str) -> Result<usize, DataFrameError> {
+    pub fn write_csv(&self, df: Rc<DataFrame>, filename: &str) -> Result<usize> {
         let physical_plan = PhysicalPlan::Write {
             plan: df.plan().clone(),
             filename: filename.to_string(),
@@ -877,33 +1273,33 @@ impl ExecutionContext {
 
         match self.execute(&physical_plan)? {
             ExecutionResult::Count(count) => Ok(count),
-            _ => Err(DataFrameError::NotImplemented), //TODO better error
+            _ => Err(ExecutionError::NotImplemented), //TODO better error
         }
     }
 
-    pub fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult, ExecutionError> {
+    pub fn execute(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult> {
         //println!("execute()");
         match &self.config.as_ref() {
             &DFConfig::Local => {
                 //TODO error handling
                 match self.execute_local(physical_plan) {
                     Ok(r) => Ok(r),
-                    Err(e) => Err(ExecutionError::Custom(format!("execution failed: {:?}", e))),
+                    Err(e) => Err(ExecutionError::General(format!(
+                        "execution failed: {:?}",
+                        e
+                    ))),
                 }
             }
             &DFConfig::Remote { ref etcd } => self.execute_remote(physical_plan, etcd.clone()),
         }
     }
 
-    fn execute_local(
-        &self,
-        physical_plan: &PhysicalPlan,
-    ) -> Result<ExecutionResult, ExecutionError> {
+    fn execute_local(&self, physical_plan: &PhysicalPlan) -> Result<ExecutionResult> {
         //println!("execute_local()");
 
         match physical_plan {
             &PhysicalPlan::Interactive { .. } => {
-                Err(ExecutionError::Custom(format!("not implemented")))
+                Err(ExecutionError::General(format!("not implemented")))
             }
             &PhysicalPlan::Write {
                 ref plan,
@@ -1006,8 +1402,8 @@ impl ExecutionContext {
         &self,
         _physical_plan: &PhysicalPlan,
         _etcd: String,
-    ) -> Result<ExecutionResult, ExecutionError> {
-        Err(ExecutionError::Custom(format!(
+    ) -> Result<ExecutionResult> {
+        Err(ExecutionError::General(format!(
             "Remote execution needs re-implementing since moving to Arrow"
         )))
     }
@@ -1043,19 +1439,19 @@ impl ExecutionContext {
     //                                        //println!("{}", result);
     //                                        Ok(ExecutionResult::Unit)
     //                                    }
-    //                                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+    //                                    Err(e) => Err(>ExecutionError::General(format!("error: {}", e)))
     //                                }
     //                            }
-    //                            Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+    //                            Err(e) => Err(>ExecutionError::General(format!("error: {}", e)))
     //                        }
     //
     //
     //                    }
-    //                    Err(e) => Err(ExecutionError::Custom(format!("error: {}", e)))
+    //                    Err(e) => Err(>ExecutionError::General(format!("error: {}", e)))
     //                }
     //            }
-    //            Ok(_) => Err(ExecutionError::Custom(format!("No workers found in cluster"))),
-    //            Err(e) => Err(ExecutionError::Custom(format!("Failed to find a worker node: {}", e)))
+    //            Ok(_) => Err(>ExecutionError::General(format!("No workers found in cluster"))),
+    //            Err(e) => Err(>ExecutionError::General(format!("Failed to find a worker node: {}", e)))
     //        }
     //    }
 }
@@ -1076,7 +1472,7 @@ impl DF {
 }
 
 impl DataFrame for DF {
-    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError> {
+    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::Projection {
             expr: expr,
             input: self.plan.clone(),
@@ -1086,7 +1482,7 @@ impl DataFrame for DF {
         Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
-    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>, DataFrameError> {
+    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::Sort {
             expr: expr,
             input: self.plan.clone(),
@@ -1096,7 +1492,7 @@ impl DataFrame for DF {
         Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
-    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>, DataFrameError> {
+    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::Selection {
             expr: expr,
             input: self.plan.clone(),
@@ -1106,10 +1502,10 @@ impl DataFrame for DF {
         Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
-    fn col(&self, column_name: &str) -> Result<Expr, DataFrameError> {
+    fn col(&self, column_name: &str) -> Result<Expr> {
         match self.plan.schema().column(column_name) {
             Some((i, _)) => Ok(Expr::Column(i)),
-            _ => Err(DataFrameError::InvalidColumn(column_name.to_string())),
+            _ => Err(ExecutionError::InvalidColumn(column_name.to_string())),
         }
     }
 
@@ -1125,12 +1521,13 @@ impl DataFrame for DF {
         self.ctx.show(self, count).unwrap();
     }
 
-    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>, ExecutionError> {
+    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>> {
         self.ctx.create_execution_plan(&self.plan)
     }
 }
 
 pub fn filter(column: &Value, bools: &Array) -> Array {
+    //println!("filter()");
     match column {
         &Value::Scalar(_) => unimplemented!(),
         &Value::Column(ref arr) => match bools.data() {
@@ -1213,9 +1610,11 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
                         .collect::<Vec<i64>>(),
                 ),
                 &ArrayData::Utf8(ref v) => {
+                    //println!("utf8 len = {}, bools len = {}", v.len(), b.len());
                     let mut x: Vec<String> = Vec::with_capacity(b.len() as usize);
                     for i in 0..b.len() as usize {
                         if *b.get(i) {
+                            //println!("i = {}", i);
                             x.push(String::from_utf8(v.slice(i as usize).to_vec()).unwrap());
                         }
                     }
@@ -1232,6 +1631,7 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
 mod tests {
     use super::super::functions::geospatial::*;
     use super::super::functions::math::*;
+    use super::super::functions::min::*;
     use super::*;
     use std::fs::File;
     use std::io::prelude::*;
@@ -1240,7 +1640,7 @@ mod tests {
     fn test_sqrt() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(SqrtFunction {}));
+        ctx.register_scalar_function(Rc::new(SqrtFunction {}));
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
@@ -1255,7 +1655,7 @@ mod tests {
     fn test_sql_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
@@ -1271,7 +1671,7 @@ mod tests {
     fn test_df_udf_udt() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1301,7 +1701,7 @@ mod tests {
     fn test_filter() {
         let mut ctx = create_context();
 
-        ctx.register_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
         let schema = Schema::new(vec![
             Field::new("city", DataType::Utf8, false),
@@ -1356,8 +1756,8 @@ mod tests {
     #[test]
     fn test_chaining_functions() {
         let mut ctx = create_context();
-        ctx.register_function(Rc::new(STPointFunc {}));
-        ctx.register_function(Rc::new(STAsText {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STAsText {}));
 
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
@@ -1373,8 +1773,8 @@ mod tests {
     fn test_simple_predicate() {
         // create execution context
         let mut ctx = ExecutionContext::local();
-        ctx.register_function(Rc::new(STPointFunc {}));
-        ctx.register_function(Rc::new(STAsText {}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STAsText {}));
 
         // define an external table (csv file)
         //        ctx.sql(
@@ -1408,31 +1808,34 @@ mod tests {
         assert_eq!(expected_result, read_file("_test_simple_predicate.csv"));
     }
 
-    //    #[test]
-    //    fn sql_aggregates() {
-    //        // create execution context
-    //        let mut ctx = ExecutionContext::local();
-    //
-    //        let schema = Schema::new(vec![
-    //            Field::new("city", DataType::Utf8, false),
-    //            Field::new("lat", DataType::Float64, false),
-    //            Field::new("lng", DataType::Float64, false),
-    //        ]);
-    //
-    //        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false).unwrap();
-    //        ctx.register("uk_cities", df);
-    //
-    //        // define the SQL statement
-    //        let sql = "SELECT MIN(lat), MAX(lat), MIN(lng), MAX(lng) FROM uk_cities";
-    //
-    //        // create a data frame
-    //        let df1 = ctx.sql(&sql).unwrap();
-    //
-    //        // write the results to a file
-    //        ctx.write_csv(df1, "_min_max_lat_lng.csv").unwrap();
-    //
-    //        assert_eq!("TBD".to_string(), read_file("_min_max_lat_lng.csv"));
-    //    }
+    #[test]
+    fn test_sql_min_max() {
+        // create execution context
+        let mut ctx = ExecutionContext::local();
+
+        let schema = Schema::new(vec![
+            Field::new("city", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false),
+        ]);
+
+        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false)
+            .unwrap();
+        ctx.register("uk_cities", df);
+
+        // define the SQL statement
+        let sql = "SELECT MIN(lat), MAX(lat), MIN(lng), MAX(lng) FROM uk_cities";
+
+        // create a data frame
+        let df1 = ctx.sql(&sql).unwrap();
+
+        // write the results to a file
+        ctx.write_csv(df1, "_test_sql_min_max.csv").unwrap();
+
+        let expected_result = read_file("test/data/expected/test_sql_min_max.csv");
+
+        assert_eq!(expected_result, read_file("_test_sql_min_max.csv"));
+    }
 
     fn read_file(filename: &str) -> String {
         let mut file = File::open(filename).unwrap();

@@ -21,10 +21,17 @@ use super::types::*;
 use arrow::datatypes::*;
 
 #[derive(Debug, Clone)]
+pub enum FunctionType {
+    Scalar,
+    Aggregate,
+}
+
+#[derive(Debug, Clone)]
 pub struct FunctionMeta {
     pub name: String,
     pub args: Vec<Field>,
     pub return_type: DataType,
+    pub function_type: FunctionType,
 }
 
 pub trait Row {
@@ -58,6 +65,8 @@ pub enum Operator {
     Multiply,
     Divide,
     Modulus,
+    And,
+    Or,
 }
 
 /// Relation Expression
@@ -77,6 +86,8 @@ pub enum Expr {
     Sort { expr: Rc<Expr>, asc: bool },
     /// scalar function
     ScalarFunction { name: String, args: Vec<Expr> },
+    /// aggregate function
+    AggregateFunction { name: String, args: Vec<Expr> },
 }
 
 impl Expr {
@@ -151,6 +162,13 @@ pub enum LogicalPlan {
         input: Rc<LogicalPlan>,
         schema: Rc<Schema>,
     },
+    /// Represents a list of aggregate expressions with optional grouping expressions
+    Aggregate {
+        input: Rc<LogicalPlan>,
+        group_expr: Vec<Expr>,
+        aggr_expr: Vec<Expr>,
+        schema: Rc<Schema>,
+    },
     /// Represents a list of sort expressions to be applied to a relation
     Sort {
         expr: Vec<Expr>,
@@ -182,14 +200,15 @@ impl LogicalPlan {
     /// Get a reference to the logical plan's schema
     pub fn schema(&self) -> &Rc<Schema> {
         match self {
-            LogicalPlan::EmptyRelation { schema } => schema,
-            LogicalPlan::TableScan { schema, .. } => schema,
-            LogicalPlan::CsvFile { schema, .. } => schema,
-            LogicalPlan::ParquetFile { schema, .. } => schema,
-            LogicalPlan::Projection { schema, .. } => schema,
-            LogicalPlan::Selection { schema, .. } => schema,
-            LogicalPlan::Sort { schema, .. } => schema,
-            LogicalPlan::Limit { schema, .. } => schema,
+            LogicalPlan::EmptyRelation { schema } => &schema,
+            LogicalPlan::TableScan { schema, .. } => &schema,
+            LogicalPlan::CsvFile { schema, .. } => &schema,
+            LogicalPlan::ParquetFile { schema, .. } => &schema,
+            LogicalPlan::Projection { schema, .. } => &schema,
+            LogicalPlan::Selection { schema, .. } => &schema,
+            LogicalPlan::Aggregate { schema, .. } => &schema,
+            LogicalPlan::Sort { schema, .. } => &schema,
+            LogicalPlan::Limit { schema, .. } => &schema,
         }
     }
 }

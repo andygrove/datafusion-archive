@@ -27,8 +27,8 @@ use datafusion::types::*;
 fn main() {
     // create execution context
     let mut ctx = ExecutionContext::local();
-    ctx.register_function(Rc::new(STPointFunc {}));
-    ctx.register_function(Rc::new(STAsText {}));
+    ctx.register_scalar_function(Rc::new(STPointFunc {}));
+    ctx.register_scalar_function(Rc::new(STAsText {}));
 
     // define schema for data source (csv file)
     let schema = Schema::new(vec![

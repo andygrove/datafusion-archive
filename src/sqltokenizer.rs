@@ -27,6 +27,8 @@ pub enum Token {
     Keyword(String),
     /// Numeric literal
     Number(String),
+    /// String literal
+    String(String),
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
@@ -135,6 +137,26 @@ impl Tokenizer {
                         Ok(Some(Token::Identifier(s)))
                     }
                 }
+                // string
+                '\'' => {
+                    //TODO: handle escaped quotes in string
+                    //TODO: handle EOF before terminating quote
+                    let mut s = String::new();
+                    chars.next(); // consume
+                    while let Some(&ch) = chars.peek() {
+                        match ch {
+                            '\'' => {
+                                chars.next(); // consume
+                                break;
+                            }
+                            _ => {
+                                chars.next(); // consume
+                                s.push(ch);
+                            }
+                        }
+                    }
+                    Ok(Some(Token::String(s)))
+                }
                 // numbers
                 '0'...'9' => {
                     let mut s = String::new();
@@ -187,6 +209,19 @@ impl Tokenizer {
                     chars.next();
                     Ok(Some(Token::Period))
                 }
+                '!' => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some(&ch) => match ch {
+                            '=' => {
+                                chars.next();
+                                Ok(Some(Token::Neq))
+                            }
+                            _ => Err(TokenizerError(format!("TBD"))),
+                        },
+                        None => Err(TokenizerError(format!("TBD"))),
+                    }
+                }
                 '<' => {
                     chars.next(); // consume
                     match chars.peek() {
@@ -225,4 +260,91 @@ impl Tokenizer {
             None => Ok(None),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenize_select_1() {
+        let sql = String::from("SELECT 1");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::Keyword(String::from("SELECT")),
+            Token::Number(String::from("1")),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_scalar_function() {
+        let sql = String::from("SELECT sqrt(1)");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::Keyword(String::from("SELECT")),
+            Token::Identifier(String::from("sqrt")),
+            Token::LParen,
+            Token::Number(String::from("1")),
+            Token::RParen,
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_simple_select() {
+        let sql = String::from("SELECT * FROM customer WHERE id = 1 LIMIT 5");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::Keyword(String::from("SELECT")),
+            Token::Mult,
+            Token::Keyword(String::from("FROM")),
+            Token::Identifier(String::from("customer")),
+            Token::Keyword(String::from("WHERE")),
+            Token::Identifier(String::from("id")),
+            Token::Eq,
+            Token::Number(String::from("1")),
+            Token::Keyword(String::from("LIMIT")),
+            Token::Number(String::from("5")),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_string_predicate() {
+        let sql = String::from("SELECT * FROM customer WHERE salary != 'Not Provided'");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::Keyword(String::from("SELECT")),
+            Token::Mult,
+            Token::Keyword(String::from("FROM")),
+            Token::Identifier(String::from("customer")),
+            Token::Keyword(String::from("WHERE")),
+            Token::Identifier(String::from("salary")),
+            Token::Neq,
+            Token::String(String::from("Not Provided")),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    fn compare(expected: Vec<Token>, actual: Vec<Token>) {
+        //println!("------------------------------");
+        //println!("tokens   = {:?}", actual);
+        //println!("expected = {:?}", expected);
+        //println!("------------------------------");
+        assert_eq!(expected, actual);
+    }
+
 }
