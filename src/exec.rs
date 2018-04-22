@@ -389,7 +389,7 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
                     &ArrayData::Utf8(ref list) => {
                         match &data_type {
                             DataType::Float64 => {
-                                let mut b: Builder<f64> = Builder::new();
+                                let mut b: Builder<f64> = Builder::with_capacity(list.len() as usize);
                                 for i in 0..list.len() as usize {
                                     let x = str::from_utf8(list.slice(i)).unwrap();
                                     match x.parse::<f64>() {
