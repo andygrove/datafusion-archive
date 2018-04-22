@@ -23,14 +23,12 @@ use arrow::array::*;
 use arrow::datatypes::*;
 
 pub struct CountFunction {
-    data_type: DataType,
     count: usize,
 }
 
 impl CountFunction {
-    pub fn new(data_type: &DataType) -> Self {
+    pub fn new() -> Self {
         CountFunction {
-            data_type: data_type.clone(),
             count: 0,
         }
     }
@@ -42,7 +40,7 @@ impl AggregateFunction for CountFunction {
     }
 
     fn args(&self) -> Vec<Field> {
-        vec![Field::new("arg", self.data_type.clone(), true)]
+        vec![Field::new("arg", DataType::UInt32, true)]
     }
 
     fn return_type(&self) -> DataType {
@@ -75,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_count() {
-        let mut count = CountFunction::new(&DataType::Float64);
+        let mut count = CountFunction::new();
         assert_eq!(DataType::UInt64, count.return_type());
         let values: Vec<f64> = vec![12.0, 22.0, 32.0, 6.0, 58.1];
 

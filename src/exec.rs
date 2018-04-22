@@ -29,6 +29,8 @@ use std::string::String;
 
 use arrow::array::*;
 use arrow::builder::*;
+use arrow::list::*;
+use arrow::list_builder::*;
 use arrow::datatypes::*;
 
 //use futures::{Future, Stream};
@@ -342,15 +344,6 @@ pub fn compile_expr(
         Expr::AggregateFunction { ref name, ref args } => {
             assert_eq!(1, args.len());
 
-            let return_type = match args[0] {
-                Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
-                _ => {
-                    //TODO: fix this hack
-                    DataType::Float64
-                    //panic!("Aggregate expressions currently only support simple arguments")
-                }
-            };
-
             let compiled_args: Result<Vec<CompiledExpr>> =
                 args.iter().map(|e| compile_scalar_expr(ctx, e)).collect();
 
@@ -360,6 +353,21 @@ pub fn compile_expr(
                 "count" => AggregateType::Count,
                 _ => unimplemented!("Unsupported aggregate function '{}'", name),
             };
+
+            //TODO: this is hacky
+            let return_type = match func {
+                AggregateType::Count => DataType::UInt64,
+                AggregateType::Min | AggregateType::Max => match args[0] {
+                    Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
+                    _ => {
+                        //TODO: fix this hack
+                        DataType::Float64
+                        //panic!("Aggregate expressions currently only support simple arguments")
+                    }
+                }
+                _ => panic!()
+            };
+
 
             Ok(RuntimeExpr::AggregateFunction {
                 func,
@@ -700,7 +708,7 @@ fn make_key(group_values: &Vec<Rc<Value>>, i: usize) -> Vec<String> {
                 ArrayData::UInt64(ref buf) => format!("{:?}", buf.get(i)),
                 ArrayData::Float32(ref buf) => format!("{:?}", buf.get(i)),
                 ArrayData::Float64(ref buf) => format!("{:?}", buf.get(i)),
-                //TODO: String
+                ArrayData::Utf8(ref list) => format!("{:?}", str::from_utf8(list.slice(i)).unwrap()),
                 _ => unimplemented!(
                     "Unsupported datatype for aggregate grouping expression"
                 ),
@@ -731,7 +739,7 @@ fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateE
                         as Box<AggregateFunction>
                 }
                 AggregateType::Count => {
-                    Box::new(CountFunction::new(return_type))
+                    Box::new(CountFunction::new())
                         as Box<AggregateFunction>
                 }
                 _ => panic!(),
@@ -870,7 +878,26 @@ impl SimpleRelation for AggregateRelation {
             row_count: map.len(),
         };
 
-        for i in 0..result_columns.len() {
+        // create Arrow arrays from grouping scalar values
+        for i in 0..group_expr.len() {
+            //TODO: should not use string version of group keys
+            //let mut b: ListBuilder<u8> = ListBuilder::new();
+            let mut tmp: Vec<String> = vec![];
+            for v in &result_columns[i] {
+                match v {
+                    ScalarValue::Utf8(s) => tmp.push(s.clone()),
+                        //b.push(s.as_bytes()),
+                    _ => panic!("type mismatch: {:?}", v),
+                }
+//                let list: List<u8> = b.finish();
+            }
+            aggr_batch
+                .data
+                .push(Rc::new(Value::Column(Rc::new(Array::from(tmp)))));
+        }
+
+        // create Arrow arrays from aggregate scalar values
+        for i in 0..aggr_expr.len() {
             match aggr_expr[i] {
                 RuntimeExpr::AggregateFunction {
                     ref return_type, ..
@@ -878,10 +905,10 @@ impl SimpleRelation for AggregateRelation {
                     //TODO: support all the types (use macros to make this less verbose)
                     DataType::Float64 => {
                         let mut b: Builder<f64> = Builder::new();
-                        for v in &result_columns[i] {
+                        for v in &result_columns[i + group_expr.len()] {
                             match v {
                                 ScalarValue::Float64(vv) => b.push(*vv),
-                                ScalarValue::UInt64(vv) => b.push(*vv as f64), // hack for testing
+                                //ScalarValue::UInt64(vv) => b.push(*vv as f64), // hack for testing
                                 _ => panic!("type mismatch: {:?}", v),
                             }
                         }
@@ -1041,7 +1068,7 @@ impl ExecutionContext {
 
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
-        //println!("AST: {:?}", ast);
+        println!("AST: {:?}", ast);
 
         match ast {
             SQLCreateTable { name, columns } => {
@@ -1066,7 +1093,7 @@ impl ExecutionContext {
 
                 // plan the query (create a logical relational plan)
                 let plan = query_planner.sql_to_rel(&ast)?;
-                //println!("Logical plan: {:?}", plan);
+                println!("Logical plan: {:?}", plan);
 
                 // return the DataFrame
                 Ok(Rc::new(DF {

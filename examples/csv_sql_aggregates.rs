@@ -33,7 +33,7 @@ fn main() {
 
             // define schema for data source (csv file)
             let schema = Schema::new(vec![
-                Field::new("id", DataType::UInt32, false),
+                Field::new("id", DataType::Utf8, false),
                 Field::new("employee_name", DataType::Utf8, false),
                 Field::new("job_title", DataType::Utf8, false),
                 Field::new("base_pay", DataType::Utf8, false),
@@ -42,10 +42,10 @@ fn main() {
                 Field::new("benefits", DataType::Utf8, false),
                 Field::new("total_pay", DataType::Utf8, false),
                 Field::new("total_pay_benefits", DataType::Utf8, false),
-                Field::new("year", DataType::UInt16, false),
+                Field::new("year", DataType::Utf8, false),
                 Field::new("notes", DataType::Utf8, true),
                 Field::new("agency", DataType::Utf8, false),
-                Field::new("satus", DataType::Utf8, false),
+                Field::new("status", DataType::Utf8, false),
             ]);
 
             // open a CSV file as a dataframe

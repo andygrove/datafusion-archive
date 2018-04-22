@@ -28,8 +28,8 @@ path = "src/bin/console/main.rs"
 bytes = "0.4"
 byteorder = "1"
 csv = "1.0.0-beta.5"
-datafusion-arrow = "0.1.0-nightly-20180420"
-#datafusion-arrow = { path = "../datafusion-arrow" }
+#datafusion-arrow = "0.1.0-nightly-20180420"
+datafusion-arrow = { path = "../datafusion-arrow" }
 parquet = "0.1.0"
 #futures = "0.1.18"
 #futures-timer = "0.1"
