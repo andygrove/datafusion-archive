@@ -123,7 +123,7 @@ impl fmt::Debug for Value {
     fn fmt(&self, f: &mut Formatter) -> result::Result<(), fmt::Error> {
         match self {
             Value::Scalar(v) => write!(f, "{:?}", v)?,
-            _ => write!(f, "???")?,
+            Value::Column(ref array) => write!(f, "[array with length {}]", array.len())?,
         }
         Ok(())
     }

@@ -766,4 +766,13 @@ mod tests {
         }
     }
 
+    #[test]
+    fn parse_aggregate_with_group_by() {
+        let sql = String::from("SELECT a, COUNT(1), MIN(b), MAX(b) FROM foo GROUP BY a");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        //TODO: assertions
+    }
 }

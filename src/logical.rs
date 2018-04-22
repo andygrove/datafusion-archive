@@ -14,6 +14,8 @@
 
 //! Logical plan
 
+use std::fmt;
+use std::fmt::{Error, Formatter};
 use std::rc::Rc;
 
 use super::types::*;
@@ -70,7 +72,7 @@ pub enum Operator {
 }
 
 /// Relation Expression
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),
@@ -89,6 +91,29 @@ pub enum Expr {
     /// aggregate function
     AggregateFunction { name: String, args: Vec<Expr> },
 }
+
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            Expr::Column(i) =>
+                write!(f, "#{}", i),
+            Expr::Literal(v) =>
+                write!(f, "{:?}", v),
+            Expr::BinaryExpr { left, op, right } =>
+                write!(f, "{:?} {:?} {:?}", left, op, right),
+            Expr::Sort { expr, asc } => if *asc {
+                write!(f, "{:?} ASC", expr)
+            } else {
+                write!(f, "{:?} DESC", expr)
+            },
+            Expr::ScalarFunction { name, args } =>
+                write!(f, "{}()", name),
+            Expr::AggregateFunction { name, args } =>
+                write!(f, "{}()", name),
+        }
+    }
+}
+
 
 impl Expr {
     pub fn eq(&self, other: &Expr) -> Expr {
@@ -142,7 +167,7 @@ impl Expr {
 
 /// The LogicalPlan represents different types of relations (such as Projection, Selection, etc) and
 /// can be created by the SQL query planner and the DataFrame API.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum LogicalPlan {
     /// A relation that applies a row limit to its child relation
     Limit {
@@ -210,6 +235,55 @@ impl LogicalPlan {
             LogicalPlan::Sort { schema, .. } => &schema,
             LogicalPlan::Limit { schema, .. } => &schema,
         }
+    }
+}
+
+impl LogicalPlan {
+    fn fmt_with_indent(&self, f: &mut Formatter, indent: usize) -> Result<(), Error> {
+        write!(f, "\n")?;
+        for _ in 0..indent {
+            write!(f, "  ")?;
+        }
+        match *self {
+            LogicalPlan::EmptyRelation { .. } => {
+                write!(f, "EmptyRelation:")
+            }
+            LogicalPlan::TableScan { ref table_name, .. } => {
+                write!(f, "TableScan: {}", table_name)
+            }
+            LogicalPlan::CsvFile { .. } => {
+                write!(f, "CsvFile:")
+            }
+            LogicalPlan::ParquetFile { .. } => {
+                write!(f, "ParquetFile:")
+            }
+            LogicalPlan::Projection { ref input, .. } => {
+                write!(f, "Projection:")?;
+                input.fmt_with_indent(f, indent + 1)
+            }
+            LogicalPlan::Selection { ref expr, ref input, .. } => {
+                write!(f, "Selection: {:?}", expr)?;
+                input.fmt_with_indent(f, indent + 1)
+            }
+            LogicalPlan::Aggregate { ref input, ref group_expr, ref aggr_expr, .. } => {
+                write!(f, "Aggregate: groupBy=[{:?}], aggr=[{:?}]", group_expr, aggr_expr)?;
+                input.fmt_with_indent(f, indent + 1)
+            }
+            LogicalPlan::Sort { ref input, .. } => {
+                write!(f, "Sort:")?;
+                input.fmt_with_indent(f, indent + 1)
+            }
+            LogicalPlan::Limit { ref input, .. } => {
+                write!(f, "Limit:")?;
+                input.fmt_with_indent(f, indent + 1)
+            }
+        }
+    }
+}
+
+impl fmt::Debug for LogicalPlan {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        self.fmt_with_indent(f, 0)
     }
 }
 

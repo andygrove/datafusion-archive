@@ -23,7 +23,6 @@ use datafusion::exec::*;
 use datafusion::functions::conversions::*;
 
 fn main() {
-
     // download data file from https://www.kaggle.com/kaggle/sf-salaries/discussion/18736
     let path = "datasets/Salaries.csv";
     match File::open(path) {
@@ -34,7 +33,7 @@ fn main() {
 
             // define schema for data source (csv file)
             let schema = Schema::new(vec![
-                Field::new("id", DataType::UInt32, false),
+                Field::new("id", DataType::Utf8, false),
                 Field::new("employee_name", DataType::Utf8, false),
                 Field::new("job_title", DataType::Utf8, false),
                 Field::new("base_pay", DataType::Utf8, false),
@@ -43,10 +42,10 @@ fn main() {
                 Field::new("benefits", DataType::Utf8, false),
                 Field::new("total_pay", DataType::Utf8, false),
                 Field::new("total_pay_benefits", DataType::Utf8, false),
-                Field::new("year", DataType::UInt16, false),
+                Field::new("year", DataType::Utf8, false),
                 Field::new("notes", DataType::Utf8, true),
                 Field::new("agency", DataType::Utf8, false),
-                Field::new("satus", DataType::Utf8, false),
+                Field::new("status", DataType::Utf8, false),
             ]);
 
             // open a CSV file as a dataframe
@@ -56,9 +55,14 @@ fn main() {
             ctx.register("salaries", salaries);
 
             // define the SQL statement
-            let sql = "SELECT MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
+            let sql = "SELECT year, MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
                             FROM salaries \
-                            WHERE base_pay != 'Not Provided' AND base_pay != ''";
+                            WHERE base_pay != 'Not Provided' AND base_pay != '' \
+                            GROUP BY year";
+
+//            let sql = "SELECT MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
+//                            FROM salaries \
+//                            WHERE base_pay != 'Not Provided' AND base_pay != ''";
 
             // create a data frame
             let df = ctx.sql(&sql).unwrap();
@@ -68,5 +72,4 @@ fn main() {
         }
         _ => println!("Could not locate {} - try downloading it from https://www.kaggle.com/kaggle/sf-salaries/discussion/18736", path)
     }
-
 }
