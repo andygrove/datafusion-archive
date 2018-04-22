@@ -13,14 +13,12 @@
 // limitations under the License.
 
 use std::fs::File;
-use std::rc::Rc;
 
 extern crate arrow;
 extern crate datafusion;
 
 use arrow::datatypes::*;
 use datafusion::exec::*;
-use datafusion::functions::conversions::*;
 
 fn main() {
     // download data file from https://www.kaggle.com/kaggle/sf-salaries/discussion/18736
@@ -29,7 +27,6 @@ fn main() {
         Ok(_) => {
             // create execution context
             let mut ctx = ExecutionContext::local();
-            ctx.register_scalar_function(Rc::new(ToFloat64Function{}));
 
             // define schema for data source (csv file)
             let schema = Schema::new(vec![
@@ -55,7 +52,7 @@ fn main() {
             ctx.register("salaries", salaries);
 
             // define the SQL statement
-            let sql = "SELECT year, MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
+            let sql = "SELECT year, MIN(CAST(base_pay AS FLOAT)), MAX(CAST(base_pay AS FLOAT)) \
                             FROM salaries \
                             WHERE base_pay != 'Not Provided' AND base_pay != '' \
                             GROUP BY year";

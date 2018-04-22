@@ -212,6 +212,13 @@ impl SqlToRel {
                 }
             }
 
+            &ASTNode::SQLCast { ref expr, ref data_type } => {
+                Ok(Expr::Cast {
+                    expr: Rc::new(self.sql_to_rex(&expr, schema)?),
+                    data_type: convert_data_type(data_type)
+                })
+            }
+
             &ASTNode::SQLBinaryExpr {
                 ref left,
                 ref op,
