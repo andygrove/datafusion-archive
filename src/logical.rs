@@ -84,6 +84,11 @@ pub enum Expr {
         op: Operator,
         right: Rc<Expr>,
     },
+    /// cast a value to a different type
+    Cast {
+        expr: Rc<Expr>,
+        data_type: DataType
+    },
     /// sort expression
     Sort { expr: Rc<Expr>, asc: bool },
     /// scalar function
@@ -99,6 +104,8 @@ impl fmt::Debug for Expr {
                 write!(f, "#{}", i),
             Expr::Literal(v) =>
                 write!(f, "{:?}", v),
+            Expr::Cast { expr, data_type } =>
+                write!(f, "CAST {:?} AS {:?}", expr, data_type),
             Expr::BinaryExpr { left, op, right } =>
                 write!(f, "{:?} {:?} {:?}", left, op, right),
             Expr::Sort { expr, asc } => if *asc {
@@ -106,9 +113,9 @@ impl fmt::Debug for Expr {
             } else {
                 write!(f, "{:?} DESC", expr)
             },
-            Expr::ScalarFunction { name, args } =>
+            Expr::ScalarFunction { name, .. } =>
                 write!(f, "{}()", name),
-            Expr::AggregateFunction { name, args } =>
+            Expr::AggregateFunction { name, .. } =>
                 write!(f, "{}()", name),
         }
     }
@@ -251,8 +258,8 @@ impl LogicalPlan {
             LogicalPlan::TableScan { ref table_name, .. } => {
                 write!(f, "TableScan: {}", table_name)
             }
-            LogicalPlan::CsvFile { .. } => {
-                write!(f, "CsvFile:")
+            LogicalPlan::CsvFile { ref filename, ref schema, .. } => {
+                write!(f, "CsvFile: file={}, schema={:?}", filename, schema)
             }
             LogicalPlan::ParquetFile { .. } => {
                 write!(f, "ParquetFile:")

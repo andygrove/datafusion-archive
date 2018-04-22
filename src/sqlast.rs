@@ -24,6 +24,10 @@ pub enum ASTNode {
         op: SQLOperator,
         right: Box<ASTNode>,
     },
+    SQLCast {
+        expr: Box<ASTNode>,
+        data_type: SQLType
+    },
     SQLNested(Box<ASTNode>),
     SQLUnary {
         operator: SQLOperator,

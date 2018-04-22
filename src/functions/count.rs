@@ -51,10 +51,12 @@ impl AggregateFunction for CountFunction {
         assert_eq!(1, args.len());
         match args[0].as_ref() {
             Value::Column(ref array) => {
+                //println!("Counting array elements");
                 self.count += array.len();
                 Ok(())
             },
             Value::Scalar(_) => {
+                //println!("Counting scalar value");
                 self.count += 1;
                 Ok(())
             }

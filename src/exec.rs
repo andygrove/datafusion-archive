@@ -315,6 +315,8 @@ impl Value {
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
 pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Rc<Value>>>;
 
+pub type CompiledCastFunction = Box<Fn(&Value) -> Result<Rc<Value>>>;
+
 pub enum AggregateType {
     Min,
     Max,
@@ -379,6 +381,44 @@ pub fn compile_expr(
     }
 }
 
+fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
+    Ok(Box::new( move|v: &Value| {
+        match v {
+            Value::Column(ref array) => {
+                match array.data() {
+                    &ArrayData::Utf8(ref list) => {
+                        match &data_type {
+                            DataType::Float64 => {
+                                let mut b: Builder<f64> = Builder::new();
+                                for i in 0..list.len() as usize {
+                                    let x = str::from_utf8(list.slice(i)).unwrap();
+                                    match x.parse::<f64>() {
+                                        Ok(v) => b.push(v),
+                                        Err(_) => return Err(ExecutionError::General(format!(
+                                            "Cannot cast '{}' to {:?}", x, data_type)))
+                                    }
+                                }
+                                Ok(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))))
+                            }
+                            _ => unimplemented!()
+                        }
+                    }
+                    _ => unimplemented!()
+                }
+            }
+            _ => unimplemented!()
+        }
+    }))
+
+
+//                    Err(ExecutionError::NotImplemented)
+//                }
+//                _ => Err(ExecutionError::NotImplemented)
+//            }
+//        }
+//        _ => Err(ExecutionError::NotImplemented)
+}
+
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
     match expr {
@@ -393,6 +433,17 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
         &Expr::Column(index) => Ok(Box::new(move |batch: &RecordBatch| {
             Ok(Rc::new((*batch.column(index)).clone()))
         })),
+        &Expr::Cast { ref expr, ref data_type } => {
+            match expr.as_ref() {
+                &Expr::Column(index) => {
+                    let compiled_cast_expr = compile_cast_column(data_type.clone())?;
+                    Ok(Box::new(move |batch: &RecordBatch| {
+                            (compiled_cast_expr)(batch.column(index))
+                        }))
+                }
+                _ => Err(ExecutionError::NotImplemented)
+            }
+        }
         &Expr::BinaryExpr {
             ref left,
             ref op,
@@ -755,6 +806,19 @@ fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateE
 
 }
 
+
+macro_rules! build_aggregate_array{
+    ($TY:ty, $NAME:ident, $DATA:expr) => {
+        {
+            let mut b: Builder<$TY> = Builder::new();
+            for v in $DATA {
+                b.push(v.$NAME().unwrap());
+            }
+            Array::from(b.finish())
+        }
+    }
+}
+
 impl SimpleRelation for AggregateRelation {
     fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
 
@@ -767,7 +831,7 @@ impl SimpleRelation for AggregateRelation {
         self.input.scan().for_each(|batch| {
             match batch {
                 Ok(ref b) => {
-                    // println!("Processing aggregates for batch with {} rows", b.num_rows());
+                    //println!("Processing aggregates for batch with {} rows", b.num_rows());
 
                     // evaluate the single argument to each aggregate function
                     let mut aggr_col_args: Vec<Vec<Rc<Value>>> = Vec::with_capacity(aggr_expr.len());
@@ -793,8 +857,8 @@ impl SimpleRelation for AggregateRelation {
                     let group_values: Vec<Rc<Value>> = group_values_result.unwrap(); //TODO
 
                     if group_values.len() == 0 {
-                        // aggregate columns directly
 
+                        // aggregate columns directly
                         let key: Vec<String> = Vec::with_capacity(0);
 
                         let entry = map.entry(key)
@@ -901,22 +965,26 @@ impl SimpleRelation for AggregateRelation {
             match aggr_expr[i] {
                 RuntimeExpr::AggregateFunction {
                     ref return_type, ..
-                } => match return_type {
-                    //TODO: support all the types (use macros to make this less verbose)
-                    DataType::Float64 => {
-                        let mut b: Builder<f64> = Builder::new();
-                        for v in &result_columns[i + group_expr.len()] {
-                            match v {
-                                ScalarValue::Float64(vv) => b.push(*vv),
-                                //ScalarValue::UInt64(vv) => b.push(*vv as f64), // hack for testing
-                                _ => panic!("type mismatch: {:?}", v),
-                            }
-                        }
-                        aggr_batch
-                            .data
-                            .push(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))));
-                    }
-                    _ => panic!(),
+                } => {
+
+                    let aggr_values = &result_columns[i + group_expr.len()];
+
+                    let array: Array = match return_type {
+                        DataType::UInt8 => build_aggregate_array!(u8, get_u8, aggr_values),
+                        DataType::UInt16 => build_aggregate_array!(u16, get_u16, aggr_values),
+                        DataType::UInt32 => build_aggregate_array!(u32, get_u32, aggr_values),
+                        DataType::UInt64 => build_aggregate_array!(u64, get_u64, aggr_values),
+                        DataType::Int8 => build_aggregate_array!(i8, get_i8, aggr_values),
+                        DataType::Int16 => build_aggregate_array!(i16, get_i16, aggr_values),
+                        DataType::Int32 => build_aggregate_array!(i32, get_i32, aggr_values),
+                        DataType::Int64 => build_aggregate_array!(i64, get_i64, aggr_values),
+                        DataType::Float32 => build_aggregate_array!(f32, get_f32, aggr_values),
+                        DataType::Float64 => build_aggregate_array!(f64, get_f64, aggr_values),
+                        _ => unimplemented!("No support for aggregate with return type {:?}", return_type),
+                    };
+
+                    aggr_batch.data.push(Rc::new(Value::Column(Rc::new(array))))
+
                 },
                 _ => panic!(),
             }

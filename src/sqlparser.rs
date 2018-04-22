@@ -99,12 +99,15 @@ impl Parser {
                         match self.peek_token() {
                             Some(Token::LParen) => {
                                 self.next_token(); // skip lparen
+                                match id.to_uppercase().as_ref() {
+                                    "CAST" => self.parse_cast_expression(),
+                                    _ => {
+                                        let args = self.parse_expr_list()?;
+                                        self.next_token(); // skip rparen
+                                        Ok(ASTNode::SQLFunction { id, args })
+                                    }
+                                }
 
-                                let args = self.parse_expr_list()?;
-
-                                self.next_token(); // skip rparen
-
-                                Ok(ASTNode::SQLFunction { id, args })
                             }
                             Some(Token::Period) => {
                                 let mut id_parts: Vec<String> = vec![id];
@@ -151,7 +154,16 @@ impl Parser {
         }
     }
 
-    /// Parse an expression infix
+    /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
+    fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
+        let expr = self.parse_expr(0)?;
+        self.consume_token(&Token::Keyword("AS".to_string()))?;
+        let data_type = self.parse_data_type()?;
+        self.consume_token(&Token::RParen)?;
+        Ok(ASTNode::SQLCast { expr: Box::new(expr), data_type })
+    }
+
+    /// Parse an expression infix (typically an operator)
     fn parse_infix(
         &mut self,
         expr: ASTNode,
@@ -409,7 +421,7 @@ impl Parser {
                     self.consume_token(&Token::RParen)?;
                     Ok(SQLType::Varchar(n as usize))
                 }
-                _ => Err(ParserError::ParserError("Invalid data type".to_string())),
+                _ => Err(ParserError::ParserError(format!("Invalid data type '{:?}'", k)))
             },
             _ => Err(ParserError::ParserError("Invalid data type".to_string())),
         }
@@ -769,6 +781,16 @@ mod tests {
     #[test]
     fn parse_aggregate_with_group_by() {
         let sql = String::from("SELECT a, COUNT(1), MIN(b), MAX(b) FROM foo GROUP BY a");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        //TODO: assertions
+    }
+
+    #[test]
+    fn parse_cast() {
+        let sql = String::from("SELECT CAST(a AS FLOAT), CAST(123 AS DOUBLE) FROM foo");
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
