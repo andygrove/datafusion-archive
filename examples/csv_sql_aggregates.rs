@@ -13,14 +13,12 @@
 // limitations under the License.
 
 use std::fs::File;
-use std::rc::Rc;
 
 extern crate arrow;
 extern crate datafusion;
 
 use arrow::datatypes::*;
 use datafusion::exec::*;
-use datafusion::functions::conversions::*;
 
 fn main() {
     // download data file from https://www.kaggle.com/kaggle/sf-salaries/discussion/18736
@@ -29,7 +27,6 @@ fn main() {
         Ok(_) => {
             // create execution context
             let mut ctx = ExecutionContext::local();
-            ctx.register_scalar_function(Rc::new(ToFloat64Function{}));
 
             // define schema for data source (csv file)
             let schema = Schema::new(vec![
