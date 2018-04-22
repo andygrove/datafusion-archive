@@ -199,7 +199,7 @@ impl SqlToRel {
         match sql {
             &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(ScalarValue::Int64(n))),
             &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(ScalarValue::Float64(n))),
-            &ASTNode::SQLLiteralString(ref s) => Ok(Expr::Literal(ScalarValue::Utf8(s.clone()))),
+            &ASTNode::SQLLiteralString(ref s) => Ok(Expr::Literal(ScalarValue::Utf8(Rc::new(s.clone())))),
 
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.columns().iter().position(|c| c.name().eq(id)) {

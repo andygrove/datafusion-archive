@@ -720,7 +720,6 @@ pub struct AggregateRelation {
 }
 
 struct AggregateEntry {
-    group_values: Vec<ScalarValue>,
     aggr_values: Vec<Box<AggregateFunction>>,
 }
 
@@ -741,25 +740,61 @@ impl AggregateRelation {
     }
 }
 
+/// Enumeration of types that can be used in a GROUP BY expression
+#[derive(PartialEq,Eq,Hash,Clone)]
+enum GroupScalar {
+    Boolean(bool),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
+    Int8(i8),
+    Int16(i16),
+    Int32(i32),
+    Int64(i64),
+    Utf8(Rc<String>)
+}
+
+impl GroupScalar {
+    
+    fn as_scalar(&self) -> ScalarValue {
+        match *self {
+            GroupScalar::Boolean(v) => ScalarValue::Boolean(v),
+            GroupScalar::UInt8(v) => ScalarValue::UInt8(v),
+            GroupScalar::UInt16(v) => ScalarValue::UInt16(v),
+            GroupScalar::UInt32(v) => ScalarValue::UInt32(v),
+            GroupScalar::UInt64(v) => ScalarValue::UInt64(v),
+            GroupScalar::Int8(v) => ScalarValue::Int8(v),
+            GroupScalar::Int16(v) => ScalarValue::Int16(v),
+            GroupScalar::Int32(v) => ScalarValue::Int32(v),
+            GroupScalar::Int64(v) => ScalarValue::Int64(v),
+            GroupScalar::Utf8(ref v) => ScalarValue::Utf8(v.clone())
+        }
+        
+    }
+    
+}
+
 /// Make a hash map key from a list of values
-fn make_key(group_values: &Vec<Rc<Value>>, i: usize) -> Vec<String> {
+fn make_key(group_values: &Vec<Rc<Value>>, i: usize) -> Vec<GroupScalar> {
     group_values
         .iter()
         .map(|v| match v.as_ref() {
-            Value::Scalar(ref vv) => format!("{:?}", vv),
+            Value::Scalar(ref vv) => match vv.as_ref() {
+                ScalarValue::Boolean(x) => GroupScalar::Boolean(*x),
+                _ => unimplemented!()
+            },
             Value::Column(ref array) => match array.data() {
-                ArrayData::Boolean(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::Int8(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::Int16(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::Int32(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::Int64(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::UInt8(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::UInt16(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::UInt32(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::UInt64(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::Float32(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::Float64(ref buf) => format!("{:?}", buf.get(i)),
-                ArrayData::Utf8(ref list) => format!("{:?}", str::from_utf8(list.slice(i)).unwrap()),
+                ArrayData::Boolean(ref buf) => GroupScalar::Boolean(*buf.get(i)),
+                ArrayData::Int8(ref buf) => GroupScalar::Int8(*buf.get(i)),
+                ArrayData::Int16(ref buf) => GroupScalar::Int16(*buf.get(i)),
+                ArrayData::Int32(ref buf) => GroupScalar::Int32(*buf.get(i)),
+                ArrayData::Int64(ref buf) => GroupScalar::Int64(*buf.get(i)),
+                ArrayData::UInt8(ref buf) => GroupScalar::UInt8(*buf.get(i)),
+                ArrayData::UInt16(ref buf) => GroupScalar::UInt16(*buf.get(i)),
+                ArrayData::UInt32(ref buf) => GroupScalar::UInt32(*buf.get(i)),
+                ArrayData::UInt64(ref buf) => GroupScalar::UInt64(*buf.get(i)),
+                ArrayData::Utf8(ref list) => GroupScalar::Utf8(Rc::new(str::from_utf8(list.slice(i)).unwrap().to_string())),
                 _ => unimplemented!(
                     "Unsupported datatype for aggregate grouping expression"
                 ),
@@ -800,7 +835,6 @@ fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateE
         .collect();
 
     Rc::new(RefCell::new(AggregateEntry {
-        group_values: vec![],
         aggr_values: functions,
     }))
 
@@ -824,7 +858,7 @@ impl SimpleRelation for AggregateRelation {
 
         let aggr_expr = &self.aggr_expr;
         let group_expr = &self.group_expr;
-        let mut map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
+        let mut map: HashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
 
         //println!("There are {} aggregate expressions", aggr_expr.len());
 
@@ -859,7 +893,7 @@ impl SimpleRelation for AggregateRelation {
                     if group_values.len() == 0 {
 
                         // aggregate columns directly
-                        let key: Vec<String> = Vec::with_capacity(0);
+                        let key: Vec<GroupScalar> = Vec::with_capacity(0);
 
                         let entry = map.entry(key)
                             .or_insert_with(|| create_aggregate_entry(aggr_expr));
@@ -917,7 +951,7 @@ impl SimpleRelation for AggregateRelation {
         for (k, v) in map.iter() {
 
             for col_index in 0..k.len() {
-                result_columns[col_index].push(ScalarValue::Utf8(k[col_index].clone()));
+                result_columns[col_index].push(k[col_index].as_scalar());
             }
 
             let g: Vec<Rc<Value>> = v.borrow()
@@ -945,15 +979,9 @@ impl SimpleRelation for AggregateRelation {
         // create Arrow arrays from grouping scalar values
         for i in 0..group_expr.len() {
             //TODO: should not use string version of group keys
-            //let mut b: ListBuilder<u8> = ListBuilder::new();
             let mut tmp: Vec<String> = vec![];
             for v in &result_columns[i] {
-                match v {
-                    ScalarValue::Utf8(s) => tmp.push(s.clone()),
-                        //b.push(s.as_bytes()),
-                    _ => panic!("type mismatch: {:?}", v),
-                }
-//                let list: List<u8> = b.finish();
+                tmp.push(format!("{:?}", v));
             }
             aggr_batch
                 .data

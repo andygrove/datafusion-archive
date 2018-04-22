@@ -41,7 +41,7 @@ pub enum ScalarValue {
     UInt16(u16),
     UInt32(u32),
     UInt64(u64),
-    Utf8(String),
+    Utf8(Rc<String>),
     Struct(Vec<ScalarValue>),
 }
 
