@@ -5,7 +5,7 @@ version = "0.2.5"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://datafusion.rs"
 keywords = [ "distributed", "query", "data", "processing", "sql" ]
-repository = "https://github.com/datafusion-rs/datafusion-rs"
+repository = "https://github.com/datafusion-rs/datafusion"
 license = "Apache-2.0"
 include = [
     "src/**/*.rs",
