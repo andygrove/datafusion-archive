@@ -212,12 +212,14 @@ pub enum LogicalPlan {
         schema_name: String,
         table_name: String,
         schema: Rc<Schema>,
+        projection: Option<Vec<usize>>
     },
     /// Represents a CSV file with a provided schema
     CsvFile {
         filename: String,
         schema: Rc<Schema>,
         has_header: bool,
+        projection: Option<Vec<usize>>
     },
     /// Represents a Parquet file that contains schema information
     ParquetFile {
@@ -255,8 +257,8 @@ impl LogicalPlan {
             LogicalPlan::EmptyRelation { .. } => {
                 write!(f, "EmptyRelation:")
             }
-            LogicalPlan::TableScan { ref table_name, .. } => {
-                write!(f, "TableScan: {}", table_name)
+            LogicalPlan::TableScan { ref table_name, ref projection, .. } => {
+                write!(f, "TableScan: {} projection={:?}", table_name, projection)
             }
             LogicalPlan::CsvFile { ref filename, ref schema, .. } => {
                 write!(f, "CsvFile: file={}, schema={:?}", filename, schema)

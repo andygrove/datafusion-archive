@@ -16,6 +16,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::string::String;
 
@@ -183,6 +184,7 @@ impl SqlToRel {
                     schema_name: String::from("default"),
                     table_name: id.clone(),
                     schema: schema.clone(),
+                    projection: None
                 })),
                 None => Err(format!("no schema found for table {}", id)),
             },
@@ -313,4 +315,155 @@ pub fn expr_to_field(expr: &Vec<Expr>, input_schema: &Schema) -> Vec<Field> {
             _ => unimplemented!(),
         })
         .collect()
+}
+
+
+fn collect_expr(e: &Expr, accum: &mut HashSet<usize>) {
+    match e {
+        Expr::Column(i) => {
+            accum.insert(*i);
+        },
+        Expr::Cast { ref expr, .. } => {
+            collect_expr(expr, accum)
+        },
+        Expr::Literal(_) => {}
+        Expr::BinaryExpr { ref left, ref right, .. } => {
+            collect_expr(left, accum);
+            collect_expr(right, accum);
+        }
+        Expr::AggregateFunction { ref args, .. } => {
+            args.iter().for_each(|e| collect_expr(e, accum));
+        }
+        Expr::ScalarFunction { ref args, .. } => {
+            args.iter().for_each(|e| collect_expr(e, accum));
+        }
+        Expr::Sort { ref expr, .. } => {
+            collect_expr(expr, accum)
+        }
+    }
+}
+
+
+pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) -> Rc<LogicalPlan> {
+    println!("push_down_projection() projection={:?}", projection);
+    match plan.as_ref() {
+        LogicalPlan::Aggregate { ref input, ref group_expr, ref aggr_expr, ref schema } => {
+            //TODO: apply projection first
+            let mut accum: HashSet<usize> = HashSet::new();
+            group_expr.iter().for_each(|e| collect_expr(e, &mut accum));
+            aggr_expr.iter().for_each(|e| collect_expr(e, &mut accum));
+            Rc::new(LogicalPlan::Aggregate {
+                input: push_down_projection(&input, accum),
+                group_expr: group_expr.clone(),
+                aggr_expr: aggr_expr.clone(),
+                schema: schema.clone()
+            })
+        }
+        LogicalPlan::Selection { ref expr, ref input, ref schema } => {
+            let mut accum: HashSet<usize> = projection.clone();
+            collect_expr(expr, &mut accum);
+            Rc::new(LogicalPlan::Selection {
+                expr: expr.clone(),
+                input: push_down_projection(&input, accum),
+                schema: schema.clone()
+            })
+        }
+        LogicalPlan::TableScan { ref schema_name, ref table_name, ref schema, .. } => {
+            Rc::new(LogicalPlan::TableScan {
+                schema_name: schema_name.to_string(),
+                table_name: table_name.to_string(),
+                schema: schema.clone(),
+                projection: Some(projection.iter().map(|i|*i).collect())
+            })
+        },
+        LogicalPlan::CsvFile { ref filename, ref schema, ref has_header, .. } => {
+            Rc::new(LogicalPlan::CsvFile {
+                filename: filename.to_string(),
+                schema: schema.clone(),
+                has_header: *has_header,
+                projection: Some(projection.iter().map(|i|*i).collect())
+            })
+        },
+        _ => unimplemented!()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use super::super::sqlparser::*;
+
+    #[test]
+    fn test_collect_expr() {
+
+        // define schema for data source (csv file)
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::Utf8, false),
+            Field::new("employee_name", DataType::Utf8, false),
+            Field::new("job_title", DataType::Utf8, false),
+            Field::new("base_pay", DataType::Utf8, false),
+            Field::new("overtime_pay", DataType::Utf8, false),
+            Field::new("other_pay", DataType::Utf8, false),
+            Field::new("benefits", DataType::Utf8, false),
+            Field::new("total_pay", DataType::Utf8, false),
+            Field::new("total_pay_benefits", DataType::Utf8, false),
+            Field::new("year", DataType::Utf8, false),
+            Field::new("notes", DataType::Utf8, true),
+            Field::new("agency", DataType::Utf8, false),
+            Field::new("status", DataType::Utf8, false),
+        ]);
+        let mut accum: HashSet<usize> = HashSet::new();
+        collect_expr(&Expr::Cast { expr: Rc::new(Expr::Column(3)), data_type: DataType::Float64 }, &mut accum);
+        collect_expr(&Expr::Cast { expr: Rc::new(Expr::Column(3)), data_type: DataType::Float64 }, &mut accum);
+        println!("accum: {:?}", accum);
+        assert_eq!(1, accum.len());
+        assert!(accum.contains(&3));
+    }
+
+    #[test]
+    fn test_push_down_projection_aggregate_query() {
+
+        // define schema for data source (csv file)
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::Utf8, false),
+            Field::new("employee_name", DataType::Utf8, false),
+            Field::new("job_title", DataType::Utf8, false),
+            Field::new("base_pay", DataType::Utf8, false),
+            Field::new("overtime_pay", DataType::Utf8, false),
+            Field::new("other_pay", DataType::Utf8, false),
+            Field::new("benefits", DataType::Utf8, false),
+            Field::new("total_pay", DataType::Utf8, false),
+            Field::new("total_pay_benefits", DataType::Utf8, false),
+            Field::new("year", DataType::Utf8, false),
+            Field::new("notes", DataType::Utf8, true),
+            Field::new("agency", DataType::Utf8, false),
+            Field::new("status", DataType::Utf8, false),
+        ]);
+
+        let schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>> = Rc::new(RefCell::new(HashMap::new()));
+        schemas.borrow_mut().insert("salaries".to_string(), Rc::new(schema));
+
+        // define the SQL statement
+        let sql = "SELECT year, MIN(CAST(base_pay AS FLOAT)), MAX(CAST(base_pay AS FLOAT)) \
+                            FROM salaries \
+                            WHERE base_pay != 'Not Provided' AND base_pay != '' \
+                            GROUP BY year";
+
+        let ast = Parser::parse_sql(String::from(sql)).unwrap();
+        let query_planner = SqlToRel::new(schemas.clone());
+        let plan = query_planner.sql_to_rel(&ast).unwrap();
+        println!("BEFORE: {:?}", plan);
+
+        let new_plan = push_down_projection(&plan, HashSet::new());
+        println!("AFTER: {:?}", new_plan);
+
+        //TODO: assertions
+
+    }
+
+
+
+
 }

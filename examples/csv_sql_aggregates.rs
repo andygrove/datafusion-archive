@@ -46,7 +46,7 @@ fn main() {
             ]);
 
             // open a CSV file as a dataframe
-            let salaries = ctx.load_csv(path, &schema, true).unwrap();
+            let salaries = ctx.load_csv(path, &schema, true, None).unwrap();
 
             // register as a table so we can run SQL against it
             ctx.register("salaries", salaries);

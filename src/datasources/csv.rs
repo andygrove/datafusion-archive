@@ -32,12 +32,13 @@ use super::common::*;
 
 pub struct CsvFile {
     schema: Rc<Schema>,
+    projection: Option<Vec<usize>>,
     record_iter: StringRecordsIntoIter<BufReader<File>>,
     batch_size: usize,
 }
 
 impl CsvFile {
-    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool) -> Result<Self> {
+    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool, projection: Option<Vec<usize>>) -> Result<Self> {
         let csv_reader = csv::ReaderBuilder::new()
             .has_headers(has_headers)
             .from_reader(BufReader::new(file));
@@ -45,6 +46,7 @@ impl CsvFile {
         let record_iter = csv_reader.into_records();
         Ok(CsvFile {
             schema: schema.clone(),
+            projection,
             record_iter,
             batch_size: 1024,
         })
@@ -55,6 +57,7 @@ impl CsvFile {
     }
 }
 
+/// Built an Arrow array from one column in a batch of CSV records
 macro_rules! collect_column {
     ($ROWS:expr, $COL_INDEX:expr, $TY:ty, $LEN:expr, $DEFAULT_VALUE:expr) => {{
         let mut b: Builder<$TY> = Builder::with_capacity($LEN);
@@ -102,36 +105,56 @@ impl DataSource for CsvFile {
             return None;
         }
 
-        let columns: Vec<Rc<Value>> = self.schema
+        let foo = self.schema
             .columns()
             .iter()
-            .enumerate()
-            .map(|(i, c)| match c.data_type() {
-                DataType::Boolean => collect_column!(rows, i, bool, rows.len(), false),
-                DataType::Int8 => collect_column!(rows, i, i8, rows.len(), 0),
-                DataType::Int16 => collect_column!(rows, i, i16, rows.len(), 0),
-                DataType::Int32 => collect_column!(rows, i, i32, rows.len(), 0),
-                DataType::Int64 => collect_column!(rows, i, i64, rows.len(), 0),
-                DataType::UInt8 => collect_column!(rows, i, u8, rows.len(), 0),
-                DataType::UInt16 => collect_column!(rows, i, u16, rows.len(), 0),
-                DataType::UInt32 => collect_column!(rows, i, u32, rows.len(), 0),
-                DataType::UInt64 => collect_column!(rows, i, u64, rows.len(), 0),
-                DataType::Float16 => collect_column!(rows, i, f32, rows.len(), 0_f32),
-                DataType::Float32 => collect_column!(rows, i, f32, rows.len(), 0_f32),
-                DataType::Float64 => collect_column!(rows, i, f64, rows.len(), 0_f64),
-                DataType::Utf8 => {
-                    let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(rows.len());
-                    rows.iter().for_each(|row| {
-                        let s = row.get(i).unwrap_or("").to_string();
-                        builder.push(s.as_bytes());
-                    });
-                    let buffer = builder.finish();
-                    Rc::new(Value::Column(Rc::new(Array::new(
-                        rows.len(),
-                        ArrayData::Utf8(buffer),
-                    ))))
+            .enumerate();
+
+        let projection = match self.projection {
+            Some(ref v) => v.clone(),
+            None => self.schema
+                .columns()
+                .iter()
+                .enumerate().
+                map(|(i,_)| i)
+            .collect()
+        };
+
+        let columns: Vec<Rc<Value>> = foo
+            .map(|(i, c)| {
+                if projection.contains(&i) {
+                    match c.data_type() {
+                        DataType::Boolean => collect_column!(rows, i, bool, rows.len(), false),
+                        DataType::Int8 => collect_column!(rows, i, i8, rows.len(), 0),
+                        DataType::Int16 => collect_column!(rows, i, i16, rows.len(), 0),
+                        DataType::Int32 => collect_column!(rows, i, i32, rows.len(), 0),
+                        DataType::Int64 => collect_column!(rows, i, i64, rows.len(), 0),
+                        DataType::UInt8 => collect_column!(rows, i, u8, rows.len(), 0),
+                        DataType::UInt16 => collect_column!(rows, i, u16, rows.len(), 0),
+                        DataType::UInt32 => collect_column!(rows, i, u32, rows.len(), 0),
+                        DataType::UInt64 => collect_column!(rows, i, u64, rows.len(), 0),
+                        DataType::Float16 => collect_column!(rows, i, f32, rows.len(), 0_f32),
+                        DataType::Float32 => collect_column!(rows, i, f32, rows.len(), 0_f32),
+                        DataType::Float64 => collect_column!(rows, i, f64, rows.len(), 0_f64),
+                        DataType::Utf8 => {
+                            let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(rows.len());
+                            rows.iter().for_each(|row| {
+                                let s = row.get(i).unwrap_or("").to_string();
+                                builder.push(s.as_bytes());
+                            });
+                            let buffer = builder.finish();
+                            Rc::new(Value::Column(Rc::new(Array::new(
+                                rows.len(),
+                                ArrayData::Utf8(buffer),
+                            ))))
+                        }
+                        _ => unimplemented!("CSV does not support data type {:?}", c.data_type())
+                    }
+                } else {
+                    // not in the projection
+                    //println!("Not loading column {} at index {}", c.name(), i);
+                    Rc::new(Value::Scalar(Rc::new(ScalarValue::Null)))
                 }
-                _ => unimplemented!(),
             })
             .collect();
 
@@ -210,7 +233,7 @@ mod tests {
 
         let file = File::open("test/data/uk_cities.csv").unwrap();
 
-        let mut csv = CsvFile::open(file, Rc::new(schema), false).unwrap();
+        let mut csv = CsvFile::open(file, Rc::new(schema), false, None).unwrap();
         let batch = csv.next().unwrap().unwrap();
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
     }
@@ -223,7 +246,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
         let file = File::open("test/data/uk_cities.csv").unwrap();
-        let mut csv = CsvFile::open(file, Rc::new(schema), false).unwrap();
+        let mut csv = CsvFile::open(file, Rc::new(schema), false, None).unwrap();
         csv.set_batch_size(2);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(csv)));
         it.for_each(|record_batch| match record_batch {

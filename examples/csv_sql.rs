@@ -36,7 +36,7 @@ fn main() {
     ]);
 
     // open a CSV file as a dataframe
-    let uk_cities = ctx.load_csv("test/data/uk_cities.csv", &schema, false)
+    let uk_cities = ctx.load_csv("test/data/uk_cities.csv", &schema, false, None)
         .unwrap();
     println!("uk_cities schema: {}", uk_cities.schema().to_string());
 
