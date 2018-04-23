@@ -71,7 +71,19 @@ impl AggregateFunction for MinFunction {
                 }
                 Ok(())
             }
-            _ => unimplemented!(),
+            Value::Scalar(ref v) => match v.as_ref() {
+                ScalarValue::Float64(ref value) => {
+                    match self.value {
+                        ScalarValue::Null => self.value = ScalarValue::Float64(*value),
+                        ScalarValue::Float64(x) => if *value < x {
+                            self.value = ScalarValue::Float64(*value)
+                        },
+                        _ => panic!("type mismatch"),
+                    }
+                    Ok(())
+                }
+                _ => unimplemented!("unsupported data type in MinFunction"),
+            }
         }
     }
 

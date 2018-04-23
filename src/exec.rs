@@ -628,7 +628,7 @@ impl SimpleRelation for FilterRelation {
         Box::new(self.input.scan().map(move |b| {
             match b {
                 Ok(ref batch) => {
-                    println!("FilterRelation batch {} rows with {} columns", batch.num_rows(), batch.num_columns());
+                    //println!("FilterRelation batch {} rows with {} columns", batch.num_rows(), batch.num_columns());
 
                     assert!(batch.num_rows() > 0);
                     // evaluate the filter expression for every row in the batch
@@ -715,8 +715,6 @@ pub struct AggregateRelation {
     input: Box<SimpleRelation>,
     group_expr: Vec<CompiledExpr>,
     aggr_expr: Vec<RuntimeExpr>,
-    //map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>>
-
 }
 
 struct AggregateEntry {
@@ -916,9 +914,14 @@ impl SimpleRelation for AggregateRelation {
                                 .or_insert_with(|| create_aggregate_entry(aggr_expr));
                             let mut entry_mut = entry.borrow_mut();
 
-                            for i in 0..aggr_expr.len() {
-                                (*entry_mut).aggr_values[i]
-                                    .execute(&aggr_col_args[i]) //TODO: pass scalar value not column
+                            for j in 0..aggr_expr.len() {
+                                let row_aggr_values: Vec<Rc<Value>> = aggr_col_args[j].iter()
+                                    .map(|col| match col.as_ref() {
+                                        Value::Column(ref col) => Rc::new(Value::Scalar(Rc::new(get_value(col, i)))),
+                                        Value::Scalar(ref v) => Rc::new(Value::Scalar(v.clone()))
+                                }).collect();
+                                (*entry_mut).aggr_values[j]
+                                    .execute(&row_aggr_values)
                                     .unwrap();
                             }
                         }
