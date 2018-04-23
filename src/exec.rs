@@ -17,8 +17,8 @@
 use std::cell::RefCell;
 use std::clone::Clone;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::convert::*;
-use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Error};
 use std::iter::Iterator;
@@ -628,7 +628,7 @@ impl SimpleRelation for FilterRelation {
         Box::new(self.input.scan().map(move |b| {
             match b {
                 Ok(ref batch) => {
-                    //println!("FilterRelation batch {} rows", batch.num_rows());
+                    //println!("FilterRelation batch {} rows with {} columns", batch.num_rows(), batch.num_columns());
 
                     assert!(batch.num_rows() > 0);
                     // evaluate the filter expression for every row in the batch
@@ -715,8 +715,6 @@ pub struct AggregateRelation {
     input: Box<SimpleRelation>,
     group_expr: Vec<CompiledExpr>,
     aggr_expr: Vec<RuntimeExpr>,
-    //map: HashMap<Vec<String>, Rc<RefCell<AggregateEntry>>>
-
 }
 
 struct AggregateEntry {
@@ -900,14 +898,9 @@ impl SimpleRelation for AggregateRelation {
                         let mut entry_mut = entry.borrow_mut();
 
                         for i in 0..aggr_expr.len() {
-                            match aggr_expr[i] {
-                                RuntimeExpr::AggregateFunction { ref args, .. } => {
-                                    (*entry_mut).aggr_values[i]
-                                        .execute(&aggr_col_args[i])
-                                        .unwrap();
-                                }
-                                _ => panic!(),
-                            }
+                            (*entry_mut).aggr_values[i]
+                                .execute(&aggr_col_args[i])
+                                .unwrap();
                         }
 
                     } else {
@@ -921,15 +914,15 @@ impl SimpleRelation for AggregateRelation {
                                 .or_insert_with(|| create_aggregate_entry(aggr_expr));
                             let mut entry_mut = entry.borrow_mut();
 
-                            for i in 0..aggr_expr.len() {
-                                match aggr_expr[i] {
-                                    RuntimeExpr::AggregateFunction { ref args, .. } => {
-                                        (*entry_mut).aggr_values[i]
-                                            .execute(&aggr_col_args[i]) //TODO: pass scalar value not column
-                                            .unwrap();
-                                    }
-                                    _ => panic!(),
-                                }
+                            for j in 0..aggr_expr.len() {
+                                let row_aggr_values: Vec<Rc<Value>> = aggr_col_args[j].iter()
+                                    .map(|col| match col.as_ref() {
+                                        Value::Column(ref col) => Rc::new(Value::Scalar(Rc::new(get_value(col, i)))),
+                                        Value::Scalar(ref v) => Rc::new(Value::Scalar(v.clone()))
+                                }).collect();
+                                (*entry_mut).aggr_values[j]
+                                    .execute(&row_aggr_values)
+                                    .unwrap();
                             }
                         }
                     }
@@ -1191,10 +1184,13 @@ impl ExecutionContext {
                 let plan = query_planner.sql_to_rel(&ast)?;
                 println!("Logical plan: {:?}", plan);
 
+                let new_plan = push_down_projection(&plan, HashSet::new());
+                println!("Optimized logical plan: {:?}", new_plan);
+
                 // return the DataFrame
                 Ok(Rc::new(DF {
                     ctx: self.clone(),
-                    plan: plan,
+                    plan: new_plan,
                 }))
             }
         }
@@ -1207,11 +1203,13 @@ impl ExecutionContext {
         filename: &str,
         schema: &Schema,
         has_header: bool,
+        projection: Option<Vec<usize>>
     ) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::CsvFile {
             filename: filename.to_string(),
             schema: Rc::new(schema.clone()),
             has_header,
+            projection
         };
         Ok(Rc::new(DF {
             ctx: self.clone(),
@@ -1250,10 +1248,19 @@ impl ExecutionContext {
 
             LogicalPlan::Sort { .. } => unimplemented!(),
 
-            LogicalPlan::TableScan { ref table_name, .. } => {
+            LogicalPlan::TableScan { ref table_name, ref projection, .. } => {
                 //println!("TableScan: {}", table_name);
                 match self.tables.borrow().get(table_name) {
-                    Some(df) => df.create_execution_plan(),
+                    Some(df) => match projection {
+                        Some(p) => {
+                            let mut h: HashSet<usize> = HashSet::new();
+                            p.iter().for_each(|i| {
+                                h.insert(*i);
+                            });
+                            self.create_execution_plan(&push_down_projection(df.plan(), h))
+                        },
+                        None => self.create_execution_plan(df.plan())
+                    },
                     _ => Err(ExecutionError::General(format!(
                         "No table registered as '{}'",
                         table_name
@@ -1265,12 +1272,14 @@ impl ExecutionContext {
                 ref filename,
                 ref schema,
                 ref has_header,
+                ref projection
             } => {
                 let file = File::open(filename)?;
                 let ds = Rc::new(RefCell::new(CsvFile::open(
                     file,
                     schema.clone(),
                     *has_header,
+                    projection.clone()
                 )?)) as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {
                     schema: schema.as_ref().clone(),
@@ -1336,7 +1345,6 @@ impl ExecutionContext {
                 ..
             } => {
                 let input_rel = self.create_execution_plan(&input)?;
-                let input_schema = input_rel.schema().clone();
 
                 let compiled_group_expr_result: Result<Vec<CompiledExpr>> = group_expr
                     .iter()
@@ -1708,7 +1716,17 @@ impl DataFrame for DF {
 pub fn filter(column: &Value, bools: &Array) -> Array {
     //println!("filter()");
     match column {
-        &Value::Scalar(_) => unimplemented!(),
+        &Value::Scalar(ref v) => match v.as_ref() {
+//            ScalarValue::Utf8(ref s) => {
+//                bools.map(|b|)
+//
+//            },
+            ScalarValue::Null => {
+                let b: Vec<i32> = vec![];
+                Array::from(b)
+            }
+            _ => unimplemented!("unsupported scalar type for filter '{:?}'", v)
+        },
         &Value::Column(ref arr) => match bools.data() {
             &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
                 &ArrayData::Boolean(ref v) => Array::from(
@@ -1858,7 +1876,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false)
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
 
         // invoke custom code as a scalar UDF
@@ -1888,7 +1906,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false)
+        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
 
         // filter by lat
@@ -1969,7 +1987,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false)
+        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
         ctx.register("uk_cities", df);
 
@@ -1998,7 +2016,7 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false)
+        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
         ctx.register("uk_cities", df);
 
@@ -2033,7 +2051,7 @@ mod tests {
                 Field::new("id", DataType::Int32, false),
                 Field::new("name", DataType::Utf8, false),
             ]),
-            true,
+            true, None,
         ).unwrap();
 
         ctx.register("people", people);
@@ -2045,7 +2063,7 @@ mod tests {
                 Field::new("lat", DataType::Float64, false),
                 Field::new("lng", DataType::Float64, false),
             ]),
-            false,
+            false, None,
         ).unwrap();
 
         ctx.register("uk_cities", uk_cities);
