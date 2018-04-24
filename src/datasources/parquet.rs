@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Defines data sources supported by DataFusion (currently CSV and Apache Parquet)
+//! Parquet support
 
 use std::fs::File;
 use std::rc::Rc;
@@ -33,9 +33,11 @@ use super::common::*;
 
 pub struct ParquetFile {
     reader: SerializedFileReader,
-    row_index: usize,
+    row_group_index: usize,
     schema: Rc<Schema>,
     batch_size: usize,
+    current_row_group: Option<Box<RowGroupReader>>,
+    column_readers: Vec<ColumnReader>
 }
 
 impl ParquetFile {
@@ -43,7 +45,7 @@ impl ParquetFile {
         let reader = SerializedFileReader::new(file).unwrap();
 
         let metadata = reader.metadata();
-        let file_type = ParquetFile::to_arrow(metadata.file_metadata().schema());
+        let file_type = to_arrow(metadata.file_metadata().schema());
 
         match file_type.data_type() {
             DataType::Struct(fields) => {
@@ -51,9 +53,11 @@ impl ParquetFile {
                 //println!("Parquet schema: {:?}", schema);
                 Ok(ParquetFile {
                     reader: reader,
-                    row_index: 0,
+                    row_group_index: 0,
                     schema: Rc::new(schema),
-                    batch_size: 9999999,
+                    batch_size: 256 * 1024,
+                    current_row_group: None,
+                    column_readers: vec![]
                 })
             }
             _ => Err(ExecutionError::General(
@@ -66,41 +70,177 @@ impl ParquetFile {
         self.batch_size = batch_size
     }
 
-    fn to_arrow(t: &Type) -> Field {
-        match t {
-            Type::PrimitiveType {
-                basic_info,
-                physical_type,
-                ..
-                //type_length,
-                //scale,
-                //precision,
-            } => {
-//                println!("basic_info: {:?}", basic_info);
+    fn load_batch(&mut self) -> Option<Result<Rc<RecordBatch>>> {
+        match &self.current_row_group {
+            Some(reader) => {
+                let mut batch: Vec<Rc<Value>> = Vec::with_capacity(reader.num_columns());
+                let mut row_count = 0;
+                for i in 0..self.column_readers.len() {
+                    let array = match self.column_readers[i] {
+                        ColumnReader::ByteArrayColumnReader(ref mut r) => {
+                            let mut builder = vec![ByteArray::default(); 1024];
+                            match r.read_batch(self.batch_size, None, None, &mut builder) {
+                                Ok((count, _)) => {
+                                    row_count = count;
+                                    //TODO: there is probably a more efficient way to copy the data to Arrow
+                                    let strings: Vec<
+                                        String,
+                                    > = (builder[0..count])
+                                        .iter()
+                                        .map(|b| {
+                                            String::from_utf8(
+                                                b.slice(0, b.len()).data().to_vec(),
+                                            ).unwrap()
+                                        })
+                                        .collect::<Vec<String>>();
+                                    Array::from(strings)
+                                }
+                                _ => panic!("Error reading parquet batch (column {})", i),
+                            }
+                        }
+                        ColumnReader::BoolColumnReader(ref mut r) => {
+                            let mut builder: Builder<bool> =
+                                Builder::with_capacity(self.batch_size);
+                            match r.read_batch(
+                                self.batch_size,
+                                None,
+                                None,
+                                builder.slice_mut(0, self.batch_size),
+                            ) {
+                                Ok((count, _)) => {
+                                    row_count = count;
+                                    builder.set_len(count);
+                                    Array::from(builder.finish())
+                                }
+                                _ => panic!("Error reading parquet batch (column {})", i),
+                            }
+                        }
+                        ColumnReader::Int32ColumnReader(ref mut r) => {
+                            let mut builder: Builder<i32> =
+                                Builder::with_capacity(self.batch_size);
+                            match r.read_batch(
+                                self.batch_size,
+                                None,
+                                None,
+                                builder.slice_mut(0, self.batch_size),
+                            ) {
+                                Ok((count, _)) => {
+                                    row_count = count;
+                                    builder.set_len(count);
+                                    Array::from(builder.finish())
+                                }
+                                _ => panic!("Error reading parquet batch (column {})", i),
+                            }
+                        }
+                        ColumnReader::Int64ColumnReader(ref mut r) => {
+                            let mut builder: Builder<i64> =
+                                Builder::with_capacity(self.batch_size);
+                            match r.read_batch(
+                                self.batch_size,
+                                None,
+                                None,
+                                builder.slice_mut(0, self.batch_size),
+                            ) {
+                                Ok((count, _)) => {
+                                    row_count = count;
+                                    builder.set_len(count);
+                                    Array::from(builder.finish())
+                                }
+                                _ => panic!("Error reading parquet batch (column {})", i),
+                            }
+                        }
+                        ColumnReader::Int96ColumnReader(ref mut r) => {
+                            let mut temp: Vec<Int96> = Vec::with_capacity(self.batch_size);
+                            for _ in 0..self.batch_size {
+                                temp.push(Int96::new());
+                            }
+                            // let mut slice: &[Int96] = &temp;
 
-                let arrow_type = match physical_type {
-                    basic::Type::BOOLEAN => DataType::Boolean,
-                    basic::Type::INT32 => DataType::Int32,
-                    basic::Type::INT64 => DataType::Int64,
-                    basic::Type::INT96 => DataType::Int64, //TODO ???
-                    basic::Type::FLOAT => DataType::Float32,
-                    basic::Type::DOUBLE => DataType::Float64,
-                    basic::Type::BYTE_ARRAY => match basic_info.logical_type() {
-                        basic::LogicalType::UTF8 => DataType::Utf8,
-                        _ => unimplemented!("No support for Parquet BYTE_ARRAY yet"),
-                    }
-                    basic::Type::FIXED_LEN_BYTE_ARRAY => unimplemented!("No support for Parquet FIXED_LEN_BYTE_ARRAY yet")
-                };
+                            match r.read_batch(
+                                self.batch_size,
+                                None,
+                                None,
+                                &mut temp
+                            ) {
+                                Ok((count, _)) => {
+                                    row_count = count;
+//                                        builder.set_len(count);
 
-                Field::new(basic_info.name(), arrow_type, false)
+
+                                    let mut builder: Builder<i64> =
+                                        Builder::with_capacity(self.batch_size);
+                                    for i in 0..count {
+                                        let v = temp[i].data();
+                                        let value: u128 =
+                                            (v[0] as u128) << 64 |
+                                                (v[1] as u128) << 32 |
+                                                (v[2] as u128);
+                                        //println!("value: {}", value);
+
+                                        let ms: i64 = (value / 1000000) as i64;
+                                        builder.push(ms);
+                                    }
+
+                                    Array::from(builder.finish())
+                                }
+                                _ => panic!("Error reading parquet batch (column {})", i),
+                            }
+                        }
+                        ColumnReader::FloatColumnReader(ref mut r) => {
+                            let mut builder: Builder<f32> =
+                                Builder::with_capacity(self.batch_size);
+                            match r.read_batch(
+                                self.batch_size,
+                                None,
+                                None,
+                                builder.slice_mut(0, self.batch_size),
+                            ) {
+                                Ok((count, _)) => {
+                                    row_count = count;
+                                    builder.set_len(count);
+                                    Array::from(builder.finish())
+                                }
+                                _ => panic!("Error reading parquet batch (column {})", i),
+                            }
+                        }
+                        ColumnReader::DoubleColumnReader(ref mut r) => {
+                            let mut builder: Builder<f64> =
+                                Builder::with_capacity(self.batch_size);
+                            match r.read_batch(
+                                self.batch_size,
+                                None,
+                                None,
+                                builder.slice_mut(0, self.batch_size),
+                            ) {
+                                Ok((count, _)) => {
+                                    row_count = count;
+                                    builder.set_len(count);
+                                    Array::from(builder.finish())
+                                }
+                                _ => panic!("Error reading parquet batch (column {})", i),
+                            }
+                        }
+                        ColumnReader::FixedLenByteArrayColumnReader(_) => unimplemented!(),
+                    };
+
+                    batch.push(Rc::new(Value::Column(Rc::new(array))));
+                }
+
+                println!("Loaded batch of {} rows", row_count);
+
+                if row_count == 0 {
+                    None
+                } else {
+                    Some(Ok(Rc::new(DefaultRecordBatch {
+                        schema: self.schema.clone(),
+                        data: batch,
+                        row_count,
+                    })))
+                }
+
             }
-            Type::GroupType { basic_info, fields } => {
-                Field::new(
-                basic_info.name(),
-                DataType::Struct(
-                    fields.iter().map(|f| ParquetFile::to_arrow(f)).collect()
-                ),
-                false)
+            _ => {
+                None
             }
         }
     }
@@ -109,186 +249,41 @@ impl ParquetFile {
 impl DataSource for ParquetFile {
 
     fn next(&mut self) -> Option<Result<Rc<RecordBatch>>> {
-        println!("ParquetFile.next()");
-        if self.row_index < self.reader.num_row_groups() {
-            match self.reader.get_row_group(self.row_index) {
-                Err(_) => Some(Err(ExecutionError::General(
-                    "parquet reader error".to_string(),
-                ))),
-                Ok(row_group_reader) => {
-                    self.row_index += 1;
 
-                    let mut arrays: Vec<Rc<Value>> =
-                        Vec::with_capacity(row_group_reader.num_columns());
-                    let mut row_count = 0;
-
-                    for i in 0..row_group_reader.num_columns() {
-                        let array: Option<Array> = match row_group_reader.get_column_reader(i) {
-                            Ok(ColumnReader::ByteArrayColumnReader(ref mut r)) => {
-                                let mut builder = vec![ByteArray::default(); 1024];
-                                match r.read_batch(self.batch_size, None, None, &mut builder) {
-                                    Ok((count, _)) => {
-                                        row_count = count;
-                                        //TODO: there is probably a more efficient way to copy the data to Arrow
-                                        let strings: Vec<
-                                            String,
-                                        > = (builder[0..count])
-                                            .iter()
-                                            .map(|b| {
-                                                String::from_utf8(
-                                                    b.slice(0, b.len()).data().to_vec(),
-                                                ).unwrap()
-                                            })
-                                            .collect::<Vec<String>>();
-                                        Some(Array::from(strings))
-                                    }
-                                    _ => panic!("Error reading parquet batch (column {})", i),
-                                }
-                            }
-                            Ok(ColumnReader::BoolColumnReader(ref mut r)) => {
-                                let mut builder: Builder<bool> =
-                                    Builder::with_capacity(self.batch_size);
-                                match r.read_batch(
-                                    self.batch_size,
-                                    None,
-                                    None,
-                                    builder.slice_mut(0, self.batch_size),
-                                ) {
-                                    Ok((count, _)) => {
-                                        row_count = count;
-                                        builder.set_len(count);
-                                        Some(Array::from(builder.finish()))
-                                    }
-                                    _ => panic!("Error reading parquet batch (column {})", i),
-                                }
-                            }
-                            Ok(ColumnReader::Int32ColumnReader(ref mut r)) => {
-                                let mut builder: Builder<i32> =
-                                    Builder::with_capacity(self.batch_size);
-                                match r.read_batch(
-                                    self.batch_size,
-                                    None,
-                                    None,
-                                    builder.slice_mut(0, self.batch_size),
-                                ) {
-                                    Ok((count, _)) => {
-                                        row_count = count;
-                                        builder.set_len(count);
-                                        Some(Array::from(builder.finish()))
-                                    }
-                                    _ => panic!("Error reading parquet batch (column {})", i),
-                                }
-                            }
-                            Ok(ColumnReader::Int64ColumnReader(ref mut r)) => {
-                                let mut builder: Builder<i64> =
-                                    Builder::with_capacity(self.batch_size);
-                                match r.read_batch(
-                                    self.batch_size,
-                                    None,
-                                    None,
-                                    builder.slice_mut(0, self.batch_size),
-                                ) {
-                                    Ok((count, _)) => {
-                                        row_count = count;
-                                        builder.set_len(count);
-                                        Some(Array::from(builder.finish()))
-                                    }
-                                    _ => panic!("Error reading parquet batch (column {})", i),
-                                }
-                            }
-                            Ok(ColumnReader::Int96ColumnReader(ref mut r)) => {
-                                let mut temp: Vec<Int96> = Vec::with_capacity(self.batch_size);
-                                for _ in 0..self.batch_size {
-                                    temp.push(Int96::new());
-                                }
-                               // let mut slice: &[Int96] = &temp;
-
-                                match r.read_batch(
-                                    self.batch_size,
-                                    None,
-                                    None,
-                                    &mut temp
-                                ) {
-                                    Ok((count, _)) => {
-                                        row_count = count;
-//                                        builder.set_len(count);
-
-
-                                        let mut builder: Builder<i64> =
-                                            Builder::with_capacity(self.batch_size);
-                                        for i in 0..count {
-                                            let v = temp[i].data();
-                                            let value: u128 =
-                                                (v[0] as u128) << 64 |
-                                                (v[1] as u128) << 32 |
-                                                (v[2] as u128);
-                                            //println!("value: {}", value);
-
-                                            let ms: i64 = (value / 1000000) as i64;
-                                            builder.push(ms);
-                                        }
-
-                                        Some(Array::from(builder.finish()))
-                                    }
-                                    _ => panic!("Error reading parquet batch (column {})", i),
-                                }
-                            }
-                            Ok(ColumnReader::FloatColumnReader(ref mut r)) => {
-                                let mut builder: Builder<f32> =
-                                    Builder::with_capacity(self.batch_size);
-                                match r.read_batch(
-                                    self.batch_size,
-                                    None,
-                                    None,
-                                    builder.slice_mut(0, self.batch_size),
-                                ) {
-                                    Ok((count, _)) => {
-                                        row_count = count;
-                                        builder.set_len(count);
-                                        Some(Array::from(builder.finish()))
-                                    }
-                                    _ => panic!("Error reading parquet batch (column {})", i),
-                                }
-                            }
-                            Ok(ColumnReader::DoubleColumnReader(ref mut r)) => {
-                                let mut builder: Builder<f64> =
-                                    Builder::with_capacity(self.batch_size);
-                                match r.read_batch(
-                                    self.batch_size,
-                                    None,
-                                    None,
-                                    builder.slice_mut(0, self.batch_size),
-                                ) {
-                                    Ok((count, _)) => {
-                                        row_count = count;
-                                        builder.set_len(count);
-                                        Some(Array::from(builder.finish()))
-                                    }
-                                    _ => panic!("Error reading parquet batch (column {})", i),
-                                }
-                            }
-                            Ok(ColumnReader::FixedLenByteArrayColumnReader(_)) => unimplemented!(),
-                            Err(_) => panic!()
-                        };
-
-                        if let Some(a) = array {
-                            arrays.push(Rc::new(Value::Column(Rc::new(a))));
-                        }
-                    }
-
-                    println!("ParquetFile.next() returning {} rows", row_count);
-
-
-                    Some(Ok(Rc::new(DefaultRecordBatch {
-                        schema: self.schema.clone(),
-                        data: arrays,
-                        row_count,
-                    })))
+        // advance the row group reader if necessary
+        if self.current_row_group.is_none() {
+            if self.row_group_index < self.reader.num_row_groups() {
+                println!("Loading row group {} of {}", self.row_group_index, self.reader.num_row_groups());
+                let reader = self.reader.get_row_group(self.row_group_index).unwrap();
+                //TODO projection push down
+                self.column_readers = vec![];
+                for i in 0..reader.num_columns() {
+                    self.column_readers.push(reader.get_column_reader(i).unwrap());
                 }
+                self.current_row_group = Some(reader);
+                self.row_group_index += 1;
+                self.load_batch()
+            } else {
+                None
             }
         } else {
-            println!("ParquetFile.next() EOF");
-            None
+            match self.load_batch() {
+                Some(b) => Some(b),
+                None => if self.row_group_index < self.reader.num_row_groups() {
+                    println!("Loading row group {} of {}", self.row_group_index, self.reader.num_row_groups());
+                    let reader = self.reader.get_row_group(self.row_group_index).unwrap();
+                    //TODO projection push down
+                    self.column_readers = vec![];
+                    for i in 0..reader.num_columns() {
+                        self.column_readers.push(reader.get_column_reader(i).unwrap());
+                    }
+                    self.current_row_group = Some(reader);
+                    self.row_group_index += 1;
+                    self.load_batch()
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -296,6 +291,46 @@ impl DataSource for ParquetFile {
         &self.schema
     }
 }
+
+fn to_arrow(t: &Type) -> Field {
+    match t {
+        Type::PrimitiveType {
+            basic_info,
+            physical_type,
+            ..
+            //type_length,
+            //scale,
+            //precision,
+        } => {
+//                println!("basic_info: {:?}", basic_info);
+
+            let arrow_type = match physical_type {
+                basic::Type::BOOLEAN => DataType::Boolean,
+                basic::Type::INT32 => DataType::Int32,
+                basic::Type::INT64 => DataType::Int64,
+                basic::Type::INT96 => DataType::Int64, //TODO ???
+                basic::Type::FLOAT => DataType::Float32,
+                basic::Type::DOUBLE => DataType::Float64,
+                basic::Type::BYTE_ARRAY => match basic_info.logical_type() {
+                    basic::LogicalType::UTF8 => DataType::Utf8,
+                    _ => unimplemented!("No support for Parquet BYTE_ARRAY yet"),
+                }
+                basic::Type::FIXED_LEN_BYTE_ARRAY => unimplemented!("No support for Parquet FIXED_LEN_BYTE_ARRAY yet")
+            };
+
+            Field::new(basic_info.name(), arrow_type, false)
+        }
+        Type::GroupType { basic_info, fields } => {
+            Field::new(
+                basic_info.name(),
+                DataType::Struct(
+                    fields.iter().map(|f| to_arrow(f)).collect()
+                ),
+                false)
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -319,7 +354,7 @@ mod tests {
     fn test_parquet_iterator() {
         let file = File::open("test/data/uk_cities.parquet").unwrap();
         let mut parquet = ParquetFile::open(file).unwrap();
-        parquet.set_batch_size(2);
+        parquet.set_batch_size(20);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(parquet)));
         it.for_each(|record_batch| match record_batch {
             Ok(b) => println!("new batch with {} rows", b.num_rows()),
