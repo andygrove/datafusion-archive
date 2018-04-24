@@ -386,18 +386,18 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
         match v {
             Value::Column(ref array) => {
                 match array.data() {
-                    &ArrayData::Boolean(ref list) => unimplemented!("CAST from Boolean"),
-                    &ArrayData::UInt8(ref list) => unimplemented!("CAST from UInt8"),
-                    &ArrayData::UInt16(ref list) => unimplemented!("CAST from UInt16"),
-                    &ArrayData::UInt32(ref list) => unimplemented!("CAST from UInt32"),
-                    &ArrayData::UInt64(ref list) => unimplemented!("CAST from UInt64"),
-                    &ArrayData::Int8(ref list) => unimplemented!("CAST from Unt8"),
-                    &ArrayData::Int16(ref list) => unimplemented!("CAST from Unt16"),
-                    &ArrayData::Int32(ref list) => unimplemented!("CAST from Unt32"),
-                    &ArrayData::Int64(ref list) => unimplemented!("CAST from Unt64"),
-                    &ArrayData::Float32(ref list) => unimplemented!("CAST from Float32"),
-                    &ArrayData::Float64(ref list) => unimplemented!("CAST from Float64"),
-                    &ArrayData::Struct(ref list) => unimplemented!("CAST from Struct"),
+                    &ArrayData::Boolean(_) => unimplemented!("CAST from Boolean"),
+                    &ArrayData::UInt8(_) => unimplemented!("CAST from UInt8"),
+                    &ArrayData::UInt16(_) => unimplemented!("CAST from UInt16"),
+                    &ArrayData::UInt32(_) => unimplemented!("CAST from UInt32"),
+                    &ArrayData::UInt64(_) => unimplemented!("CAST from UInt64"),
+                    &ArrayData::Int8(_) => unimplemented!("CAST from Unt8"),
+                    &ArrayData::Int16(_) => unimplemented!("CAST from Unt16"),
+                    &ArrayData::Int32(_) => unimplemented!("CAST from Unt32"),
+                    &ArrayData::Int64(_) => unimplemented!("CAST from Unt64"),
+                    &ArrayData::Float32(_) => unimplemented!("CAST from Float32"),
+                    &ArrayData::Float64(_) => unimplemented!("CAST from Float64"),
+                    &ArrayData::Struct(_) => unimplemented!("CAST from Struct"),
                     &ArrayData::Utf8(ref list) => {
                         match &data_type {
                             DataType::Float64 => {
