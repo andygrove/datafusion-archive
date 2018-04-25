@@ -543,21 +543,22 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
             }))
         }
         // aggregate functions don't fit this pattern .. will need to rework this ..
-        &Expr::AggregateFunction { .. } => panic!("Aggregate expressions cannot be compiled yet"), //        &Expr::AggregateFunction { ref name, ref args } => {
-                                                                                                   //
-                                                                                                   //            // evaluate the arguments to the function
-                                                                                                   //            let compiled_args: Result<Vec<CompiledExpr>> =
-                                                                                                   //                args.iter().map(|e| compile_expr(ctx, e)).collect();
-                                                                                                   //
-                                                                                                   //            let compiled_args_ok = compiled_args?;
-                                                                                                   //
-                                                                                                   //            Ok(Box::new(move |batch| {
-                                                                                                   //                let arg_values: Result<Vec<Value>> =
-                                                                                                   //                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
-                                                                                                   //
-                                                                                                   //                Ok(Rc::new(arg_values?))
-                                                                                                   //            }))
-                                                                                                   //        }
+        &Expr::AggregateFunction { .. } => panic!("Aggregate expressions cannot be compiled yet"),
+//        &Expr::AggregateFunction { ref name, ref args } => {
+//
+//            // evaluate the arguments to the function
+//            let compiled_args: Result<Vec<CompiledExpr>> =
+//                args.iter().map(|e| compile_expr(ctx, e)).collect();
+//
+//            let compiled_args_ok = compiled_args?;
+//
+//            Ok(Box::new(move |batch| {
+//                let arg_values: Result<Vec<Value>> =
+//                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
+//
+//                Ok(Rc::new(arg_values?))
+//            }))
+//        }
     }
 }
 
