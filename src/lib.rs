@@ -36,6 +36,7 @@ pub mod datasources;
 pub mod errors;
 pub mod exec;
 pub mod functions;
+pub mod relations;
 pub mod sqlast;
 pub mod sqlparser;
 pub mod sqlplanner;
