@@ -225,6 +225,7 @@ pub enum LogicalPlan {
     ParquetFile {
         filename: String,
         schema: Rc<Schema>,
+        projection: Option<Vec<usize>>
     },
     /// An empty relation with an empty schema
     EmptyRelation { schema: Rc<Schema> },

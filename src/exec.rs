@@ -1228,14 +1228,15 @@ impl ExecutionContext {
         }))
     }
 
-    pub fn load_parquet(&self, filename: &str) -> Result<Rc<DataFrame>> {
+    pub fn load_parquet(&self, filename: &str, projection: Option<Vec<usize>>) -> Result<Rc<DataFrame>> {
         //TODO: can only get schema by assuming file is local and opening it - need catalog!!
         let file = File::open(filename)?;
-        let p = ParquetFile::open(file)?;
+        let p = ParquetFile::open(file, None)?;
 
         let plan = LogicalPlan::ParquetFile {
             filename: filename.to_string(),
             schema: p.schema().clone(),
+            projection
         };
         Ok(Rc::new(DF {
             ctx: self.clone(),
@@ -1301,9 +1302,10 @@ impl ExecutionContext {
             LogicalPlan::ParquetFile {
                 ref filename,
                 ref schema,
+                ref projection
             } => {
                 let file = File::open(filename)?;
-                let ds = Rc::new(RefCell::new(ParquetFile::open(file)?)) as Rc<RefCell<DataSource>>;
+                let ds = Rc::new(RefCell::new(ParquetFile::open(file, projection.clone())?)) as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {
                     schema: schema.as_ref().clone(),
                     ds,

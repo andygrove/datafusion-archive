@@ -384,7 +384,13 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
                 projection: Some(projection.iter().map(|i|*i).collect())
             })
         },
-        LogicalPlan::ParquetFile { .. } => plan.clone(),
+        LogicalPlan::ParquetFile { ref filename, ref schema, .. } => {
+            Rc::new(LogicalPlan::ParquetFile {
+                filename: filename.to_string(),
+                schema: schema.clone(),
+                projection: Some(projection.iter().map(|i|*i).collect())
+            })
+        },
         LogicalPlan::Projection { .. } => plan.clone(),
         LogicalPlan::Limit { .. } => plan.clone(),
         LogicalPlan::Sort { .. } => plan.clone(),

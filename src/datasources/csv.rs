@@ -105,7 +105,7 @@ impl DataSource for CsvFile {
             return None;
         }
 
-        let foo = self.schema
+        let column_with_index = self.schema
             .columns()
             .iter()
             .enumerate();
@@ -120,7 +120,7 @@ impl DataSource for CsvFile {
             .collect()
         };
 
-        let columns: Vec<Rc<Value>> = foo
+        let columns: Vec<Rc<Value>> = column_with_index
             .map(|(i, c)| {
                 if projection.contains(&i) {
                     match c.data_type() {
