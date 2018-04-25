@@ -378,6 +378,21 @@ pub fn compile_expr(
     }
 }
 
+macro_rules! cast_utf8_to {
+    {$TY:ty, $LIST:expr} => {{
+        let mut b: Builder<$TY> = Builder::with_capacity($LIST.len() as usize);
+        for i in 0..$LIST.len() as usize {
+            let x = str::from_utf8($LIST.slice(i)).unwrap();
+            match x.parse::<$TY>() {
+                Ok(v) => b.push(v),
+                Err(_) => return Err(ExecutionError::General(format!(
+                    "Cannot cast Utf8 value '{}' to {}", x, stringify!($TY))))
+            }
+        }
+        Ok(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))))
+    }}
+}
+
 fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
     Ok(Box::new( move|v: &Value| {
         match v {
@@ -397,18 +412,17 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
                     &ArrayData::Struct(_) => unimplemented!("CAST from Struct"),
                     &ArrayData::Utf8(ref list) => {
                         match &data_type {
-                            DataType::Float64 => {
-                                let mut b: Builder<f64> = Builder::with_capacity(list.len() as usize);
-                                for i in 0..list.len() as usize {
-                                    let x = str::from_utf8(list.slice(i)).unwrap();
-                                    match x.parse::<f64>() {
-                                        Ok(v) => b.push(v),
-                                        Err(_) => return Err(ExecutionError::General(format!(
-                                            "Cannot cast '{}' to {:?}", x, data_type)))
-                                    }
-                                }
-                                Ok(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))))
-                            }
+                            DataType::Boolean => cast_utf8_to!(bool, list),
+                            DataType::Int8 => cast_utf8_to!(i8, list),
+                            DataType::Int16 => cast_utf8_to!(i16, list),
+                            DataType::Int32 => cast_utf8_to!(i32, list),
+                            DataType::Int64 => cast_utf8_to!(i64, list),
+                            DataType::UInt8 => cast_utf8_to!(u8, list),
+                            DataType::UInt16 => cast_utf8_to!(u16, list),
+                            DataType::UInt32 => cast_utf8_to!(u32, list),
+                            DataType::UInt64 => cast_utf8_to!(u64, list),
+                            DataType::Float32 => cast_utf8_to!(f32, list),
+                            DataType::Float64 => cast_utf8_to!(f32, list),
                             _ => unimplemented!("CAST from Utf8 to {:?}", data_type)
                         }
                     }
