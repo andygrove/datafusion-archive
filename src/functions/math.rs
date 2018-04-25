@@ -29,21 +29,21 @@ impl ScalarFunction for SqrtFunction {
         "sqrt".to_string()
     }
 
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>> {
-        match args[0].as_ref() {
-            &Value::Column(ref arr) => match arr.data() {
-                &ArrayData::Float32(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
+    fn execute(&self, args: Vec<Value>) -> Result<Value> {
+        match args[0] {
+            Value::Column(ref arr) => match arr.data() {
+                ArrayData::Float32(ref v) => Ok(Value::Column(Rc::new(Array::from(
                     v.iter().map(|v| v.sqrt()).collect::<Vec<f32>>(),
-                ))))),
-                &ArrayData::Float64(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
+                )))),
+                ArrayData::Float64(ref v) => Ok(Value::Column(Rc::new(Array::from(
                     v.iter().map(|v| v.sqrt()).collect::<Vec<f64>>(),
-                ))))),
-                &ArrayData::Int32(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
+                )))),
+                ArrayData::Int32(ref v) => Ok(Value::Column(Rc::new(Array::from(
                     v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
-                ))))),
-                &ArrayData::Int64(ref v) => Ok(Rc::new(Value::Column(Rc::new(Array::from(
+                )))),
+                ArrayData::Int64(ref v) => Ok(Value::Column(Rc::new(Array::from(
                     v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
-                ))))),
+                )))),
                 _ => Err(ExecutionError::General(
                     "Unsupported arg type for sqrt".to_string(),
                 )),

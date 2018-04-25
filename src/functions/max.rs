@@ -49,13 +49,13 @@ impl AggregateFunction for MaxFunction {
         self.data_type.clone()
     }
 
-    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<()> {
+    fn execute(&mut self, args: &Vec<Value>) -> Result<()> {
         assert_eq!(1, args.len());
-        match args[0].as_ref() {
+        match args[0] {
             Value::Column(ref array) => {
                 match array.data() {
                     //TODO support all types using macros
-                    &ArrayData::Float64(ref buf) => {
+                    ArrayData::Float64(ref buf) => {
                         for i in 0..buf.len() as usize {
                             let value = *buf.get(i);
                             match self.value {
@@ -87,8 +87,8 @@ impl AggregateFunction for MaxFunction {
         }
     }
 
-    fn finish(&self) -> Result<Rc<Value>> {
-        Ok(Rc::new(Value::Scalar(Rc::new(self.value.clone()))))
+    fn finish(&self) -> Result<Value> {
+        Ok(Value::Scalar(Rc::new(self.value.clone())))
     }
 }
 
@@ -103,12 +103,12 @@ mod tests {
         assert_eq!(DataType::Float64, max.return_type());
         let values: Vec<f64> = vec![12.0, 22.0, 32.0, 6.0, 58.1];
 
-        max.execute(&vec![Rc::new(Value::Column(Rc::new(Array::from(values))))])
+        max.execute(&vec![Value::Column(Rc::new(Array::from(values)))])
             .unwrap();
         let result = max.finish().unwrap();
 
-        match result.as_ref() {
-            &Value::Scalar(ref v) => assert_eq!(v.get_f64().unwrap(), 58.1),
+        match result {
+            Value::Scalar(ref v) => assert_eq!(v.get_f64().unwrap(), 58.1),
             _ => panic!(),
         }
     }

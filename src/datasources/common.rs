@@ -29,13 +29,13 @@ pub trait RecordBatch {
     fn num_columns(&self) -> usize;
     fn num_rows(&self) -> usize;
     fn column(&self, index: usize) -> &Value;
-    fn columns(&self) -> &Vec<Rc<Value>>;
+    fn columns(&self) -> &Vec<Value>;
 
     /// Read one row from a record batch (very inefficient but handy for debugging)
     fn row_slice(&self, index: usize) -> Vec<Rc<ScalarValue>> {
         self.columns()
             .iter()
-            .map(|c| match c.as_ref() {
+            .map(|c| match c {
                 &Value::Scalar(ref v) => v.clone(),
                 &Value::Column(ref v) => Rc::new(get_value(v, index)),
             })
@@ -75,7 +75,7 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
 //TODO: remove pub from fields
 pub struct DefaultRecordBatch {
     pub schema: Rc<Schema>,
-    pub data: Vec<Rc<Value>>,
+    pub data: Vec<Value>,
     pub row_count: usize,
 }
 
@@ -96,7 +96,7 @@ impl RecordBatch for DefaultRecordBatch {
         &self.data[index]
     }
 
-    fn columns(&self) -> &Vec<Rc<Value>> {
+    fn columns(&self) -> &Vec<Value> {
         &self.data
     }
 }

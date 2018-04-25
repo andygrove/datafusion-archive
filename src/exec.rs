@@ -123,9 +123,9 @@ macro_rules! compare_arrays_inner {
 
 macro_rules! compare_arrays {
     ($V1:ident, $V2:ident, $F:expr) => {
-        Ok(Rc::new(Value::Column(Rc::new(Array::from(
+        Ok(Value::Column(Rc::new(Array::from(
             compare_arrays_inner!($V1, $V2, $F)?,
-        )))))
+        ))))
     };
 }
 
@@ -147,14 +147,14 @@ macro_rules! compare_array_with_scalar_inner {
 
 macro_rules! compare_array_with_scalar {
     ($V1:ident, $V2:ident, $F:expr) => {
-        Ok(Rc::new(Value::Column(Rc::new(Array::from(
+        Ok(Value::Column(Rc::new(Array::from(
             compare_array_with_scalar_inner!($V1, $V2, $F)?,
-        )))))
+        ))))
     };
 }
 
 impl Value {
-    pub fn eq(&self, other: &Value) -> Result<Rc<Value>> {
+    pub fn eq(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa == bb)
@@ -165,7 +165,7 @@ impl Value {
                     for i in 0..list.len() as usize {
                         v.push(list.slice(i) == b.as_bytes());
                     }
-                    Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+                    Ok(Value::Column(Rc::new(Array::from(v))))
                 }
                 _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb),
             },
@@ -176,7 +176,7 @@ impl Value {
         }
     }
 
-    pub fn not_eq(&self, other: &Value) -> Result<Rc<Value>> {
+    pub fn not_eq(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa != bb)
@@ -187,7 +187,7 @@ impl Value {
                     for i in 0..list.len() as usize {
                         v.push(list.slice(i) != b.as_bytes());
                     }
-                    Ok(Rc::new(Value::Column(Rc::new(Array::from(v)))))
+                    Ok(Value::Column(Rc::new(Array::from(v))))
                 }
                 _ => compare_array_with_scalar!(v1, v2, |(aa, bb)| aa != bb),
             },
@@ -198,7 +198,7 @@ impl Value {
         }
     }
 
-    pub fn lt(&self, other: &Value) -> Result<Rc<Value>> {
+    pub fn lt(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa < bb)
@@ -213,7 +213,7 @@ impl Value {
         }
     }
 
-    pub fn lt_eq(&self, other: &Value) -> Result<Rc<Value>> {
+    pub fn lt_eq(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa <= bb)
@@ -228,7 +228,7 @@ impl Value {
         }
     }
 
-    pub fn gt(&self, other: &Value) -> Result<Rc<Value>> {
+    pub fn gt(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa >= bb)
@@ -243,7 +243,7 @@ impl Value {
         }
     }
 
-    pub fn gt_eq(&self, other: &Value) -> Result<Rc<Value>> {
+    pub fn gt_eq(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 compare_arrays!(v1, v2, |(aa, bb)| aa > bb)
@@ -258,20 +258,20 @@ impl Value {
         }
     }
 
-    pub fn add(&self, _other: &Value) -> Result<Rc<Value>> {
+    pub fn add(&self, _other: &Value) -> Result<Value> {
         unimplemented!()
     }
-    pub fn subtract(&self, _other: &Value) -> Result<Rc<Value>> {
+    pub fn subtract(&self, _other: &Value) -> Result<Value> {
         unimplemented!()
     }
-    pub fn divide(&self, _other: &Value) -> Result<Rc<Value>> {
+    pub fn divide(&self, _other: &Value) -> Result<Value> {
         unimplemented!()
     }
-    pub fn multiply(&self, _other: &Value) -> Result<Rc<Value>> {
+    pub fn multiply(&self, _other: &Value) -> Result<Value> {
         unimplemented!()
     }
 
-    pub fn and(&self, other: &Value) -> Result<Rc<Value>> {
+    pub fn and(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 match (v1.data(), v2.data()) {
@@ -284,7 +284,7 @@ impl Value {
                         //                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
                         //                        println!("AND: bools = {:?}", bools);
                         let bools = Array::from(bools);
-                        Ok(Rc::new(Value::Column(Rc::new(bools))))
+                        Ok(Value::Column(Rc::new(bools)))
                     }
                     _ => panic!(),
                 }
@@ -292,7 +292,7 @@ impl Value {
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
                 (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
                     let bools = Array::from(l.iter().map(|ll| ll && *r).collect::<Vec<bool>>());
-                    Ok(Rc::new(Value::Column(Rc::new(bools))))
+                    Ok(Value::Column(Rc::new(bools)))
                 }
                 _ => panic!(),
             },
@@ -304,15 +304,15 @@ impl Value {
         }
     }
 
-    pub fn or(&self, _other: &Value) -> Result<Rc<Value>> {
+    pub fn or(&self, _other: &Value) -> Result<Value> {
         unimplemented!()
     }
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Rc<Value>>>;
+pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Value>>;
 
-pub type CompiledCastFunction = Box<Fn(&Value) -> Result<Rc<Value>>>;
+pub type CompiledCastFunction = Box<Fn(&Value) -> Result<Value>>;
 
 pub enum AggregateType {
     Min,
@@ -389,7 +389,7 @@ macro_rules! cast_utf8_to {
                     "Cannot cast Utf8 value '{}' to {}", x, stringify!($TY))))
             }
         }
-        Ok(Rc::new(Value::Column(Rc::new(Array::from(b.finish())))))
+        Ok(Value::Column(Rc::new(Array::from(b.finish()))))
     }}
 }
 
@@ -449,11 +449,11 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
             Ok(Box::new(move |_| {
                 // literal values are a bit special - we don't repeat them in a vector
                 // because it would be redundant, so we have a single value in a vector instead
-                Ok(Rc::new(Value::Scalar(Rc::new(literal_value.clone()))))
+                Ok(Value::Scalar(Rc::new(literal_value.clone())))
             }))
         }
         &Expr::Column(index) => Ok(Box::new(move |batch: &RecordBatch| {
-            Ok(Rc::new((*batch.column(index)).clone()))
+            Ok((*batch.column(index)).clone())
         })),
         &Expr::Cast { ref expr, ref data_type } => {
             match expr.as_ref() {
@@ -558,7 +558,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
             let func = ctx.load_scalar_function(name.as_ref())?;
 
             Ok(Box::new(move |batch| {
-                let arg_values: Result<Vec<Rc<Value>>> =
+                let arg_values: Result<Vec<Value>> =
                     compiled_args_ok.iter().map(|expr| expr(batch)).collect();
 
                 func.execute(arg_values?)
@@ -574,7 +574,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
                                                                                                    //            let compiled_args_ok = compiled_args?;
                                                                                                    //
                                                                                                    //            Ok(Box::new(move |batch| {
-                                                                                                   //                let arg_values: Result<Vec<Rc<Value>>> =
+                                                                                                   //                let arg_values: Result<Vec<Value>> =
                                                                                                    //                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
                                                                                                    //
                                                                                                    //                Ok(Rc::new(arg_values?))
@@ -655,21 +655,21 @@ impl SimpleRelation for FilterRelation {
                     assert!(batch.num_rows() > 0);
                     // evaluate the filter expression for every row in the batch
                     let x = (*filter_expr)(batch.as_ref())?;
-                    match x.as_ref() {
-                        &Value::Column(ref filter_eval) => {
-                            let filtered_columns: Vec<Rc<Value>> = (0..batch.num_columns())
+                    match x {
+                        Value::Column(ref filter_eval) => {
+                            let filtered_columns: Vec<Value> = (0..batch.num_columns())
                                 .map(move |column_index| {
                                     //println!("Filtering column {}", column_index);
                                     let column = batch.column(column_index);
-                                    Rc::new(Value::Column(Rc::new(filter(column, &filter_eval))))
+                                    Value::Column(Rc::new(filter(column, &filter_eval)))
                                 })
                                 .collect();
 
                             let row_count_opt: Option<usize> = filtered_columns
                                 .iter()
-                                .map(|c| match c.as_ref() {
-                                    &Value::Scalar(_) => 1,
-                                    &Value::Column(ref v) => v.len(),
+                                .map(|c| match c {
+                                    Value::Scalar(_) => 1,
+                                    Value::Column(ref v) => v.len(),
                                 })
                                 .max();
 
@@ -689,7 +689,7 @@ impl SimpleRelation for FilterRelation {
 
                             Ok(filtered_batch)
                         }
-                        &Value::Scalar(_) => unimplemented!("Cannot filter on a scalar value yet"), //TODO: implement
+                        Value::Scalar(_) => unimplemented!("Cannot filter on a scalar value yet"), //TODO: implement
                     }
                 }
                 Err(e) => Err(e),
@@ -710,7 +710,7 @@ impl SimpleRelation for ProjectRelation {
             Ok(ref batch) => {
                 println!("ProjectRelation batch {} rows", batch.num_rows());
 
-                let projected_columns: Result<Vec<Rc<Value>>> =
+                let projected_columns: Result<Vec<Value>> =
                     project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
 
                 let projected_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
@@ -796,10 +796,10 @@ impl GroupScalar {
 }
 
 /// Make a hash map key from a list of values
-fn make_key(group_values: &Vec<Rc<Value>>, i: usize) -> Vec<GroupScalar> {
+fn make_key(group_values: &Vec<Value>, i: usize) -> Vec<GroupScalar> {
     group_values
         .iter()
-        .map(|v| match v.as_ref() {
+        .map(|v| match v {
             Value::Scalar(ref vv) => match vv.as_ref() {
                 ScalarValue::Boolean(x) => GroupScalar::Boolean(*x),
                 _ => unimplemented!()
@@ -888,12 +888,12 @@ impl SimpleRelation for AggregateRelation {
                     //println!("Processing aggregates for batch with {} rows", b.num_rows());
 
                     // evaluate the single argument to each aggregate function
-                    let mut aggr_col_args: Vec<Vec<Rc<Value>>> = Vec::with_capacity(aggr_expr.len());
+                    let mut aggr_col_args: Vec<Vec<Value>> = Vec::with_capacity(aggr_expr.len());
                     for i in 0..aggr_expr.len() {
                         match aggr_expr[i] {
                             RuntimeExpr::AggregateFunction { ref args, .. } => {
                                 // arguments to the aggregate function
-                                let aggr_func_args: Result<Vec<Rc<Value>>> = args.iter()
+                                let aggr_func_args: Result<Vec<Value>> = args.iter()
                                     .map(|e| (*e)(b.as_ref()))
                                     .collect();
 
@@ -905,10 +905,10 @@ impl SimpleRelation for AggregateRelation {
                     }
 
                     // evaluate the grouping expressions
-                    let group_values_result: Result<Vec<Rc<Value>>> =
+                    let group_values_result: Result<Vec<Value>> =
                         group_expr.iter().map(|e| (*e)(b.as_ref())).collect();
 
-                    let group_values: Vec<Rc<Value>> = group_values_result.unwrap(); //TODO
+                    let group_values: Vec<Value> = group_values_result.unwrap(); //TODO
 
                     if group_values.len() == 0 {
 
@@ -937,10 +937,10 @@ impl SimpleRelation for AggregateRelation {
                             let mut entry_mut = entry.borrow_mut();
 
                             for j in 0..aggr_expr.len() {
-                                let row_aggr_values: Vec<Rc<Value>> = aggr_col_args[j].iter()
-                                    .map(|col| match col.as_ref() {
-                                        Value::Column(ref col) => Rc::new(Value::Scalar(Rc::new(get_value(col, i)))),
-                                        Value::Scalar(ref v) => Rc::new(Value::Scalar(v.clone()))
+                                let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
+                                    .map(|col| match col {
+                                        Value::Column(ref col) => Value::Scalar(Rc::new(get_value(col, i))),
+                                        Value::Scalar(ref v) => Value::Scalar(v.clone())
                                 }).collect();
                                 (*entry_mut).aggr_values[j]
                                     .execute(&row_aggr_values)
@@ -969,7 +969,7 @@ impl SimpleRelation for AggregateRelation {
                 result_columns[col_index].push(k[col_index].as_scalar());
             }
 
-            let g: Vec<Rc<Value>> = v.borrow()
+            let g: Vec<Value> = v.borrow()
                 .aggr_values
                 .iter()
                 .map(|v| v.finish().unwrap())
@@ -978,7 +978,7 @@ impl SimpleRelation for AggregateRelation {
             //            println!("aggregate entry: {:?}", g);
 
             for col_index in 0..g.len() {
-                result_columns[col_index + group_expr.len()].push(match g[col_index].as_ref() {
+                result_columns[col_index + group_expr.len()].push(match g[col_index] {
                     Value::Scalar(ref v) => v.as_ref().clone(),
                     _ => panic!(),
                 });
@@ -1000,7 +1000,7 @@ impl SimpleRelation for AggregateRelation {
             }
             aggr_batch
                 .data
-                .push(Rc::new(Value::Column(Rc::new(Array::from(tmp)))));
+                .push(Value::Column(Rc::new(Array::from(tmp))));
         }
 
         // create Arrow arrays from aggregate scalar values
@@ -1026,7 +1026,7 @@ impl SimpleRelation for AggregateRelation {
                         _ => unimplemented!("No support for aggregate with return type {:?}", return_type),
                     };
 
-                    aggr_batch.data.push(Rc::new(Value::Column(Rc::new(array))))
+                    aggr_batch.data.push(Value::Column(Rc::new(array)))
 
                 },
                 _ => panic!(),

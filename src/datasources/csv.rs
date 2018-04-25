@@ -84,7 +84,7 @@ macro_rules! collect_column {
                 ),
             })
         }
-        Rc::new(Value::Column(Rc::new(Array::from(b.finish()))))
+        Value::Column(Rc::new(Array::from(b.finish())))
     }};
 }
 
@@ -120,7 +120,7 @@ impl DataSource for CsvFile {
             .collect()
         };
 
-        let columns: Vec<Rc<Value>> = column_with_index
+        let columns: Vec<Value> = column_with_index
             .map(|(i, c)| {
                 if projection.contains(&i) {
                     match c.data_type() {
@@ -143,17 +143,17 @@ impl DataSource for CsvFile {
                                 builder.push(s.as_bytes());
                             });
                             let buffer = builder.finish();
-                            Rc::new(Value::Column(Rc::new(Array::new(
+                            Value::Column(Rc::new(Array::new(
                                 rows.len(),
                                 ArrayData::Utf8(buffer),
-                            ))))
+                            )))
                         }
                         _ => unimplemented!("CSV does not support data type {:?}", c.data_type())
                     }
                 } else {
                     // not in the projection
                     //println!("Not loading column {} at index {}", c.name(), i);
-                    Rc::new(Value::Scalar(Rc::new(ScalarValue::Null)))
+                    Value::Scalar(Rc::new(ScalarValue::Null))
                 }
             })
             .collect();

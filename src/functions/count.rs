@@ -46,9 +46,9 @@ impl AggregateFunction for CountFunction {
         DataType::UInt64
     }
 
-    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<()> {
+    fn execute(&mut self, args: &Vec<Value>) -> Result<()> {
         assert_eq!(1, args.len());
-        match args[0].as_ref() {
+        match args[0] {
             Value::Column(ref array) => {
                 //println!("Counting array elements");
                 self.count += array.len();
@@ -62,8 +62,8 @@ impl AggregateFunction for CountFunction {
         }
     }
 
-    fn finish(&self) -> Result<Rc<Value>> {
-        Ok(Rc::new(Value::Scalar(Rc::new(ScalarValue::UInt64(self.count as u64)))))
+    fn finish(&self) -> Result<Value> {
+        Ok(Value::Scalar(Rc::new(ScalarValue::UInt64(self.count as u64))))
     }
 }
 
@@ -79,12 +79,12 @@ mod tests {
         assert_eq!(DataType::UInt64, count.return_type());
         let values: Vec<f64> = vec![12.0, 22.0, 32.0, 6.0, 58.1];
 
-        count.execute(&vec![Rc::new(Value::Column(Rc::new(Array::from(values))))])
+        count.execute(&vec![Value::Column(Rc::new(Array::from(values)))])
             .unwrap();
         let result = count.finish().unwrap();
 
-        match result.as_ref() {
-            &Value::Scalar(ref v) => assert_eq!(v.get_u64().unwrap(), 5),
+        match result {
+            Value::Scalar(ref v) => assert_eq!(v.get_u64().unwrap(), 5),
             _ => panic!(),
         }
     }

@@ -110,7 +110,7 @@ impl ParquetFile {
     fn load_batch(&mut self) -> Option<Result<Rc<RecordBatch>>> {
         match &self.current_row_group {
             Some(reader) => {
-                let mut batch: Vec<Rc<Value>> = Vec::with_capacity(reader.num_columns());
+                let mut batch: Vec<Value> = Vec::with_capacity(reader.num_columns());
                 let mut row_count = 0;
                 for i in 0..self.column_readers.len() {
                     let array = match self.column_readers[i] {
@@ -261,7 +261,7 @@ impl ParquetFile {
                         }
                     };
 
-                    batch.push(Rc::new(Value::Column(Rc::new(array))));
+                    batch.push(Value::Column(Rc::new(array)));
                 }
 
 //                println!("Loaded batch of {} rows", row_count);

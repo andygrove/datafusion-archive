@@ -132,7 +132,7 @@ pub trait ScalarFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&self, args: Vec<Rc<Value>>) -> Result<Rc<Value>>;
+    fn execute(&self, args: Vec<Value>) -> Result<Value>;
 }
 
 /// Aggregate function
@@ -140,6 +140,6 @@ pub trait AggregateFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&mut self, args: &Vec<Rc<Value>>) -> Result<()>;
-    fn finish(&self) -> Result<Rc<Value>>;
+    fn execute(&mut self, args: &Vec<Value>) -> Result<()>;
+    fn finish(&self) -> Result<Value>;
 }
