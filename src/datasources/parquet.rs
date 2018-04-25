@@ -19,6 +19,7 @@ use std::rc::Rc;
 
 use arrow::array::*;
 use arrow::builder::*;
+use arrow::list_builder::*;
 use arrow::datatypes::*;
 
 use parquet::basic;
@@ -114,22 +115,20 @@ impl ParquetFile {
                 for i in 0..self.column_readers.len() {
                     let array = match self.column_readers[i] {
                         Some(ColumnReader::ByteArrayColumnReader(ref mut r)) => {
-                            let mut builder = vec![ByteArray::default(); 1024];
-                            match r.read_batch(self.batch_size, None, None, &mut builder) {
+                            let mut b: Vec<ByteArray> = Vec::with_capacity(self.batch_size);
+                            for _ in 0..self.batch_size {
+                                b.push(ByteArray::default());
+                            }
+                            match r.read_batch(self.batch_size, None, None, &mut b) {
                                 Ok((count, _)) => {
                                     row_count = count;
-                                    //TODO: there is probably a more efficient way to copy the data to Arrow
-                                    let strings: Vec<
-                                        String,
-                                    > = (builder[0..count])
-                                        .iter()
-                                        .map(|b| {
-                                            String::from_utf8(
-                                                b.slice(0, b.len()).data().to_vec(),
-                                            ).unwrap()
-                                        })
-                                        .collect::<Vec<String>>();
-                                    Array::from(strings)
+
+                                    let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(count);
+                                    for j in 0..row_count {
+                                        builder.push(b[j].slice(0, b[j].len()).data());
+
+                                    }
+                                    Array::new(count,ArrayData::Utf8(builder.finish()))
                                 }
                                 _ => panic!("Error reading parquet batch (column {})", i),
                             }

@@ -784,7 +784,7 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
+        let _ = parser.parse().unwrap();
         //TODO: assertions
     }
 
@@ -794,7 +794,7 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
+        let _ = parser.parse().unwrap();
         //TODO: assertions
     }
 }

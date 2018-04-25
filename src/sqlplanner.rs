@@ -407,23 +407,6 @@ mod tests {
 
     #[test]
     fn test_collect_expr() {
-
-        // define schema for data source (csv file)
-        let schema = Schema::new(vec![
-            Field::new("id", DataType::Utf8, false),
-            Field::new("employee_name", DataType::Utf8, false),
-            Field::new("job_title", DataType::Utf8, false),
-            Field::new("base_pay", DataType::Utf8, false),
-            Field::new("overtime_pay", DataType::Utf8, false),
-            Field::new("other_pay", DataType::Utf8, false),
-            Field::new("benefits", DataType::Utf8, false),
-            Field::new("total_pay", DataType::Utf8, false),
-            Field::new("total_pay_benefits", DataType::Utf8, false),
-            Field::new("year", DataType::Utf8, false),
-            Field::new("notes", DataType::Utf8, true),
-            Field::new("agency", DataType::Utf8, false),
-            Field::new("status", DataType::Utf8, false),
-        ]);
         let mut accum: HashSet<usize> = HashSet::new();
         collect_expr(&Expr::Cast { expr: Rc::new(Expr::Column(3)), data_type: DataType::Float64 }, &mut accum);
         collect_expr(&Expr::Cast { expr: Rc::new(Expr::Column(3)), data_type: DataType::Float64 }, &mut accum);

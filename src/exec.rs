@@ -20,17 +20,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::*;
 use std::fs::File;
-use std::io::{BufWriter, Error};
+use std::io::BufWriter;
 use std::iter::Iterator;
 use std::rc::Rc;
-use std::result;
 use std::str;
 use std::string::String;
 
 use arrow::array::*;
 use arrow::builder::*;
-use arrow::list::*;
-use arrow::list_builder::*;
 use arrow::datatypes::*;
 
 //use futures::{Future, Stream};
@@ -603,7 +600,7 @@ pub struct ProjectRelation {
 pub struct LimitRelation {
     schema: Rc<Schema>,
     input: Box<SimpleRelation>,
-    limit: usize,
+    _limit: usize,
 }
 
 /// trait for all relations (a relation is essentially just an iterator over rows with
@@ -1412,7 +1409,7 @@ impl ExecutionContext {
                 let input_rel = self.create_execution_plan(input)?;
                 let rel = LimitRelation {
                     input: input_rel,
-                    limit: limit,
+                    _limit: limit,
                     schema: schema.clone(),
                 };
                 Ok(Box::new(rel))
@@ -1841,7 +1838,6 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
 mod tests {
     use super::super::functions::geospatial::*;
     use super::super::functions::math::*;
-    use super::super::functions::min::*;
     use super::*;
     use std::fs::File;
     use std::io::prelude::*;

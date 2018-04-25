@@ -16,7 +16,6 @@
 
 use std::fmt;
 use std::fmt::Formatter;
-use std::io::Error;
 use std::rc::Rc;
 use std::result;
 
@@ -24,7 +23,6 @@ use arrow::array::Array;
 use arrow::datatypes::{DataType, Field};
 
 use super::errors::*;
-use super::sqlparser::ParserError;
 
 /// ScalarValue enumeration
 #[derive(Debug, Clone, PartialEq)]

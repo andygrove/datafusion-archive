@@ -19,7 +19,6 @@ use std::rc::Rc;
 use super::super::errors::*;
 use super::super::types::*;
 
-use arrow::array::*;
 use arrow::datatypes::*;
 
 pub struct CountFunction {
@@ -72,6 +71,7 @@ impl AggregateFunction for CountFunction {
 mod tests {
 
     use super::*;
+    use arrow::array::*;
 
     #[test]
     fn test_count() {
