@@ -68,7 +68,6 @@ impl SqlToRel {
                     &Some(ref filter_expr) => Some(LogicalPlan::Selection {
                         expr: self.sql_to_rex(&filter_expr, &input_schema.clone())?,
                         input: input.clone(),
-                        schema: input_schema.clone(),
                     }),
                     _ => None,
                 };
@@ -359,13 +358,12 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
                 schema: schema.clone()
             })
         }
-        LogicalPlan::Selection { ref expr, ref input, ref schema } => {
+        LogicalPlan::Selection { ref expr, ref input } => {
             let mut accum: HashSet<usize> = projection.clone();
             collect_expr(expr, &mut accum);
             Rc::new(LogicalPlan::Selection {
                 expr: expr.clone(),
-                input: push_down_projection(&input, accum),
-                schema: schema.clone()
+                input: push_down_projection(&input, accum)
             })
         }
         LogicalPlan::TableScan { ref schema_name, ref table_name, ref schema, .. } => {

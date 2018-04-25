@@ -22,6 +22,7 @@ extern crate byteorder;
 extern crate bytes;
 extern crate clap;
 extern crate csv;
+extern crate fnv;
 extern crate liner;
 extern crate parquet;
 

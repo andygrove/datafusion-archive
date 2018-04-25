@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::str;
 
@@ -27,8 +26,9 @@ use super::super::types::*;
 
 use arrow::array::*;
 use arrow::builder::*;
-use arrow::list_builder::*;
 use arrow::datatypes::*;
+
+use fnv::FnvHashMap;
 
 pub struct AggregateRelation {
     schema: Rc<Schema>,
@@ -174,7 +174,8 @@ impl SimpleRelation for AggregateRelation {
 
         let aggr_expr = &self.aggr_expr;
         let group_expr = &self.group_expr;
-        let mut map: HashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
+//        let mut map: HashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
+        let mut map: FnvHashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = FnvHashMap::default();
 
         //println!("There are {} aggregate expressions", aggr_expr.len());
 

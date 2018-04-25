@@ -192,7 +192,6 @@ pub enum LogicalPlan {
     Selection {
         expr: Expr,
         input: Rc<LogicalPlan>,
-        schema: Rc<Schema>,
     },
     /// Represents a list of aggregate expressions with optional grouping expressions
     Aggregate {
@@ -240,7 +239,7 @@ impl LogicalPlan {
             LogicalPlan::CsvFile { schema, .. } => &schema,
             LogicalPlan::ParquetFile { schema, .. } => &schema,
             LogicalPlan::Projection { schema, .. } => &schema,
-            LogicalPlan::Selection { schema, .. } => &schema,
+            LogicalPlan::Selection { input, .. } => input.schema(),
             LogicalPlan::Aggregate { schema, .. } => &schema,
             LogicalPlan::Sort { schema, .. } => &schema,
             LogicalPlan::Limit { schema, .. } => &schema,

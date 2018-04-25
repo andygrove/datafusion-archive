@@ -40,11 +40,10 @@ use super::datasources::common::*;
 use super::datasources::csv::*;
 use super::datasources::parquet::*;
 use super::errors::*;
-use super::functions::count::*;
-use super::functions::max::*;
-use super::functions::min::*;
 use super::logical::*;
 use super::relations::aggregate::*;
+use super::relations::filter::*;
+use super::relations::projection::*;
 use super::sqlast::ASTNode::*;
 use super::sqlparser::*;
 use super::sqlplanner::*;
@@ -593,18 +592,6 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
 //
 //}
 
-pub struct FilterRelation {
-    schema: Rc<Schema>,
-    input: Box<SimpleRelation>,
-    expr: CompiledExpr,
-}
-
-pub struct ProjectRelation {
-    schema: Rc<Schema>,
-    input: Box<SimpleRelation>,
-    expr: Vec<CompiledExpr>,
-}
-
 //pub struct SortRelation {
 //    schema: Schema,
 //    input: Box<SimpleRelation>,
@@ -640,96 +627,6 @@ impl SimpleRelation for DataSourceRelation {
 
     fn schema<'a>(&'a self) -> &'a Schema {
         &self.schema
-    }
-}
-
-impl SimpleRelation for FilterRelation {
-    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-        let filter_expr = &self.expr;
-        let schema = self.schema.clone();
-
-        Box::new(self.input.scan().map(move |b| {
-            match b {
-                Ok(ref batch) => {
-                    //println!("FilterRelation batch {} rows with {} columns", batch.num_rows(), batch.num_columns());
-
-                    assert!(batch.num_rows() > 0);
-                    // evaluate the filter expression for every row in the batch
-                    let x = (*filter_expr)(batch.as_ref())?;
-                    match x {
-                        Value::Column(ref filter_eval) => {
-                            let filtered_columns: Vec<Value> = (0..batch.num_columns())
-                                .map(move |column_index| {
-                                    //println!("Filtering column {}", column_index);
-                                    let column = batch.column(column_index);
-                                    Value::Column(Rc::new(filter(column, &filter_eval)))
-                                })
-                                .collect();
-
-                            let row_count_opt: Option<usize> = filtered_columns
-                                .iter()
-                                .map(|c| match c {
-                                    Value::Scalar(_) => 1,
-                                    Value::Column(ref v) => v.len(),
-                                })
-                                .max();
-
-                            //TODO: should ge able to something like `row_count_opt.or_else(0)` ?
-                            let row_count = match row_count_opt {
-                                None => 0,
-                                Some(n) => n,
-                            };
-
-                            //println!("Filtered batch has {} rows out of original {}", row_count, batch.num_rows());
-
-                            let filtered_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
-                                row_count,
-                                data: filtered_columns,
-                                schema: schema.clone(),
-                            });
-
-                            Ok(filtered_batch)
-                        }
-                        Value::Scalar(_) => unimplemented!("Cannot filter on a scalar value yet"), //TODO: implement
-                    }
-                }
-                Err(e) => Err(e),
-            }
-        }))
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        &self.schema
-    }
-}
-
-impl SimpleRelation for ProjectRelation {
-    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-        let project_expr = &self.expr;
-
-        let projection_iter = self.input.scan().map(move |r| match r {
-            Ok(ref batch) => {
-                println!("ProjectRelation batch {} rows", batch.num_rows());
-
-                let projected_columns: Result<Vec<Value>> =
-                    project_expr.iter().map(|e| (*e)(batch.as_ref())).collect();
-
-                let projected_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
-                    schema: Rc::new(Schema::empty()), //TODO
-                    data: projected_columns?,
-                    row_count: batch.num_rows(),
-                });
-
-                Ok(projected_batch)
-            }
-            Err(_) => r,
-        });
-
-        Box::new(projection_iter)
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        self.schema.as_ref()
     }
 }
 
@@ -1014,15 +911,9 @@ impl ExecutionContext {
             LogicalPlan::Selection {
                 ref expr,
                 ref input,
-                ref schema,
             } => {
                 let input_rel = self.create_execution_plan(input)?;
-
-                let rel = FilterRelation {
-                    input: input_rel,
-                    expr: compile_scalar_expr(&self, expr)?,
-                    schema: schema.clone(),
-                };
+                let rel = FilterRelation::new(input_rel, compile_scalar_expr(&self, expr)?);
                 Ok(Box::new(rel))
             }
 
@@ -1032,20 +923,15 @@ impl ExecutionContext {
                 ..
             } => {
                 let input_rel = self.create_execution_plan(&input)?;
-                let input_schema = input_rel.schema().clone();
 
-                let project_columns: Vec<Field> = expr_to_field(&expr, &input_schema);
+                let project_columns: Vec<Field> = expr_to_field(&expr, input_rel.schema());
 
-                let project_schema = Schema::new(project_columns);
+                let project_schema = Rc::new(Schema::new(project_columns));
 
                 let compiled_expr: Result<Vec<CompiledExpr>> =
                     expr.iter().map(|e| compile_scalar_expr(&self, e)).collect();
 
-                let rel = ProjectRelation {
-                    input: input_rel,
-                    expr: compiled_expr?,
-                    schema: Rc::new(project_schema),
-                };
+                let rel = ProjectRelation::new(input_rel, compiled_expr?, project_schema);
 
                 Ok(Box::new(rel))
             }
@@ -1395,7 +1281,6 @@ impl DataFrame for DF {
         let plan = LogicalPlan::Selection {
             expr: expr,
             input: self.plan.clone(),
-            schema: self.plan.schema().clone(),
         };
 
         Ok(Rc::new(self.with_plan(Rc::new(plan))))
@@ -1425,116 +1310,6 @@ impl DataFrame for DF {
     }
 }
 
-pub fn filter(column: &Value, bools: &Array) -> Array {
-    //println!("filter()");
-    match column {
-        &Value::Scalar(ref v) => match v.as_ref() {
-//            ScalarValue::Utf8(ref s) => {
-//                bools.map(|b|)
-//
-//            },
-            ScalarValue::Null => {
-                let b: Vec<i32> = vec![];
-                Array::from(b)
-            }
-            _ => unimplemented!("unsupported scalar type for filter '{:?}'", v)
-        },
-        &Value::Column(ref arr) => match bools.data() {
-            &ArrayData::Boolean(ref b) => match arr.as_ref().data() {
-                &ArrayData::Boolean(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<bool>>(),
-                ),
-                &ArrayData::Float32(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<f32>>(),
-                ),
-                &ArrayData::Float64(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<f64>>(),
-                ),
-                &ArrayData::UInt8(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<u8>>(),
-                ),
-                &ArrayData::UInt16(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<u16>>(),
-                ),
-                &ArrayData::UInt32(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<u32>>(),
-                ),
-                &ArrayData::UInt64(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<u64>>(),
-                ),
-                &ArrayData::Int8(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<i8>>(),
-                ),
-                &ArrayData::Int16(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<i16>>(),
-                ),
-                &ArrayData::Int32(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<i32>>(),
-                ),
-                &ArrayData::Int64(ref v) => Array::from(
-                    v.iter()
-                        .zip(b.iter())
-                        .filter(|&(_, f)| f)
-                        .map(|(v, _)| v)
-                        .collect::<Vec<i64>>(),
-                ),
-                &ArrayData::Utf8(ref v) => {
-                    //println!("utf8 len = {}, bools len = {}", v.len(), b.len());
-                    let mut x: Vec<String> = Vec::with_capacity(b.len() as usize);
-                    for i in 0..b.len() as usize {
-                        if *b.get(i) {
-                            //println!("i = {}", i);
-                            x.push(String::from_utf8(v.slice(i as usize).to_vec()).unwrap());
-                        }
-                    }
-                    Array::from(x)
-                }
-                &ArrayData::Struct(ref _v) => unimplemented!("Cannot filter on structs yet"),
-            },
-            _ => panic!("Filter array expected to be boolean"),
-        },
-    }
-}
 
 #[cfg(test)]
 mod tests {
