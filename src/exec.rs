@@ -761,7 +761,7 @@ impl AggregateRelation {
 }
 
 /// Enumeration of types that can be used in a GROUP BY expression
-#[derive(PartialEq,Eq,Hash,Clone)]
+#[derive(Debug, PartialEq,Eq,Hash,Clone)]
 enum GroupScalar {
     Boolean(bool),
     UInt8(u8),
@@ -796,10 +796,9 @@ impl GroupScalar {
 }
 
 /// Make a hash map key from a list of values
-fn make_key(group_values: &Vec<Value>, i: usize) -> Vec<GroupScalar> {
-    group_values
-        .iter()
-        .map(|v| match v {
+fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
+    for j in 0..group_values.len() {
+        key[j] = match group_values[j] {
             Value::Scalar(ref vv) => match vv.as_ref() {
                 ScalarValue::Boolean(x) => GroupScalar::Boolean(*x),
                 _ => unimplemented!()
@@ -819,8 +818,8 @@ fn make_key(group_values: &Vec<Value>, i: usize) -> Vec<GroupScalar> {
                     "Unsupported datatype for aggregate grouping expression"
                 ),
             },
-        })
-        .collect()
+        };
+    }
 }
 
 /// Create an initial aggregate entry
@@ -927,25 +926,60 @@ impl SimpleRelation for AggregateRelation {
 
                     } else {
 
+                        let mut key: Vec<GroupScalar> = Vec::with_capacity(group_values.len());
+                        for _ in 0 .. group_values.len() {
+                            key.push(GroupScalar::Int32(0));
+                        }
+
                         // expensive row-based aggregation by group
                         for i in 0..b.num_rows() {
-                            let key = make_key(&group_values, i);
+                            write_key(&mut key, &group_values, i);
+                            //let key = make_key(&group_values, i);
                             //println!("key = {:?}", key);
 
-                            let entry = map.entry(key)
-                                .or_insert_with(|| create_aggregate_entry(aggr_expr));
-                            let mut entry_mut = entry.borrow_mut();
+                            let x = match map.get(&key) {
+                                Some(entry) => {
+                                    let mut entry_mut = entry.borrow_mut();
 
-                            for j in 0..aggr_expr.len() {
-                                let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
-                                    .map(|col| match col {
-                                        Value::Column(ref col) => Value::Scalar(Rc::new(get_value(col, i))),
-                                        Value::Scalar(ref v) => Value::Scalar(v.clone())
-                                }).collect();
-                                (*entry_mut).aggr_values[j]
-                                    .execute(&row_aggr_values)
-                                    .unwrap();
+                                    for j in 0..aggr_expr.len() {
+                                        let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
+                                            .map(|col| match col {
+                                                Value::Column(ref col) => Value::Scalar(Rc::new(get_value(col, i))),
+                                                Value::Scalar(ref v) => Value::Scalar(v.clone())
+                                            }).collect();
+                                        (*entry_mut).aggr_values[j]
+                                            .execute(&row_aggr_values)
+                                            .unwrap();
+                                    }
+
+                                    true
+
+                                }
+                                None => false
+                            };
+
+                            if !x {
+                                let entry = create_aggregate_entry(aggr_expr);
+                                {
+                                    let mut entry_mut = entry.borrow_mut();
+
+                                    for j in 0..aggr_expr.len() {
+                                        let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
+                                            .map(|col| match col {
+                                                Value::Column(ref col) => Value::Scalar(Rc::new(get_value(col, i))),
+                                                Value::Scalar(ref v) => Value::Scalar(v.clone())
+                                            }).collect();
+                                        (*entry_mut).aggr_values[j]
+                                            .execute(&row_aggr_values)
+                                            .unwrap();
+                                    }
+                                }
+                                map.insert(key.clone(), entry);
+
                             }
+
+//                            let entry = map.entry(key)
+//                                .or_insert_with(|| create_aggregate_entry(aggr_expr));
                         }
                     }
                 }
