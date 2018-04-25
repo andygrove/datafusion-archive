@@ -30,12 +30,6 @@ use arrow::array::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
 
-//use futures::{Future, Stream};
-//use hyper::Client;
-//use tokio_core::reactor::Core;
-//use hyper::{Method, Request};
-//use hyper::header::{ContentLength, ContentType};
-
 use super::dataframe::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
@@ -56,27 +50,6 @@ pub enum DFConfig {
     Local,
     Remote { etcd: String },
 }
-
-//#[derive(Debug)]
-//pub enum ExecutionError {
-//    IoError(Error),
-//    ExecError(ExecutionError),
-//    InvalidColumn(String),
-//    NotImplemented,
-//}
-
-//impl From<ExecutionError> for ExecutionError {
-//    fn from(e: ExecutionError) -> Self {
-//        ExecutionError::ExecError(e)
-//    }
-//}
-//
-//impl From<Error> for ExecutionError {
-//    fn from(e: Error) -> Self {
-//        ExecutionError::IoError(e)
-//    }
-//}
-
 
 macro_rules! compare_arrays_inner {
     ($V1:ident, $V2:ident, $F:expr) => {
@@ -409,14 +382,6 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
             _ => unimplemented!("CAST from ScalarValue")
         }
     }))
-
-
-//                    Err(ExecutionError::NotImplemented)
-//                }
-//                _ => Err(ExecutionError::NotImplemented)
-//            }
-//        }
-//        _ => Err(ExecutionError::NotImplemented)
 }
 
 /// Compiles a scalar expression into a closure
@@ -569,13 +534,6 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
 //pub fn compile_aggregate_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
 //    match
 //
-//}
-
-//pub struct SortRelation {
-//    schema: Schema,
-//    input: Box<SimpleRelation>,
-//    sort_expr: Vec<CompiledExpr>,
-//    sort_asc: Vec<bool>
 //}
 
 pub struct LimitRelation {

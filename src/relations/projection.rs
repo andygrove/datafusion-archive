@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Relational Projection
+
 use std::rc::Rc;
 
 use super::super::datasources::common::*;
