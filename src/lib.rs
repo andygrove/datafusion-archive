@@ -32,6 +32,7 @@ extern crate parquet;
 //extern crate tokio_core;
 
 //pub mod cluster;
+pub mod dataframe;
 pub mod datasources;
 #[macro_use]
 pub mod errors;

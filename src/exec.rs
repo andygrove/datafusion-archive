@@ -36,6 +36,7 @@ use arrow::datatypes::*;
 //use hyper::{Method, Request};
 //use hyper::header::{ContentLength, ContentType};
 
+use super::dataframe::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
 use super::datasources::parquet::*;
@@ -76,29 +77,6 @@ pub enum DFConfig {
 //    }
 //}
 
-/// DataFrame is an abstraction of a logical plan and a schema
-pub trait DataFrame {
-    /// Projection
-    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>>;
-
-    /// Selection
-    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>>;
-
-    /// Sorting
-    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>>;
-
-    /// Return an expression representing the specified column
-    fn col(&self, column_name: &str) -> Result<Expr>;
-
-    fn schema(&self) -> &Rc<Schema>;
-
-    fn plan(&self) -> &Rc<LogicalPlan>;
-
-    /// show N rows (useful for debugging)
-    fn show(&self, count: usize);
-
-    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>>;
-}
 
 macro_rules! compare_arrays_inner {
     ($V1:ident, $V2:ident, $F:expr) => {
@@ -776,12 +754,11 @@ impl ExecutionContext {
                 self.define_schema(&name, &schema);
 
                 //TODO: not sure what to return here
-                Ok(Rc::new(DF {
-                    ctx: self.clone(),
-                    plan: Rc::new(LogicalPlan::EmptyRelation {
+                Ok(Rc::new(DF::new(self.clone(),
+                    Rc::new(LogicalPlan::EmptyRelation {
                         schema: Rc::new(Schema::empty()),
-                    }),
-                }))
+                    })
+                )))
             }
             _ => {
                 // create a query planner
@@ -795,10 +772,10 @@ impl ExecutionContext {
                 println!("Optimized logical plan: {:?}", new_plan);
 
                 // return the DataFrame
-                Ok(Rc::new(DF {
-                    ctx: self.clone(),
-                    plan: new_plan,
-                }))
+                Ok(Rc::new(DF::new(
+                    self.clone(),
+                    new_plan,
+                )))
             }
         }
     }
@@ -818,10 +795,10 @@ impl ExecutionContext {
             has_header,
             projection
         };
-        Ok(Rc::new(DF {
-            ctx: self.clone(),
-            plan: Rc::new(plan),
-        }))
+        Ok(Rc::new(DF::new(
+            self.clone(),
+            Rc::new(plan),
+        )))
     }
 
     pub fn load_parquet(&self, filename: &str, projection: Option<Vec<usize>>) -> Result<Rc<DataFrame>> {
@@ -834,10 +811,10 @@ impl ExecutionContext {
             schema: p.schema().clone(),
             projection
         };
-        Ok(Rc::new(DF {
-            ctx: self.clone(),
-            plan: Rc::new(plan),
-        }))
+        Ok(Rc::new(DF::new(
+            self.clone(),
+            Rc::new(plan),
+        )))
     }
 
     pub fn register_table(&mut self, name: String, schema: Schema) {
@@ -1240,76 +1217,6 @@ impl ExecutionContext {
     //        }
     //    }
 }
-
-pub struct DF {
-    ctx: ExecutionContext,
-    pub plan: Rc<LogicalPlan>,
-}
-
-impl DF {
-    pub fn new(ctx: ExecutionContext, plan: Rc<LogicalPlan>) -> Self {
-        DF { ctx, plan }
-    }
-
-    pub fn with_plan(&self, plan: Rc<LogicalPlan>) -> Self {
-        DF::new(self.ctx.clone(), plan)
-    }
-}
-
-impl DataFrame for DF {
-    fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
-        let plan = LogicalPlan::Projection {
-            expr: expr,
-            input: self.plan.clone(),
-            schema: self.plan.schema().clone(),
-        };
-
-        Ok(Rc::new(self.with_plan(Rc::new(plan))))
-    }
-
-    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
-        let plan = LogicalPlan::Sort {
-            expr: expr,
-            input: self.plan.clone(),
-            schema: self.plan.schema().clone(),
-        };
-
-        Ok(Rc::new(self.with_plan(Rc::new(plan))))
-    }
-
-    fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>> {
-        let plan = LogicalPlan::Selection {
-            expr: expr,
-            input: self.plan.clone(),
-        };
-
-        Ok(Rc::new(self.with_plan(Rc::new(plan))))
-    }
-
-    fn col(&self, column_name: &str) -> Result<Expr> {
-        match self.plan.schema().column(column_name) {
-            Some((i, _)) => Ok(Expr::Column(i)),
-            _ => Err(ExecutionError::InvalidColumn(column_name.to_string())),
-        }
-    }
-
-    fn schema(&self) -> &Rc<Schema> {
-        self.plan.schema()
-    }
-
-    fn plan(&self) -> &Rc<LogicalPlan> {
-        &self.plan
-    }
-
-    fn show(&self, count: usize) {
-        self.ctx.show(self, count).unwrap();
-    }
-
-    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>> {
-        self.ctx.create_execution_plan(&self.plan)
-    }
-}
-
 
 #[cfg(test)]
 mod tests {
