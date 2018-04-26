@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/datafusion.svg)](https://crates.io/crates/datafusion)
 [![Docs](https://docs.rs/datafusion/badge.svg)](https://docs.rs/datafusion)
+[![Build Status](https://travis-ci.org/datafusion-rs/datafusion.svg?branch=master)](https://travis-ci.org/datafusion-rs/datafusion)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
 DataFusion is a modern distributed compute platform implemented in Rust. It is very much inspired by Apache Spark and has a similar programming style through the use of DataFrames and SQL.
