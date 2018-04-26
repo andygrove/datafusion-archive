@@ -19,6 +19,7 @@ extern crate liner;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::rc::Rc;
 use std::str;
 use std::time::Instant;
 
@@ -26,6 +27,8 @@ use clap::{App, Arg};
 use datafusion::exec::*;
 use datafusion::sqlast::ASTNode::SQLCreateTable;
 use datafusion::sqlparser::*;
+use datafusion::functions::geospatial::*;
+use datafusion::functions::math::*;
 
 mod linereader;
 
@@ -94,11 +97,14 @@ struct Console {
 }
 
 impl Console {
+
+    /// Create a new instance of the console
     fn new() -> Self {
-        Console {
-            ctx: ExecutionContext::local(),
-            //ctx: ExecutionContext::remote(etcd),
-        }
+        let mut ctx = ExecutionContext::local();
+        ctx.register_scalar_function(Rc::new(STPointFunc{}));
+        ctx.register_scalar_function(Rc::new(STAsText{}));
+        ctx.register_scalar_function(Rc::new(SqrtFunction{}));
+        Console { ctx }
     }
 
     /// Execute a SQL statement or console command
@@ -112,7 +118,7 @@ impl Console {
             Ok(ast) => match ast {
                 SQLCreateTable { .. } => {
                     self.ctx.sql(&sql).unwrap();
-                    println!("Registered schema with execution context");
+                    //println!("Registered schema with execution context");
                     ()
                 }
                 _ => match self.ctx.create_logical_plan(sql) {

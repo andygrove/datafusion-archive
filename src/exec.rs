@@ -40,6 +40,7 @@ use super::relations::aggregate::*;
 use super::relations::filter::*;
 use super::relations::projection::*;
 use super::sqlast::ASTNode::*;
+use super::sqlast::FileType;
 use super::sqlparser::*;
 use super::sqlplanner::*;
 use super::types::*;
@@ -603,22 +604,20 @@ pub enum ExecutionResult {
 
 #[derive(Clone)]
 pub struct ExecutionContext {
-    schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
+    tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
     function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
     functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
     aggregate_functions: Rc<RefCell<HashMap<String, Rc<AggregateFunction>>>>,
     config: Rc<DFConfig>,
-    tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
 }
 
 impl ExecutionContext {
     pub fn local() -> Self {
         ExecutionContext {
-            schemas: Rc::new(RefCell::new(HashMap::new())),
+            tables: Rc::new(RefCell::new(HashMap::new())),
             function_meta: Rc::new(RefCell::new(HashMap::new())),
             functions: Rc::new(RefCell::new(HashMap::new())),
             aggregate_functions: Rc::new(RefCell::new(HashMap::new())),
-            tables: Rc::new(RefCell::new(HashMap::new())),
             config: Rc::new(DFConfig::Local),
         }
     }
@@ -631,12 +630,6 @@ impl ExecutionContext {
         //            tables: Rc::new(RefCell::new(HashMap::new())),
         //            config: Rc::new(DFConfig::Remote { etcd: etcd }),
         //        }
-    }
-
-    pub fn define_schema(&mut self, name: &str, schema: &Schema) {
-        self.schemas
-            .borrow_mut()
-            .insert(name.to_string(), Rc::new(schema.clone()));
     }
 
     pub fn register_scalar_function(&mut self, func: Rc<ScalarFunction>) {
@@ -678,7 +671,7 @@ impl ExecutionContext {
         let ast = Parser::parse_sql(String::from(sql))?;
 
         // create a query planner
-        let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
+        let query_planner = SqlToRel::new(self.tables.clone()); //TODO: pass reference to schemas
 
         // plan the query (create a logical relational plan)
         Ok(query_planner.sql_to_rel(&ast)?)
@@ -689,11 +682,6 @@ impl ExecutionContext {
         self.tables
             .borrow_mut()
             .insert(table_name.to_string(), df.clone());
-
-        // temp hack
-        self.schemas
-            .borrow_mut()
-            .insert(table_name.to_string(), df.schema().clone());
     }
 
     pub fn sql(&mut self, sql: &str) -> Result<Rc<DataFrame>> {
@@ -701,16 +689,23 @@ impl ExecutionContext {
 
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
-        println!("AST: {:?}", ast);
+        //println!("AST: {:?}", ast);
 
         match ast {
-            SQLCreateTable { name, columns, .. } => {
+            SQLCreateTable { name, columns, file_type, header_row, location } => {
+
                 let fields: Vec<Field> = columns
                     .iter()
                     .map(|c| Field::new(&c.name, convert_data_type(&c.data_type), c.allow_null))
                     .collect();
                 let schema = Schema::new(fields);
-                self.define_schema(&name, &schema);
+
+                let df = match file_type {
+                    FileType::CSV => self.load_csv(&location, &schema, header_row, None)?,
+                    FileType::Parquet => self.load_parquet(&location, None)?,
+                };
+
+                self.register(&name, df);
 
                 //TODO: not sure what to return here
                 Ok(Rc::new(DF::new(self.clone(),
@@ -721,14 +716,14 @@ impl ExecutionContext {
             }
             _ => {
                 // create a query planner
-                let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
+                let query_planner = SqlToRel::new(self.tables.clone());
 
                 // plan the query (create a logical relational plan)
                 let plan = query_planner.sql_to_rel(&ast)?;
-                println!("Logical plan: {:?}", plan);
+                //println!("Logical plan: {:?}", plan);
 
                 let new_plan = push_down_projection(&plan, HashSet::new());
-                println!("Optimized logical plan: {:?}", new_plan);
+                //println!("Optimized logical plan: {:?}", new_plan);
 
                 // return the DataFrame
                 Ok(Rc::new(DF::new(
@@ -774,12 +769,6 @@ impl ExecutionContext {
             self.clone(),
             Rc::new(plan),
         )))
-    }
-
-    pub fn register_table(&mut self, name: String, schema: Schema) {
-        self.schemas
-            .borrow_mut()
-            .insert(name, Rc::new(schema.clone()));
     }
 
     pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>> {
@@ -1019,8 +1008,29 @@ impl ExecutionContext {
         //println!("execute_local()");
 
         match physical_plan {
-            &PhysicalPlan::Interactive { .. } => {
-                Err(ExecutionError::General(format!("not implemented")))
+            &PhysicalPlan::Interactive { ref plan } => {
+                let mut execution_plan = self.create_execution_plan(plan)?;
+
+                // implement execution here for now but should be a common method for processing a plan
+                let it = execution_plan.scan();
+                it.for_each(|t| {
+                    match t {
+                        Ok(ref batch) => {
+                            ////println!("Processing batch of {} rows", batch.row_count());
+                            for i in 0..batch.num_rows() {
+                                let row = batch.row_slice(i);
+                                let csv = row.into_iter()
+                                    .map(|v| v.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(",");
+                                println!("{}", csv);
+                            }
+                        }
+                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
+                    }
+                });
+
+                Ok(ExecutionResult::Count(0))
             }
             &PhysicalPlan::Write {
                 ref plan,

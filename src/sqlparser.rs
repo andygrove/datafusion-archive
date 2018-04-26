@@ -381,9 +381,15 @@ impl Parser {
                         }
                     }
 
-                    println!("Parsed {} column defs", columns.len());
+                    //println!("Parsed {} column defs", columns.len());
 
+                    let mut headers = true;
                     let file_type: FileType = if self.parse_keywords(vec!["STORED", "AS", "CSV"]) {
+                        if self.parse_keywords(vec!["WITH", "HEADER", "ROW"]) {
+                            headers = true;
+                        } else if self.parse_keywords(vec!["WITHOUT", "HEADER", "ROW"]) {
+                            headers = false;
+                        }
                         FileType::CSV
                     } else if self.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
                         FileType::Parquet
@@ -401,6 +407,7 @@ impl Parser {
                         name: id,
                         columns,
                         file_type,
+                        header_row: headers,
                         location
                     })
                 }
@@ -763,13 +770,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_create_external_table_csv() {
+    fn parse_create_external_table_csv_with_header_row() {
         let sql = String::from(
             "CREATE EXTERNAL TABLE uk_cities (\
              name VARCHAR(100) NOT NULL,\
              lat DOUBLE NOT NULL,\
              lng DOUBLE NOT NULL) \
-             STORED AS CSV \
+             STORED AS CSV WITH HEADER ROW \
              LOCATION '/mnt/ssd/uk_cities.csv'",
         );
 
@@ -779,10 +786,39 @@ mod tests {
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
-            ASTNode::SQLCreateTable { name, columns, file_type, location } => {
+            ASTNode::SQLCreateTable { name, columns, file_type, header_row, location } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(3, columns.len());
                 assert_eq!(FileType::CSV, file_type);
+                assert_eq!(true, header_row);
+                assert_eq!("/mnt/ssd/uk_cities.csv", location);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_create_external_table_csv_without_header_row() {
+        let sql = String::from(
+            "CREATE EXTERNAL TABLE uk_cities (\
+             name VARCHAR(100) NOT NULL,\
+             lat DOUBLE NOT NULL,\
+             lng DOUBLE NOT NULL) \
+             STORED AS CSV WITHOUT HEADER ROW \
+             LOCATION '/mnt/ssd/uk_cities.csv'",
+        );
+
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        //println!("AST = {:?}", ast);
+        match ast {
+            ASTNode::SQLCreateTable { name, columns, file_type, header_row, location } => {
+                assert_eq!("uk_cities", name);
+                assert_eq!(3, columns.len());
+                assert_eq!(FileType::CSV, file_type);
+                assert_eq!(false, header_row);
                 assert_eq!("/mnt/ssd/uk_cities.csv", location);
             }
             _ => assert!(false),
@@ -803,7 +839,7 @@ mod tests {
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
-            ASTNode::SQLCreateTable { name, columns, file_type, location } => {
+            ASTNode::SQLCreateTable { name, columns, file_type, location, .. } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(0, columns.len());
                 assert_eq!(FileType::Parquet, file_type);

@@ -73,7 +73,7 @@ static KEYWORDS: &'static [&'static str] = &[
     "AND", "OR", "NOT", // boolean logic
     "AS", // alias
     "VARCHAR", "FLOAT", "DOUBLE", "INT", "INTEGER", "LONG", // data types
-    "STORED", "CSV", "PARQUET", "LOCATION" // used in CREATE EXTERNAL TABLE
+    "STORED", "CSV", "PARQUET", "LOCATION", "WITH", "WITHOUT", "HEADER", "ROW" // used in CREATE EXTERNAL TABLE
 ];
 
 /// SQL Tokenizer

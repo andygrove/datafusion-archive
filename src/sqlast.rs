@@ -61,10 +61,15 @@ pub enum ASTNode {
         limit: Option<Box<ASTNode>>,
     },
     SQLCreateTable {
+        /// Table name
         name: String,
         /// Optional schema
         columns: Vec<SQLColumnDef>,
+        /// File type (CSV or Parquet)
         file_type: FileType,
+        /// For CSV files, indicate whether the file has a header row or not
+        header_row: bool,
+        /// Path to file or directory contianing files
         location: String
     },
 }
