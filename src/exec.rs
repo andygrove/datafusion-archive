@@ -704,7 +704,7 @@ impl ExecutionContext {
         println!("AST: {:?}", ast);
 
         match ast {
-            SQLCreateTable { name, columns } => {
+            SQLCreateTable { name, columns, .. } => {
                 let fields: Vec<Field> = columns
                     .iter()
                     .map(|c| Field::new(&c.name, convert_data_type(&c.data_type), c.allow_null))

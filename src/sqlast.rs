@@ -14,7 +14,14 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 
-/// SQL Abstract Syntax Tree (AST) type
+/// Supported file types for `CREATE EXTERNAL TABLE`
+#[derive(Debug, Clone, PartialEq)]
+pub enum FileType {
+    CSV,
+    Parquet
+}
+
+/// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     SQLIdentifier(String),
@@ -55,7 +62,10 @@ pub enum ASTNode {
     },
     SQLCreateTable {
         name: String,
+        /// Optional schema
         columns: Vec<SQLColumnDef>,
+        file_type: FileType,
+        location: String
     },
 }
 

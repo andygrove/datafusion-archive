@@ -23,6 +23,12 @@ pub enum ParserError {
     ParserError(String),
 }
 
+macro_rules! parser_err {
+    ($MSG:expr) => {
+        Err(ParserError::ParserError($MSG.to_string()))
+    }
+}
+
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(format!("{:?}", e))
@@ -90,10 +96,7 @@ impl Parser {
                     Token::Keyword(k) => match k.to_uppercase().as_ref() {
                         "SELECT" => Ok(self.parse_select()?),
                         "CREATE" => Ok(self.parse_create()?),
-                        _ => Err(ParserError::ParserError(format!(
-                            "No prefix parser for keyword {}",
-                            k
-                        ))),
+                        _ => return parser_err!(format!("No prefix parser for keyword {}", k))
                     },
                     Token::Identifier(id) => {
                         match self.peek_token() {
@@ -116,9 +119,9 @@ impl Parser {
                                     match self.next_token() {
                                         Some(Token::Identifier(id)) => id_parts.push(id),
                                         _ => {
-                                            return Err(ParserError::ParserError(format!(
+                                            return parser_err!(format!(
                                                 "Error parsing compound identifier"
-                                            )))
+                                            ))
                                         }
                                     }
                                 }
@@ -129,28 +132,28 @@ impl Parser {
                     }
                     Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
                         Ok(n) => Ok(ASTNode::SQLLiteralDouble(n)),
-                        Err(e) => Err(ParserError::ParserError(format!(
+                        Err(e) => parser_err!(format!(
                             "Could not parse '{}' as i64: {}",
                             n, e
-                        ))),
+                        )),
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => Ok(ASTNode::SQLLiteralLong(n)),
-                        Err(e) => Err(ParserError::ParserError(format!(
+                        Err(e) => parser_err!(format!(
                             "Could not parse '{}' as i64: {}",
                             n, e
-                        ))),
+                        )),
                     },
                     Token::String(ref s) => Ok(ASTNode::SQLLiteralString(s.to_string())),
-                    _ => Err(ParserError::ParserError(format!(
+                    _ => parser_err!(format!(
                         "Prefix parser expected a keyword but found {:?}",
                         t
-                    ))),
+                    )),
                 }
             }
-            None => Err(ParserError::ParserError(format!(
+            None => parser_err!(format!(
                 "Prefix parser expected a keyword but hit EOF"
-            ))),
+            )),
         }
     }
 
@@ -190,10 +193,10 @@ impl Parser {
                     op: self.to_sql_operator(&tok)?,
                     right: Box::new(self.parse_expr(precedence)?),
                 })),
-                _ => Err(ParserError::ParserError(format!(
+                _ => parser_err!(format!(
                     "No infix parser for token {:?}",
                     tok
-                ))),
+                )),
             },
             None => Ok(None),
         }
@@ -214,10 +217,10 @@ impl Parser {
             &Token::Div => Ok(SQLOperator::Divide),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
-            _ => Err(ParserError::ParserError(format!(
+            _ => parser_err!(format!(
                 "Unsupported SQL operator {:?}",
                 tok
-            ))),
+            )),
         }
     }
 
@@ -293,7 +296,10 @@ impl Parser {
     fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
         let index = self.index;
         for keyword in keywords {
+            //println!("parse_keywords aborting .. expecting {}", keyword);
             if !self.parse_keyword(&keyword) {
+                //println!("parse_keywords aborting .. did not find {}", keyword);
+                // reset index and return immediately
                 self.index = index;
                 return false;
             }
@@ -305,95 +311,109 @@ impl Parser {
     //        let expr = self.parse_expr()?;
     //        match expr {
     //            Some(ASTNode::SQLIdentifier { .. }) => Ok(expr),
-    //            _ => Err(ParserError::ParserError(format!("Expected identifier but found {:?}", expr)))
+    //            _ => parser_err!(format!("Expected identifier but found {:?}", expr)))
     //        }
     //    }
 
     /// Consume the next token if it matches the expected token, otherwise return an error
-    fn consume_token(&mut self, expected: &Token) -> Result<(), ParserError> {
-        match self.next_token() {
-            Some(ref t) if *t == *expected => Ok(()),
-            _ => Err(ParserError::ParserError(format!(
+    fn consume_token(&mut self, expected: &Token) -> Result<bool, ParserError> {
+        match self.peek_token() {
+            Some(ref t) => if *t == *expected {
+                self.next_token();
+                Ok(true)
+            } else {
+                Ok(false)
+            },
+            _ => parser_err!(format!(
                 "expected token {:?} but was {:?}",
                 expected,
                 self.prev_token()
-            ))),
+            )),
         }
     }
-
-    // specific methods
 
     /// Parse a SQL CREATE statement
     fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
         if self.parse_keywords(vec!["EXTERNAL", "TABLE"]) {
             match self.next_token() {
                 Some(Token::Identifier(id)) => {
-                    self.consume_token(&Token::LParen)?;
 
+                    // parse optional column list (schema)
                     let mut columns = vec![];
+                    if self.consume_token(&Token::LParen)? {
+                        loop {
+                            if let Some(Token::Identifier(column_name)) = self.next_token() {
+                                if let Ok(data_type) = self.parse_data_type() {
+                                    if self.parse_keywords(vec!["NOT", "NULL"]) {
+                                        //TODO:
+                                    } else if self.parse_keyword("NULL") {
+                                        //TODO:
+                                    }
 
-                    // parse column defs
-                    loop {
-                        if let Some(Token::Identifier(column_name)) = self.next_token() {
-                            if let Ok(data_type) = self.parse_data_type() {
-                                if self.parse_keywords(vec!["NOT", "NULL"]) {
-                                    //TODO:
-                                } else if self.parse_keyword("NULL") {
-                                    //TODO:
-                                }
-
-                                match self.peek_token() {
-                                    Some(Token::Comma) => {
-                                        self.next_token();
-                                        columns.push(SQLColumnDef {
-                                            name: column_name,
-                                            data_type: data_type,
-                                            allow_null: true, // TODO
-                                        });
+                                    match self.peek_token() {
+                                        Some(Token::Comma) => {
+                                            self.next_token();
+                                            columns.push(SQLColumnDef {
+                                                name: column_name,
+                                                data_type: data_type,
+                                                allow_null: true, // TODO
+                                            });
+                                        }
+                                        Some(Token::RParen) => {
+                                            self.next_token();
+                                            columns.push(SQLColumnDef {
+                                                name: column_name,
+                                                data_type: data_type,
+                                                allow_null: true, // TODO
+                                            });
+                                            break;
+                                        }
+                                        _ => {
+                                            return parser_err!("Expected ',' or ')' after column definition");
+                                        }
                                     }
-                                    Some(Token::RParen) => {
-                                        self.next_token();
-                                        columns.push(SQLColumnDef {
-                                            name: column_name,
-                                            data_type: data_type,
-                                            allow_null: true, // TODO
-                                        });
-                                        break;
-                                    }
-                                    _ => {
-                                        return Err(ParserError::ParserError(
-                                            "Expected ',' or ')' after column definition"
-                                                .to_string(),
-                                        ))
-                                    }
+                                } else {
+                                    return parser_err!("Error parsing data type in column definition");
                                 }
                             } else {
-                                return Err(ParserError::ParserError(
-                                    "Error parsing data type in column definition".to_string(),
-                                ));
+                                return parser_err!("Error parsing column name");
                             }
-                        } else {
-                            return Err(ParserError::ParserError(
-                                "Error parsing column name".to_string(),
-                            ));
                         }
                     }
 
+                    println!("Parsed {} column defs", columns.len());
+
+                    let file_type: FileType = if self.parse_keywords(vec!["STORED", "AS", "CSV"]) {
+                        FileType::CSV
+                    } else if self.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
+                        FileType::Parquet
+                    } else {
+                        return parser_err!(format!("Expexted 'STORED AS' clause, found {:?}", self.peek_token()));
+                    };
+
+                    let location: String = if self.parse_keywords(vec!["LOCATION"]) {
+                        self.parse_literal_string()?
+                    } else {
+                        return parser_err!("Missing 'LOCATION' clause");
+                    };
+
                     Ok(ASTNode::SQLCreateTable {
                         name: id,
-                        columns: columns,
+                        columns,
+                        file_type,
+                        location
                     })
                 }
-                _ => Err(ParserError::ParserError(format!(
+                _ => parser_err!(format!(
                     "Unexpected token after CREATE EXTERNAL TABLE: {:?}",
                     self.peek_token()
-                ))),
+                )),
             }
         } else {
-            Err(ParserError::ParserError(format!(
+            parser_err!(format!(
                 "Unexpected token after CREATE: {:?}",
                 self.peek_token()
-            )))
+            ))
         }
     }
 
@@ -403,7 +423,15 @@ impl Parser {
             Some(Token::Number(s)) => s.parse::<i64>().map_err(|e| {
                 ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
             }),
-            _ => Err(ParserError::ParserError("Expected literal int".to_string())),
+            _ => parser_err!("Expected literal int"),
+        }
+    }
+
+    /// Parse a literal string
+    fn parse_literal_string(&mut self) -> Result<String, ParserError> {
+        match self.next_token() {
+            Some(Token::String(ref s)) => Ok(s.clone()),
+            _ => parser_err!("Expected literal string"),
         }
     }
 
@@ -421,9 +449,9 @@ impl Parser {
                     self.consume_token(&Token::RParen)?;
                     Ok(SQLType::Varchar(n as usize))
                 }
-                _ => Err(ParserError::ParserError(format!("Invalid data type '{:?}'", k)))
+                _ => parser_err!(format!("Invalid data type '{:?}'", k))
             },
-            _ => Err(ParserError::ParserError("Invalid data type".to_string())),
+            _ => parser_err!("Invalid data type"),
         }
     }
 
@@ -469,10 +497,10 @@ impl Parser {
         };
 
         if let Some(next_token) = self.peek_token() {
-            Err(ParserError::ParserError(format!(
+            parser_err!(format!(
                 "Unexpected token at end of SELECT: {:?}",
                 next_token
-            )))
+            ))
         } else {
             Ok(ASTNode::SQLSelect {
                 projection,
@@ -519,19 +547,19 @@ impl Parser {
                         "ASC" => true,
                         "DESC" => false,
                         _ => {
-                            return Err(ParserError::ParserError(format!(
+                            return parser_err!(format!(
                                 "Invalid modifier for ORDER BY expression: {:?}",
                                 k
-                            )))
+                            ))
                         }
                     }
                 }
                 Some(Token::Comma) => true,
                 Some(other) => {
-                    return Err(ParserError::ParserError(format!(
+                    return parser_err!(format!(
                         "Unexpected token after ORDER BY expr: {:?}",
                         other
-                    )))
+                    ))
                 }
                 None => true,
             };
@@ -735,12 +763,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_create_external_table() {
+    fn parse_create_external_table_csv() {
         let sql = String::from(
             "CREATE EXTERNAL TABLE uk_cities (\
              name VARCHAR(100) NOT NULL,\
              lat DOUBLE NOT NULL,\
-             lng DOUBLE NOT NULL)",
+             lng DOUBLE NOT NULL) \
+             STORED AS CSV \
+             LOCATION '/mnt/ssd/uk_cities.csv'",
         );
 
         let mut tokenizer = Tokenizer::new(&sql);
@@ -749,9 +779,35 @@ mod tests {
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
-            ASTNode::SQLCreateTable { name, columns, .. } => {
+            ASTNode::SQLCreateTable { name, columns, file_type, location } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(3, columns.len());
+                assert_eq!(FileType::CSV, file_type);
+                assert_eq!("/mnt/ssd/uk_cities.csv", location);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_create_external_table_parquet() {
+        let sql = String::from(
+            "CREATE EXTERNAL TABLE uk_cities \
+             STORED AS PARQUET \
+             LOCATION '/mnt/ssd/uk_cities.parquet'",
+        );
+
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+        //println!("AST = {:?}", ast);
+        match ast {
+            ASTNode::SQLCreateTable { name, columns, file_type, location } => {
+                assert_eq!("uk_cities", name);
+                assert_eq!(0, columns.len());
+                assert_eq!(FileType::Parquet, file_type);
+                assert_eq!("/mnt/ssd/uk_cities.parquet", location);
             }
             _ => assert!(false),
         }
