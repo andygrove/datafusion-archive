@@ -31,7 +31,7 @@ fnv = "1.0.3"
 csv = "1.0.0-beta.5"
 datafusion-arrow = "0.1.0-nightly-20180420"
 #datafusion-arrow = { path = "../datafusion-arrow" }
-parquet = "0.1.0"
+parquet = "0.2.0"
 #parquet = { path = "../parquet-rs" }
 #futures = "0.1.18"
 #futures-timer = "0.1"
