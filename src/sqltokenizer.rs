@@ -72,7 +72,7 @@ static KEYWORDS: &'static [&'static str] = &[
     "IN", "NULL", "SET", "CREATE", "EXTERNAL", "TABLE", "ASC", "DESC",
     "AND", "OR", "NOT", // boolean logic
     "AS", // alias
-    "VARCHAR", "FLOAT", "DOUBLE", "INT", "INTEGER", "LONG", // data types
+    "STRING", "VARCHAR", "FLOAT", "DOUBLE", "INT", "INTEGER", "LONG", // data types
     "STORED", "CSV", "PARQUET", "LOCATION", "WITH", "WITHOUT", "HEADER", "ROW" // used in CREATE EXTERNAL TABLE
 ];
 

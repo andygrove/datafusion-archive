@@ -312,7 +312,8 @@ pub fn expr_to_field(expr: &Vec<Expr>, input_schema: &Schema) -> Vec<Field> {
                 DataType::Float64, //TODO: hard-coded until I have function metadata in place
                 true,
             ),
-            _ => unimplemented!(),
+            &Expr::Cast { ref data_type, .. } => Field::new("cast", data_type.clone(), true),
+            _ => unimplemented!("Cannot determine schema type for expression {:?}", e),
         })
         .collect()
 }

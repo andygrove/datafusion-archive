@@ -430,7 +430,7 @@ impl Parser {
             Some(Token::Number(s)) => s.parse::<i64>().map_err(|e| {
                 ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
             }),
-            _ => parser_err!("Expected literal int"),
+            other => parser_err!(format!("Expected literal int, found {:?}", other)),
         }
     }
 
@@ -438,7 +438,7 @@ impl Parser {
     fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
             Some(Token::String(ref s)) => Ok(s.clone()),
-            _ => parser_err!("Expected literal string"),
+            other => parser_err!(format!("Expected literal string, found {:?}", other)),
         }
     }
 
@@ -450,15 +450,19 @@ impl Parser {
                 "LONG" => Ok(SQLType::Long),
                 "FLOAT" => Ok(SQLType::Float),
                 "DOUBLE" => Ok(SQLType::Double),
-                "VARCHAR" => {
-                    self.consume_token(&Token::LParen)?;
-                    let n = self.parse_literal_int()?;
-                    self.consume_token(&Token::RParen)?;
-                    Ok(SQLType::Varchar(n as usize))
+                "VARCHAR" | "STRING" => {
+                    // optional length
+                    if self.consume_token(&Token::LParen)? {
+                        let n = self.parse_literal_int()?;
+                        self.consume_token(&Token::RParen)?;
+                        Ok(SQLType::Varchar(n as usize))
+                    } else {
+                        Ok(SQLType::Varchar(100 as usize))
+                    }
                 }
                 _ => parser_err!(format!("Invalid data type '{:?}'", k))
             },
-            _ => parser_err!("Invalid data type"),
+            other => parser_err!(format!("Invalid data type: '{:?}'", other)),
         }
     }
 
