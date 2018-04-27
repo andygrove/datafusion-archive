@@ -67,10 +67,13 @@ pub struct TokenizerError(String);
 
 /// SQL keywords
 static KEYWORDS: &'static [&'static str] = &[
-    "SELECT", "FROM", "WHERE", "LIMIT", "ORDER", "GROUP", "BY", "HAVING", "UNION", "ALL", "INSERT",
-    "UPDATE", "DELETE", "IN", "NOT", "NULL", "SET", "CREATE", "EXTERNAL", "TABLE", "ASC", "DESC",
-    "AND", "OR", "AS",
-    "VARCHAR", "FLOAT", "DOUBLE", "INT", "INTEGER"
+    "SELECT", "FROM", "WHERE", "LIMIT", "ORDER", "GROUP", "BY", "HAVING", "UNION", "ALL",
+    "INSERT", "UPDATE", "DELETE",
+    "IN", "NULL", "SET", "CREATE", "EXTERNAL", "TABLE", "ASC", "DESC",
+    "AND", "OR", "NOT", // boolean logic
+    "AS", // alias
+    "STRING", "VARCHAR", "FLOAT", "DOUBLE", "INT", "INTEGER", "LONG", // data types
+    "STORED", "CSV", "PARQUET", "LOCATION", "WITH", "WITHOUT", "HEADER", "ROW" // used in CREATE EXTERNAL TABLE
 ];
 
 /// SQL Tokenizer

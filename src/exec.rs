@@ -28,6 +28,7 @@ use std::string::String;
 
 use arrow::array::*;
 use arrow::builder::*;
+use arrow::list_builder::*;
 use arrow::datatypes::*;
 
 use super::dataframe::*;
@@ -40,6 +41,7 @@ use super::relations::aggregate::*;
 use super::relations::filter::*;
 use super::relations::projection::*;
 use super::sqlast::ASTNode::*;
+use super::sqlast::FileType;
 use super::sqlparser::*;
 use super::sqlplanner::*;
 use super::types::*;
@@ -329,6 +331,43 @@ pub fn compile_expr(
     }
 }
 
+macro_rules! cast_primitive {
+    {$TO:ty, $LIST:expr} => {{
+        let mut b: Builder<$TO> = Builder::with_capacity($LIST.len() as usize);
+        for i in 0..$LIST.len() as usize {
+            b.push(*$LIST.get(i) as $TO)
+        }
+        Ok(Value::Column(Rc::new(Array::from(b.finish()))))
+    }}
+}
+
+
+macro_rules! cast_from_to {
+    {$FROM:ty, $TO:ident, $LIST:expr} => {{
+        match &$TO {
+            DataType::UInt8 => cast_primitive!(u8, $LIST),
+            DataType::UInt16 => cast_primitive!(u16, $LIST),
+            DataType::UInt32 => cast_primitive!(u32, $LIST),
+            DataType::UInt64 => cast_primitive!(u64, $LIST),
+            DataType::Int8 => cast_primitive!(i8, $LIST),
+            DataType::Int16 => cast_primitive!(i16, $LIST),
+            DataType::Int32 => cast_primitive!(i32, $LIST),
+            DataType::Int64 => cast_primitive!(i64, $LIST),
+            DataType::Float32 => cast_primitive!(f32, $LIST),
+            DataType::Float64 => cast_primitive!(f64, $LIST),
+            DataType::Utf8 => {
+                let mut b: ListBuilder<u8> = ListBuilder::with_capacity($LIST.len() as usize);
+                for i in 0..$LIST.len() as usize {
+                    let s = format!("{:?}", *$LIST.get(i));
+                    b.push(s.as_bytes());
+                }
+                Ok(Value::Column(Rc::new(Array::new($LIST.len() as usize,ArrayData::Utf8(b.finish())))))
+            },
+            _ => unimplemented!("CAST from {:?} to {:?}", stringify!($FROM), stringify!($TO))
+        }
+    }}
+}
+
 macro_rules! cast_utf8_to {
     {$TY:ty, $LIST:expr} => {{
         let mut b: Builder<$TY> = Builder::with_capacity($LIST.len() as usize);
@@ -350,16 +389,16 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
             Value::Column(ref array) => {
                 match array.data() {
                     &ArrayData::Boolean(_) => unimplemented!("CAST from Boolean"),
-                    &ArrayData::UInt8(_) => unimplemented!("CAST from UInt8"),
-                    &ArrayData::UInt16(_) => unimplemented!("CAST from UInt16"),
-                    &ArrayData::UInt32(_) => unimplemented!("CAST from UInt32"),
-                    &ArrayData::UInt64(_) => unimplemented!("CAST from UInt64"),
-                    &ArrayData::Int8(_) => unimplemented!("CAST from Unt8"),
-                    &ArrayData::Int16(_) => unimplemented!("CAST from Unt16"),
-                    &ArrayData::Int32(_) => unimplemented!("CAST from Unt32"),
-                    &ArrayData::Int64(_) => unimplemented!("CAST from Unt64"),
-                    &ArrayData::Float32(_) => unimplemented!("CAST from Float32"),
-                    &ArrayData::Float64(_) => unimplemented!("CAST from Float64"),
+                    &ArrayData::UInt8(ref list) => cast_from_to!(u8, data_type, list),
+                    &ArrayData::UInt16(ref list) => cast_from_to!(u16, data_type, list),
+                    &ArrayData::UInt32(ref list) => cast_from_to!(u32, data_type, list),
+                    &ArrayData::UInt64(ref list) => cast_from_to!(u64, data_type, list),
+                    &ArrayData::Int8(ref list) => cast_from_to!(i8, data_type, list),
+                    &ArrayData::Int16(ref list) => cast_from_to!(i16, data_type, list),
+                    &ArrayData::Int32(ref list) => cast_from_to!(i32, data_type, list),
+                    &ArrayData::Int64(ref list) => cast_from_to!(i64, data_type, list),
+                    &ArrayData::Float32(ref list) => cast_from_to!(f32, data_type, list),
+                    &ArrayData::Float64(ref list) => cast_from_to!(f64, data_type, list),
                     &ArrayData::Struct(_) => unimplemented!("CAST from Struct"),
                     &ArrayData::Utf8(ref list) => {
                         match &data_type {
@@ -374,6 +413,7 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
                             DataType::UInt64 => cast_utf8_to!(u64, list),
                             DataType::Float32 => cast_utf8_to!(f32, list),
                             DataType::Float64 => cast_utf8_to!(f32, list),
+                            DataType::Utf8 => Ok(v.clone()),
                             _ => unimplemented!("CAST from Utf8 to {:?}", data_type)
                         }
                     }
@@ -603,22 +643,20 @@ pub enum ExecutionResult {
 
 #[derive(Clone)]
 pub struct ExecutionContext {
-    schemas: Rc<RefCell<HashMap<String, Rc<Schema>>>>,
+    tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
     function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
     functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
     aggregate_functions: Rc<RefCell<HashMap<String, Rc<AggregateFunction>>>>,
     config: Rc<DFConfig>,
-    tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
 }
 
 impl ExecutionContext {
     pub fn local() -> Self {
         ExecutionContext {
-            schemas: Rc::new(RefCell::new(HashMap::new())),
+            tables: Rc::new(RefCell::new(HashMap::new())),
             function_meta: Rc::new(RefCell::new(HashMap::new())),
             functions: Rc::new(RefCell::new(HashMap::new())),
             aggregate_functions: Rc::new(RefCell::new(HashMap::new())),
-            tables: Rc::new(RefCell::new(HashMap::new())),
             config: Rc::new(DFConfig::Local),
         }
     }
@@ -631,12 +669,6 @@ impl ExecutionContext {
         //            tables: Rc::new(RefCell::new(HashMap::new())),
         //            config: Rc::new(DFConfig::Remote { etcd: etcd }),
         //        }
-    }
-
-    pub fn define_schema(&mut self, name: &str, schema: &Schema) {
-        self.schemas
-            .borrow_mut()
-            .insert(name.to_string(), Rc::new(schema.clone()));
     }
 
     pub fn register_scalar_function(&mut self, func: Rc<ScalarFunction>) {
@@ -678,7 +710,7 @@ impl ExecutionContext {
         let ast = Parser::parse_sql(String::from(sql))?;
 
         // create a query planner
-        let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
+        let query_planner = SqlToRel::new(self.tables.clone()); //TODO: pass reference to schemas
 
         // plan the query (create a logical relational plan)
         Ok(query_planner.sql_to_rel(&ast)?)
@@ -689,11 +721,6 @@ impl ExecutionContext {
         self.tables
             .borrow_mut()
             .insert(table_name.to_string(), df.clone());
-
-        // temp hack
-        self.schemas
-            .borrow_mut()
-            .insert(table_name.to_string(), df.schema().clone());
     }
 
     pub fn sql(&mut self, sql: &str) -> Result<Rc<DataFrame>> {
@@ -701,16 +728,23 @@ impl ExecutionContext {
 
         // parse SQL into AST
         let ast = Parser::parse_sql(String::from(sql))?;
-        println!("AST: {:?}", ast);
+        //println!("AST: {:?}", ast);
 
         match ast {
-            SQLCreateTable { name, columns } => {
+            SQLCreateTable { name, columns, file_type, header_row, location } => {
+
                 let fields: Vec<Field> = columns
                     .iter()
                     .map(|c| Field::new(&c.name, convert_data_type(&c.data_type), c.allow_null))
                     .collect();
                 let schema = Schema::new(fields);
-                self.define_schema(&name, &schema);
+
+                let df = match file_type {
+                    FileType::CSV => self.load_csv(&location, &schema, header_row, None)?,
+                    FileType::Parquet => self.load_parquet(&location, None)?,
+                };
+
+                self.register(&name, df);
 
                 //TODO: not sure what to return here
                 Ok(Rc::new(DF::new(self.clone(),
@@ -721,14 +755,14 @@ impl ExecutionContext {
             }
             _ => {
                 // create a query planner
-                let query_planner = SqlToRel::new(self.schemas.clone()); //TODO: pass reference to schemas
+                let query_planner = SqlToRel::new(self.tables.clone());
 
                 // plan the query (create a logical relational plan)
                 let plan = query_planner.sql_to_rel(&ast)?;
-                println!("Logical plan: {:?}", plan);
+                //println!("Logical plan: {:?}", plan);
 
                 let new_plan = push_down_projection(&plan, HashSet::new());
-                println!("Optimized logical plan: {:?}", new_plan);
+                //println!("Optimized logical plan: {:?}", new_plan);
 
                 // return the DataFrame
                 Ok(Rc::new(DF::new(
@@ -774,12 +808,6 @@ impl ExecutionContext {
             self.clone(),
             Rc::new(plan),
         )))
-    }
-
-    pub fn register_table(&mut self, name: String, schema: Schema) {
-        self.schemas
-            .borrow_mut()
-            .insert(name, Rc::new(schema.clone()));
     }
 
     pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>> {
@@ -1019,8 +1047,29 @@ impl ExecutionContext {
         //println!("execute_local()");
 
         match physical_plan {
-            &PhysicalPlan::Interactive { .. } => {
-                Err(ExecutionError::General(format!("not implemented")))
+            &PhysicalPlan::Interactive { ref plan } => {
+                let mut execution_plan = self.create_execution_plan(plan)?;
+
+                // implement execution here for now but should be a common method for processing a plan
+                let it = execution_plan.scan();
+                it.for_each(|t| {
+                    match t {
+                        Ok(ref batch) => {
+                            ////println!("Processing batch of {} rows", batch.row_count());
+                            for i in 0..batch.num_rows() {
+                                let row = batch.row_slice(i);
+                                let csv = row.into_iter()
+                                    .map(|v| v.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(",");
+                                println!("{}", csv);
+                            }
+                        }
+                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
+                    }
+                });
+
+                Ok(ExecutionResult::Count(0))
             }
             &PhysicalPlan::Write {
                 ref plan,
@@ -1385,6 +1434,40 @@ mod tests {
 
         assert_eq!(expected_result, read_file("_test_sql_min_max.csv"));
     }
+
+    #[test]
+    fn test_cast() {
+        // create execution context
+        let mut ctx = ExecutionContext::local();
+
+        let schema = Schema::new(vec![
+            Field::new("c_int", DataType::UInt32, false),
+            Field::new("c_float", DataType::Float64, false),
+            Field::new("c_string", DataType::Utf8, false),
+        ]);
+
+        let df = ctx.load_csv("./test/data/all_types.csv", &schema, true, None)
+            .unwrap();
+        ctx.register("all_types", df);
+
+        // define the SQL statement
+        let sql = "SELECT \
+            CAST(c_int AS INT),    CAST(c_int AS FLOAT),    CAST(c_int AS STRING), \
+            CAST(c_float AS INT),  CAST(c_float AS FLOAT),  CAST(c_float AS STRING), \
+            CAST(c_string AS FLOAT), CAST(c_string AS STRING) \
+        FROM all_types";
+
+        // create a data frame
+        let df1 = ctx.sql(&sql).unwrap();
+
+        // write the results to a file
+        ctx.write_csv(df1, "_test_cast.csv").unwrap();
+
+        let expected_result = read_file("test/data/expected/test_cast.csv");
+
+        assert_eq!(expected_result, read_file("_test_cast.csv"));
+    }
+
 
     fn read_file(filename: &str) -> String {
         let mut file = File::open(filename).unwrap();
