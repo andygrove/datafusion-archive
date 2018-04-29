@@ -412,7 +412,7 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
                             DataType::UInt32 => cast_utf8_to!(u32, list),
                             DataType::UInt64 => cast_utf8_to!(u64, list),
                             DataType::Float32 => cast_utf8_to!(f32, list),
-                            DataType::Float64 => cast_utf8_to!(f32, list),
+                            DataType::Float64 => cast_utf8_to!(f64, list),
                             DataType::Utf8 => Ok(v.clone()),
                             _ => unimplemented!("CAST from Utf8 to {:?}", data_type)
                         }
