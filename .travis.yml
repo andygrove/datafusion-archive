@@ -28,7 +28,7 @@ after_success:
   - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
         cargo bench;
     fi
-  - travis-cargo coveralls --verbose
+  - travis-cargo coveralls
 
 env:
   global:
