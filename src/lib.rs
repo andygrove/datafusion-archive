@@ -26,6 +26,9 @@ extern crate fnv;
 extern crate liner;
 extern crate parquet;
 
+#[macro_use]
+extern crate lazy_static;
+
 //extern crate etcd;
 //extern crate futures;
 //extern crate hyper;

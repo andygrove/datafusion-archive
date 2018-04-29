@@ -18,6 +18,8 @@ use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;
 
+use fnv::FnvHashSet;
+
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -65,34 +67,65 @@ pub enum Token {
 #[derive(Debug)]
 pub struct TokenizerError(String);
 
-/// SQL keywords
-static KEYWORDS: &'static [&'static str] = &[
-    "SELECT", "FROM", "WHERE", "LIMIT", "ORDER", "GROUP", "BY", "HAVING", "UNION", "ALL",
-    "INSERT", "UPDATE", "DELETE",
-    "IN", "NULL", "SET", "CREATE", "EXTERNAL", "TABLE", "ASC", "DESC",
-    "AND", "OR", "NOT", // boolean logic
-    "AS", // alias
-    "STRING", "VARCHAR", "FLOAT", "DOUBLE", "INT", "INTEGER", "LONG", // data types
-    "STORED", "CSV", "PARQUET", "LOCATION", "WITH", "WITHOUT", "HEADER", "ROW" // used in CREATE EXTERNAL TABLE
-];
+lazy_static! {
+    static ref KEYWORDS: FnvHashSet<&'static str> = {
+        let mut m = FnvHashSet::default();
+
+        m.insert("SELECT");
+        m.insert("FROM");
+        m.insert("WHERE");
+        m.insert("LIMIT");
+        m.insert("ORDER");
+        m.insert("GROUP");
+        m.insert("BY");
+        m.insert("HAVING");
+        m.insert("UNION");
+        m.insert("ALL");
+        m.insert("INSERT");
+        m.insert("UPDATE");
+        m.insert("DELETE");
+        m.insert("IN");
+        m.insert("NULL");
+        m.insert("SET");
+        m.insert("CREATE");
+        m.insert("EXTERNAL");
+        m.insert("TABLE");
+        m.insert("ASC");
+        m.insert("DESC");
+        m.insert("AND");
+        m.insert("OR");
+        m.insert("NOT");
+        m.insert("AS"); // Alias
+        m.insert("STRING");
+        m.insert("VARCHAR");
+        m.insert("FLOAT");
+        m.insert("DOUBLE");
+        m.insert("INT");
+        m.insert("INTEGER");
+        m.insert("LONG");
+        m.insert("STORED");
+        m.insert("CSV");
+        m.insert("PARQUET");
+        m.insert("LOCATION");
+        m.insert("WITH");
+        m.insert("WITHOUT");
+        m.insert("HEADER");
+        m.insert("ROW"); // used in CREATE EXTERNAL TABLE
+        m
+    };
+}
 
 /// SQL Tokenizer
 pub struct Tokenizer {
-    keywords: HashSet<String>,
     pub query: String,
 }
 
 impl Tokenizer {
     /// Create a new SQL tokenizer for the specified SQL statement
     pub fn new(query: &str) -> Self {
-        let mut tokenizer = Tokenizer {
-            keywords: HashSet::new(),
+        Self {
             query: query.to_string(),
-        };
-        KEYWORDS.into_iter().for_each(|k| {
-            tokenizer.keywords.insert(k.to_string());
-        });
-        tokenizer
+        }
     }
 
     /// Tokenize the statement and produce a vector of tokens
@@ -135,7 +168,7 @@ impl Tokenizer {
                             _ => break,
                         }
                     }
-                    if self.keywords.contains(&s) {
+                    if KEYWORDS.contains(s.as_str()) {
                         Ok(Some(Token::Keyword(s)))
                     } else {
                         Ok(Some(Token::Identifier(s)))
