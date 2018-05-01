@@ -1,7 +1,5 @@
 dist: trusty
-sudo: required
 language: rust
-cache: cargo
 addons:
   apt:
     packages:
