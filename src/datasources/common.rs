@@ -18,7 +18,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::str;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::datatypes::*;
 
 use super::super::errors::*;
@@ -58,7 +58,7 @@ pub fn get_value(column: &Array, index: usize) -> ScalarValue {
         ArrayData::UInt32(ref v) => ScalarValue::UInt32(*v.get(index)),
         ArrayData::UInt64(ref v) => ScalarValue::UInt64(*v.get(index)),
         ArrayData::Utf8(ref data) => {
-            ScalarValue::Utf8(Rc::new(String::from(str::from_utf8(data.slice(index)).unwrap())))
+            ScalarValue::Utf8(Rc::new(String::from(str::from_utf8(data.get(index)).unwrap())))
         }
         ArrayData::Struct(ref v) => {
             // v is Vec<ArrayData>

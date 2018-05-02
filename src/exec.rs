@@ -26,7 +26,7 @@ use std::rc::Rc;
 use std::str;
 use std::string::String;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::builder::*;
 use arrow::list_builder::*;
 use arrow::datatypes::*;
@@ -116,7 +116,7 @@ impl Value {
                 (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
                     let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
                     for i in 0..list.len() as usize {
-                        v.push(list.slice(i) == b.as_bytes());
+                        v.push(list.get(i) == b.as_bytes());
                     }
                     Ok(Value::Column(Rc::new(Array::from(v))))
                 }
@@ -138,7 +138,7 @@ impl Value {
                 (&ArrayData::Utf8(ref list), &ScalarValue::Utf8(ref b)) => {
                     let mut v: Vec<bool> = Vec::with_capacity(list.len() as usize);
                     for i in 0..list.len() as usize {
-                        v.push(list.slice(i) != b.as_bytes());
+                        v.push(list.get(i) != b.as_bytes());
                     }
                     Ok(Value::Column(Rc::new(Array::from(v))))
                 }
@@ -372,7 +372,7 @@ macro_rules! cast_utf8_to {
     {$TY:ty, $LIST:expr} => {{
         let mut b: Builder<$TY> = Builder::with_capacity($LIST.len() as usize);
         for i in 0..$LIST.len() as usize {
-            let x = str::from_utf8($LIST.slice(i)).unwrap();
+            let x = str::from_utf8($LIST.get(i)).unwrap();
             match x.parse::<$TY>() {
                 Ok(v) => b.push(v),
                 Err(_) => return Err(ExecutionError::General(format!(
@@ -1112,7 +1112,7 @@ impl ExecutionContext {
                                             ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
                                             ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
                                             ArrayData::Utf8(ref data) => {
-                                                w.write_bytes(data.slice(i))
+                                                w.write_bytes(data.get(i))
                                             }
                                             ArrayData::Struct(ref v) => {
                                                 let fields = v.iter()

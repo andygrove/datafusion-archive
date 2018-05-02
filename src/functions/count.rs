@@ -71,7 +71,7 @@ impl AggregateFunction for CountFunction {
 mod tests {
 
     use super::*;
-    use arrow::array::*;
+    //use arrow::array::*;
 
     #[test]
     fn test_count() {

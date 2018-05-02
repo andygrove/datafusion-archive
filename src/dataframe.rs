@@ -94,7 +94,7 @@ impl DataFrame for DF {
     }
 
     fn col(&self, column_name: &str) -> Result<Expr> {
-        match self.plan.schema().column(column_name) {
+        match self.plan.schema().column_with_name (column_name) {
             Some((i, _)) => Ok(Expr::Column(i)),
             _ => Err(ExecutionError::InvalidColumn(column_name.to_string())),
         }

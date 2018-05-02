@@ -14,7 +14,6 @@
 
 //! SQL Tokenizer
 
-use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;
 

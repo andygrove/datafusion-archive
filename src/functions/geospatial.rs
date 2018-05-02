@@ -17,7 +17,7 @@
 use std::convert::From;
 use std::rc::Rc;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::datatypes::*;
 
 use super::super::errors::*;

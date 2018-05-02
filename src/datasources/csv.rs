@@ -18,7 +18,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::rc::Rc;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::list_builder::ListBuilder;

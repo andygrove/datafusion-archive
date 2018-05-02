@@ -19,7 +19,7 @@ use super::super::errors::*;
 use super::super::exec::*;
 use super::super::types::*;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::datatypes::*;
 
 pub struct FilterRelation {
@@ -192,7 +192,7 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
                     for i in 0..b.len() as usize {
                         if *b.get(i) {
                             //println!("i = {}", i);
-                            x.push(String::from_utf8(v.slice(i as usize).to_vec()).unwrap());
+                            x.push(String::from_utf8(v.get(i as usize).to_vec()).unwrap());
                         }
                     }
                     Array::from(x)

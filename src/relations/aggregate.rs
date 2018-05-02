@@ -24,7 +24,7 @@ use super::super::functions::min::MinFunction;
 use super::super::functions::max::MaxFunction;
 use super::super::types::*;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
 
@@ -110,7 +110,7 @@ fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
                 ArrayData::UInt16(ref buf) => GroupScalar::UInt16(*buf.get(i)),
                 ArrayData::UInt32(ref buf) => GroupScalar::UInt32(*buf.get(i)),
                 ArrayData::UInt64(ref buf) => GroupScalar::UInt64(*buf.get(i)),
-                ArrayData::Utf8(ref list) => GroupScalar::Utf8(Rc::new(str::from_utf8(list.slice(i)).unwrap().to_string())),
+                ArrayData::Utf8(ref list) => GroupScalar::Utf8(Rc::new(str::from_utf8(list.get(i)).unwrap().to_string())),
                 _ => unimplemented!(
                     "Unsupported datatype for aggregate grouping expression"
                 ),

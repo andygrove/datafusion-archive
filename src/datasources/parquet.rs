@@ -17,7 +17,7 @@
 use std::fs::File;
 use std::rc::Rc;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::builder::*;
 use arrow::list_builder::*;
 use arrow::datatypes::*;

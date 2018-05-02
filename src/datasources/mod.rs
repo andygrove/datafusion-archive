@@ -17,4 +17,4 @@
 pub mod common;
 pub mod csv;
 pub mod parquet;
-pub mod quiver;
+//pub mod quiver;
