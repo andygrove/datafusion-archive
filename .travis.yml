@@ -1,7 +1,7 @@
 dist: trusty
 sudo: required
-language: rust
 cache: cargo
+language: rust
 addons:
   apt:
     packages:
@@ -16,15 +16,20 @@ addons:
 rust:
   - nightly
 
+before_script:
+  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  - cargo install --force cargo-travis && export PATH=$HOME/.cargo/bin:$PATH
+
 script:
-  - cargo build
-  - cargo test
+  - travis-cargo build
+  - travis-cargo test
 
 after_success:
   - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
         cargo bench;
     fi
   - cargo coveralls --verbose
+
 
 env:
   global:
