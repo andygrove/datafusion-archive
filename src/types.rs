@@ -221,9 +221,9 @@ impl ScalarValue {
 macro_rules! primitive_accessor {
     ($NAME:ident, $VARIANT:ident, $TY:ty) => {
         pub fn $NAME(&self) -> Result<$TY> {
-            match *self {
-                ScalarValue::$VARIANT(v) => Ok(v),
-                _ => Err(df_error!("type mismatch".to_string()))
+            match self {
+                ScalarValue::$VARIANT(v) => Ok(*v),
+                other => Err(ExecutionError::General(format!("Cannot access scalar value {:?} as {}", other, stringify!($VARIANT))))
             }
         }
     }

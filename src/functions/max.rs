@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! MIN() aggregate function
+//! MAX() aggregate function
 
 use std::rc::Rc;
 
@@ -36,9 +36,39 @@ impl MaxFunction {
     }
 }
 
+
+macro_rules! max_in_column {
+    ($SELF:ident, $BUF:ident, $VARIANT:ident) => {{
+        for i in 0..$BUF.len() as usize {
+            let value = *$BUF.get(i);
+            match $SELF.value {
+                ScalarValue::Null => $SELF.value = ScalarValue::$VARIANT(value),
+                ScalarValue::$VARIANT(x) => if value > x {
+                    $SELF.value = ScalarValue::$VARIANT(value)
+                },
+                ref other => panic!("Type mismatch in MAX() for datatype {} - {:?}",
+                stringify!($VARIANT), other),
+            }
+        }
+    }}
+}
+macro_rules! max_in_scalar {
+    ($SELF:ident, $VALUE:ident, $VARIANT:ident) => {{
+        match $SELF.value {
+            ScalarValue::Null => $SELF.value = ScalarValue::$VARIANT(*$VALUE),
+            ScalarValue::$VARIANT(x) => if *$VALUE > x {
+                $SELF.value = ScalarValue::$VARIANT(*$VALUE)
+            },
+            _ => panic!("Yype mismatch in MAX()"),
+        }
+        Ok(())
+
+    }}
+}
+
 impl AggregateFunction for MaxFunction {
     fn name(&self) -> String {
-        "MIN".to_string()
+        "MAX".to_string()
     }
 
     fn args(&self) -> Vec<Field> {
@@ -54,35 +84,32 @@ impl AggregateFunction for MaxFunction {
         match args[0] {
             Value::Column(ref array) => {
                 match array.data() {
-                    //TODO support all types using macros
-                    ArrayData::Float64(ref buf) => {
-                        for i in 0..buf.len() as usize {
-                            let value = *buf.get(i);
-                            match self.value {
-                                ScalarValue::Null => self.value = ScalarValue::Float64(value),
-                                ScalarValue::Float64(x) => if value > x {
-                                    self.value = ScalarValue::Float64(value)
-                                },
-                                _ => panic!("type mismatch"),
-                            }
-                        }
-                    }
-                    _ => unimplemented!("unsupported data type in MaxFunction"),
+                    ArrayData::UInt8(ref buf) => max_in_column!(self, buf, UInt8),
+                    ArrayData::UInt16(ref buf) => max_in_column!(self, buf, UInt16),
+                    ArrayData::UInt32(ref buf) => max_in_column!(self, buf, UInt32),
+                    ArrayData::UInt64(ref buf) => max_in_column!(self, buf, UInt64),
+                    ArrayData::Int8(ref buf) => max_in_column!(self, buf, Int8),
+                    ArrayData::Int16(ref buf) => max_in_column!(self, buf, Int16),
+                    ArrayData::Int32(ref buf) => max_in_column!(self, buf, Int32),
+                    ArrayData::Int64(ref buf) => max_in_column!(self, buf, Int64),
+                    ArrayData::Float32(ref buf) => max_in_column!(self, buf, Float32),
+                    ArrayData::Float64(ref buf) => max_in_column!(self, buf, Float64),
+                    _ => unimplemented!("MAX() unsupported array datatype"),
                 }
                 Ok(())
             }
             Value::Scalar(ref v) => match v.as_ref() {
-                ScalarValue::Float64(ref value) => {
-                    match self.value {
-                        ScalarValue::Null => self.value = ScalarValue::Float64(*value),
-                        ScalarValue::Float64(x) => if *value > x {
-                            self.value = ScalarValue::Float64(*value)
-                        },
-                        _ => panic!("type mismatch"),
-                    }
-                    Ok(())
-                }
-                _ => unimplemented!("unsupported data type in MaxFunction"),
+                ScalarValue::UInt8(ref value) => max_in_scalar!(self, value, UInt8),
+                ScalarValue::UInt16(ref value) => max_in_scalar!(self, value, UInt16),
+                ScalarValue::UInt32(ref value) => max_in_scalar!(self, value, UInt32),
+                ScalarValue::UInt64(ref value) => max_in_scalar!(self, value, UInt64),
+                ScalarValue::Int8(ref value) => max_in_scalar!(self, value, Int8),
+                ScalarValue::Int16(ref value) => max_in_scalar!(self, value, Int16),
+                ScalarValue::Int32(ref value) => max_in_scalar!(self, value, Int32),
+                ScalarValue::Int64(ref value) => max_in_scalar!(self, value, Int64),
+                ScalarValue::Float32(ref value) => max_in_scalar!(self, value, Float32),
+                ScalarValue::Float64(ref value) => max_in_scalar!(self, value, Float64),
+                _ => unimplemented!("MAX() unsupported scalar datatype"),
             },
         }
     }

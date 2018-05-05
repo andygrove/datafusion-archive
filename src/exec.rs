@@ -857,7 +857,7 @@ impl ExecutionContext {
                 //println!("Logical plan: {:?}", plan);
 
                 let new_plan = push_down_projection(&plan, HashSet::new());
-                //println!("Optimized logical plan: {:?}", new_plan);
+                println!("Optimized logical plan: {:?}", new_plan);
 
                 // return the DataFrame
                 Ok(Rc::new(DF::new(self.clone(), new_plan)))
