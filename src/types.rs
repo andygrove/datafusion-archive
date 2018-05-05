@@ -197,6 +197,27 @@ pub enum ScalarValue {
     Struct(Vec<ScalarValue>),
 }
 
+impl ScalarValue {
+    pub fn get_datatype(&self) -> DataType {
+        match *self {
+            ScalarValue::Boolean(_) => DataType::Boolean,
+            ScalarValue::UInt8(_) => DataType::UInt8,
+            ScalarValue::UInt16(_) => DataType::UInt16,
+            ScalarValue::UInt32(_) => DataType::UInt32,
+            ScalarValue::UInt64(_) => DataType::UInt64,
+            ScalarValue::Int8(_) => DataType::Int8,
+            ScalarValue::Int16(_) => DataType::Int16,
+            ScalarValue::Int32(_) => DataType::Int32,
+            ScalarValue::Int64(_) => DataType::Int64,
+            ScalarValue::Float32(_) => DataType::Float32,
+            ScalarValue::Float64(_) => DataType::Float64,
+            ScalarValue::Utf8(_) => DataType::Utf8,
+            ScalarValue::Struct(_) => unimplemented!(),
+            ScalarValue::Null => unimplemented!()
+        }
+    }
+}
+
 macro_rules! primitive_accessor {
     ($NAME:ident, $VARIANT:ident, $TY:ty) => {
         pub fn $NAME(&self) -> Result<$TY> {

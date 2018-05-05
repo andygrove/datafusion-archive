@@ -25,7 +25,8 @@ use std::time::Instant;
 
 use clap::{App, Arg};
 use datafusion::exec::*;
-use datafusion::functions::geospatial::*;
+use datafusion::functions::geospatial::st_point::*;
+use datafusion::functions::geospatial::st_astext::*;
 use datafusion::functions::math::*;
 use datafusion::sqlast::ASTNode::SQLCreateTable;
 use datafusion::sqlparser::*;

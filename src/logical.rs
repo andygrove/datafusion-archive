@@ -71,6 +71,14 @@ pub enum Operator {
     Or,
 }
 
+impl Operator {
+    /// Get the result type of applying this operation to its left and right inputs
+    pub fn get_datatype(&self, l: &Expr, _r:&Expr, schema: &Schema) -> DataType {
+        //TODO: implement correctly, just go with left side for now
+        l.get_type(schema).clone()
+    }
+}
+
 /// Relation Expression
 #[derive(Clone)]
 pub enum Expr {
@@ -106,7 +114,7 @@ impl Expr {
     pub fn get_type(&self, schema: &Schema) -> DataType {
         match self {
             Expr::Column(n) => schema.column(*n).data_type().clone(),
-            Expr::Literal(_) => unimplemented!(),
+            Expr::Literal(l) => l.get_datatype(),
             Expr::Cast { data_type, .. } => data_type.clone(),
             Expr::ScalarFunction { return_type, .. } => return_type.clone(),
             _ => unimplemented!(),

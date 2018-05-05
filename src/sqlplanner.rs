@@ -244,11 +244,25 @@ impl SqlToRel {
                     &SQLOperator::And => Operator::And,
                     &SQLOperator::Or => Operator::Or,
                 };
-                Ok(Expr::BinaryExpr {
-                    left: Rc::new(self.sql_to_rex(&left, &schema)?),
-                    op: operator,
-                    right: Rc::new(self.sql_to_rex(&right, &schema)?),
-                })
+
+                let left_expr = self.sql_to_rex(&left, &schema)?;
+                let right_expr = self.sql_to_rex(&right, &schema)?;
+                let left_type = left_expr.get_type(schema);
+                let right_type = right_expr.get_type(schema);
+
+                match get_supertype(&left_type, &right_type) {
+                    Some(supertype) => {
+                        Ok(Expr::BinaryExpr {
+                            left: Rc::new(left_expr.cast_to(&supertype, schema)?),
+                            op: operator,
+                            right: Rc::new(right_expr.cast_to(&supertype, schema)?),
+                        })
+                    },
+                    None => return Err(
+                        format!("No common supertype found for binary operator {:?} \
+                            with input types {:?} and {:?}", operator, left_type, right_type))
+                }
+
             }
 
             &ASTNode::SQLOrderBy { ref expr, asc } => Ok(Expr::Sort {
@@ -431,6 +445,75 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
         LogicalPlan::Limit { .. } => plan.clone(),
         LogicalPlan::Sort { .. } => plan.clone(),
         LogicalPlan::EmptyRelation { .. } => plan.clone(),
+    }
+}
+
+//TODO move to Arrow DataType impl?
+fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
+    use self::DataType::*;
+    match (l,r) {
+        (UInt8, UInt8) => Some(UInt8),
+        (UInt8, UInt16) => Some(UInt16),
+        (UInt8, UInt32) => Some(UInt32),
+        (UInt8, UInt64) => Some(UInt64),
+        (UInt8, Float32) => Some(Float32),
+        (UInt8, Float64) => Some(Float64),
+
+        (UInt16, UInt8) => Some(UInt16),
+        (UInt16, UInt16) => Some(UInt16),
+        (UInt16, UInt32) => Some(UInt32),
+        (UInt16, UInt64) => Some(UInt64),
+        (UInt16, Float32) => Some(Float32),
+        (UInt16, Float64) => Some(Float64),
+
+        (UInt32, UInt8) => Some(UInt32),
+        (UInt32, UInt16) => Some(UInt32),
+        (UInt32, UInt32) => Some(UInt32),
+        (UInt32, UInt64) => Some(UInt64),
+        (UInt32, Float32) => Some(Float32),
+        (UInt32, Float64) => Some(Float64),
+
+        (UInt64, UInt8) => Some(UInt64),
+        (UInt64, UInt16) => Some(UInt64),
+        (UInt64, UInt32) => Some(UInt64),
+        (UInt64, UInt64) => Some(UInt64),
+        (UInt64, Float32) => Some(Float32),
+        (UInt64, Float64) => Some(Float64),
+
+        (Int8, Int8) => Some(Int8),
+        (Int8, Int16) => Some(Int16),
+        (Int8, Int32) => Some(Int32),
+        (Int8, Int64) => Some(Int64),
+        (Int8, Float32) => Some(Float32),
+        (Int8, Float64) => Some(Float64),
+
+        (Int16, Int8) => Some(Int16),
+        (Int16, Int16) => Some(Int16),
+        (Int16, Int32) => Some(Int32),
+        (Int16, Int64) => Some(Int64),
+        (Int16, Float32) => Some(Float32),
+        (Int16, Float64) => Some(Float64),
+
+        (Int32, Int8) => Some(Int32),
+        (Int32, Int16) => Some(Int32),
+        (Int32, Int32) => Some(Int32),
+        (Int32, Int64) => Some(Int64),
+        (Int32, Float32) => Some(Float32),
+        (Int32, Float64) => Some(Float64),
+
+        (Int64, Int8) => Some(Int64),
+        (Int64, Int16) => Some(Int64),
+        (Int64, Int32) => Some(Int64),
+        (Int64, Int64) => Some(Int64),
+        (Int64, Float32) => Some(Float32),
+        (Int64, Float64) => Some(Float64),
+
+        (Float32, Float32) => Some(Float32),
+        (Float32, Float64) => Some(Float64),
+        (Float64, Float32) => Some(Float64),
+        (Float64, Float64) => Some(Float64),
+
+        _ => None
     }
 }
 

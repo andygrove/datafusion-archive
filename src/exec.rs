@@ -1325,7 +1325,8 @@ impl ExecutionContext {
 
 #[cfg(test)]
 mod tests {
-    use super::super::functions::geospatial::*;
+    use super::super::functions::geospatial::st_astext::*;
+    use super::super::functions::geospatial::st_point::*;
     use super::super::functions::math::*;
     use super::*;
     use std::fs::File;
