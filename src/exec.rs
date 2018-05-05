@@ -595,7 +595,17 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
 
             let func = ctx.load_scalar_function(name.as_ref())?;
 
-            //TODO type checking of args
+            // type checking for function arguments
+            let expected_args = func.args();
+            for i in 0..expected_args.len() {
+                let actual_type = compiled_args_ok[i].get_type();
+                if expected_args[i].data_type() != &actual_type {
+                    return Err(ExecutionError::General(format!(
+                        "Scalar function {} requires {:?} for argument {} but got {:?}",
+                        name, expected_args[i].data_type(), i, actual_type
+                    )))
+                }
+            }
 
             Ok(RuntimeExpr::Compiled {
                 f: Rc::new(move |batch| {
