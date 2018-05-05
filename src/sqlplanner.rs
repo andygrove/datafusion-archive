@@ -31,13 +31,15 @@ use arrow::datatypes::*;
 pub struct SqlToRel {
     //default_schema: Option<String>,
     tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
+    function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
 }
 
 impl SqlToRel {
     /// Create a new query planner
-    pub fn new(schemas: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>) -> Self {
+    pub fn new(tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
+               function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>) -> Self {
         SqlToRel {
-            /*default_schema: None,*/ tables: schemas,
+            /*default_schema: None,*/ tables, function_meta
         }
     }
 
@@ -254,22 +256,44 @@ impl SqlToRel {
             }),
 
             &ASTNode::SQLFunction { ref id, ref args } => {
-                let rex_args = args.iter()
-                    .map(|a| self.sql_to_rex(a, schema))
-                    .collect::<Result<Vec<Expr>, String>>()?;
 
                 //TODO: fix this hack
                 match id.to_lowercase().as_ref() {
-                    "min" | "max" | "count" | "sum" | "avg" => Ok(Expr::AggregateFunction {
-                        name: id.clone(),
-                        args: rex_args,
-                        return_type: DataType::Float64 //TODO
-                    }),
-                    _ => Ok(Expr::ScalarFunction {
-                        name: id.clone(),
-                        args: rex_args,
-                        return_type: DataType::Float64 //TODO
-                    }),
+                    "min" | "max" | "count" | "sum" | "avg" => {
+
+                        let rex_args = args.iter()
+                            .map(|a| self.sql_to_rex(a, schema))
+                            .collect::<Result<Vec<Expr>, String>>()?;
+
+                        Ok(Expr::AggregateFunction {
+                            name: id.clone(),
+                            args: rex_args,
+                            return_type: DataType::Float64 //TODO
+                        })
+                    },
+                    _ => {
+                        match self.function_meta.borrow().get(id) {
+                            Some(fm) => {
+                                let rex_args = args.iter()
+                                    .map(|a| self.sql_to_rex(a, schema))
+                                    .collect::<Result<Vec<Expr>, String>>()?;
+
+                                let mut safe_args: Vec<Expr> = vec![];
+                                for i in 0..rex_args.len() {
+                                    safe_args.push(rex_args[i].cast_to(fm.args[i].data_type(), schema)?);
+                                }
+
+                                Ok(Expr::ScalarFunction {
+                                    name: id.clone(),
+                                    args: safe_args,
+                                    return_type: DataType::Float64 //TODO
+                                })
+
+                            },
+                            _ => Err(format!("Invalid function '{}'", id))
+                        }
+
+                    },
                 }
             }
 

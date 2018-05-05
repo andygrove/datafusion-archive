@@ -587,16 +587,23 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
         &Expr::ScalarFunction { ref name, ref args, ref return_type } => {
             ////println!("Executing function {}", name);
 
+            let func = ctx.load_scalar_function(name.as_ref())?;
+
+            let expected_args = func.args();
+
+            if expected_args.len() != args.len() {
+                return Err(ExecutionError::General(
+                    format!("Function {} requires {} parameters but {} were provided",
+                            name, expected_args.len(), args.len())))
+            }
+
             // evaluate the arguments to the function
             let compiled_args: Result<Vec<RuntimeExpr>> =
                 args.iter().map(|e| compile_scalar_expr(ctx, e, input_schema)).collect();
 
             let compiled_args_ok = compiled_args?;
 
-            let func = ctx.load_scalar_function(name.as_ref())?;
-
             // type checking for function arguments
-            let expected_args = func.args();
             for i in 0..expected_args.len() {
                 let actual_type = compiled_args_ok[i].get_type();
                 if expected_args[i].data_type() != &actual_type {
@@ -780,7 +787,9 @@ impl ExecutionContext {
         let ast = Parser::parse_sql(String::from(sql))?;
 
         // create a query planner
-        let query_planner = SqlToRel::new(self.tables.clone()); //TODO: pass reference to schemas
+        let query_planner = SqlToRel::new(self.tables.clone(),
+        self.function_meta.clone()
+        );
 
         // plan the query (create a logical relational plan)
         Ok(query_planner.sql_to_rel(&ast)?)
@@ -825,7 +834,7 @@ impl ExecutionContext {
             }
             _ => {
                 // create a query planner
-                let query_planner = SqlToRel::new(self.tables.clone());
+                let query_planner = SqlToRel::new(self.tables.clone(), self.function_meta.clone());
 
                 // plan the query (create a logical relational plan)
                 let plan = query_planner.sql_to_rel(&ast)?;

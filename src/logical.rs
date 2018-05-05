@@ -104,35 +104,30 @@ pub enum Expr {
     },
 }
 
-impl fmt::Debug for Expr {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            Expr::Column(i) =>
-                write!(f, "#{}", i),
-            Expr::Literal(v) =>
-                write!(f, "{:?}", v),
-            Expr::Cast { expr, data_type } =>
-                write!(f, "CAST {:?} AS {:?}", expr, data_type),
-            Expr::BinaryExpr { left, op, right } =>
-                write!(f, "{:?} {:?} {:?}", left, op, right),
-            Expr::Sort { expr, asc } => if *asc {
-                write!(f, "{:?} ASC", expr)
-            } else {
-                write!(f, "{:?} DESC", expr)
-            },
-            Expr::ScalarFunction { name, .. } =>
-                write!(f, "{}()", name),
-            Expr::AggregateFunction { name, .. } =>
-                write!(f, "{}()", name),
-        }
-    }
-}
-
-
 impl Expr {
 
-    pub fn get_type(&self) -> &DataType {
-        unimplemented!()
+    pub fn get_type(&self, schema: &Schema) -> DataType {
+        match self {
+            Expr::Column(n) => schema.column(*n).data_type().clone(),
+            Expr::Literal(_) => unimplemented!(),
+            Expr::Cast { data_type, .. } => data_type.clone(),
+            Expr::ScalarFunction { return_type, .. } => return_type.clone(),
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn cast_to(&self, cast_to_type: &DataType, schema: &Schema) -> Result<Expr, String> {
+        let this_type = self.get_type(schema);
+        if this_type == *cast_to_type {
+            Ok(self.clone())
+        } else if cast_to_type.can_coerce_from(&this_type) {
+            Ok(Expr::Cast {
+                expr: Rc::new(self.clone()),
+                data_type: cast_to_type.clone()
+            })
+        } else {
+            Err(format!("Cannot automatically convert {:?} to {:?}", this_type, cast_to_type))
+        }
     }
 
     pub fn eq(&self, other: &Expr) -> Expr {
@@ -183,6 +178,32 @@ impl Expr {
         }
     }
 }
+
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            Expr::Column(i) =>
+                write!(f, "#{}", i),
+            Expr::Literal(v) =>
+                write!(f, "{:?}", v),
+            Expr::Cast { expr, data_type } =>
+                write!(f, "CAST {:?} AS {:?}", expr, data_type),
+            Expr::BinaryExpr { left, op, right } =>
+                write!(f, "{:?} {:?} {:?}", left, op, right),
+            Expr::Sort { expr, asc } => if *asc {
+                write!(f, "{:?} ASC", expr)
+            } else {
+                write!(f, "{:?} DESC", expr)
+            },
+            Expr::ScalarFunction { name, .. } =>
+                write!(f, "{}()", name),
+            Expr::AggregateFunction { name, .. } =>
+                write!(f, "{}()", name),
+        }
+    }
+}
+
+
 
 /// The LogicalPlan represents different types of relations (such as Projection, Selection, etc) and
 /// can be created by the SQL query planner and the DataFrame API.

@@ -56,8 +56,7 @@ impl ScalarFunction for SqrtFunction {
 
     fn args(&self) -> Vec<Field> {
         vec![
-            Field::new("x", DataType::Float64, false),
-            Field::new("y", DataType::Float64, false),
+            Field::new("n", DataType::Float64, false),
         ]
     }
 
