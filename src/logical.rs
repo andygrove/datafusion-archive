@@ -71,6 +71,14 @@ pub enum Operator {
     Or,
 }
 
+impl Operator {
+    /// Get the result type of applying this operation to its left and right inputs
+    pub fn get_datatype(&self, l: &Expr, _r:&Expr, schema: &Schema) -> DataType {
+        //TODO: implement correctly, just go with left side for now
+        l.get_type(schema).clone()
+    }
+}
+
 /// Relation Expression
 #[derive(Clone)]
 pub enum Expr {
@@ -85,44 +93,51 @@ pub enum Expr {
         right: Rc<Expr>,
     },
     /// cast a value to a different type
-    Cast {
-        expr: Rc<Expr>,
-        data_type: DataType
-    },
+    Cast { expr: Rc<Expr>, data_type: DataType },
     /// sort expression
     Sort { expr: Rc<Expr>, asc: bool },
     /// scalar function
-    ScalarFunction { name: String, args: Vec<Expr> },
+    ScalarFunction {
+        name: String,
+        args: Vec<Expr>,
+        return_type: DataType,
+    },
     /// aggregate function
-    AggregateFunction { name: String, args: Vec<Expr> },
+    AggregateFunction {
+        name: String,
+        args: Vec<Expr>,
+        return_type: DataType,
+    },
 }
-
-impl fmt::Debug for Expr {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            Expr::Column(i) =>
-                write!(f, "#{}", i),
-            Expr::Literal(v) =>
-                write!(f, "{:?}", v),
-            Expr::Cast { expr, data_type } =>
-                write!(f, "CAST {:?} AS {:?}", expr, data_type),
-            Expr::BinaryExpr { left, op, right } =>
-                write!(f, "{:?} {:?} {:?}", left, op, right),
-            Expr::Sort { expr, asc } => if *asc {
-                write!(f, "{:?} ASC", expr)
-            } else {
-                write!(f, "{:?} DESC", expr)
-            },
-            Expr::ScalarFunction { name, .. } =>
-                write!(f, "{}()", name),
-            Expr::AggregateFunction { name, .. } =>
-                write!(f, "{}()", name),
-        }
-    }
-}
-
 
 impl Expr {
+    pub fn get_type(&self, schema: &Schema) -> DataType {
+        match self {
+            Expr::Column(n) => schema.column(*n).data_type().clone(),
+            Expr::Literal(l) => l.get_datatype(),
+            Expr::Cast { data_type, .. } => data_type.clone(),
+            Expr::ScalarFunction { return_type, .. } => return_type.clone(),
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn cast_to(&self, cast_to_type: &DataType, schema: &Schema) -> Result<Expr, String> {
+        let this_type = self.get_type(schema);
+        if this_type == *cast_to_type {
+            Ok(self.clone())
+        } else if cast_to_type.can_coerce_from(&this_type) {
+            Ok(Expr::Cast {
+                expr: Rc::new(self.clone()),
+                data_type: cast_to_type.clone(),
+            })
+        } else {
+            Err(format!(
+                "Cannot automatically convert {:?} to {:?}",
+                this_type, cast_to_type
+            ))
+        }
+    }
+
     pub fn eq(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
             left: Rc::new(self.clone()),
@@ -172,6 +187,42 @@ impl Expr {
     }
 }
 
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            Expr::Column(i) => {
+                write!(f, "#{}", i)
+            },
+            Expr::Literal(v) => {
+                write!(f, "{:?}", v)
+            },
+            Expr::Cast { expr, data_type } => {
+                write!(f, "CAST {:?} AS {:?}", expr, data_type)
+            },
+            Expr::BinaryExpr { left, op, right } => {
+                write!(f, "{:?} {:?} {:?}", left, op, right)
+            },
+            Expr::Sort { expr, asc } => if *asc {
+                write!(f, "{:?} ASC", expr)
+            } else {
+                write!(f, "{:?} DESC", expr)
+            },
+            Expr::ScalarFunction { name, ref args, .. } => {
+                write!(f, "{}(", name)?;
+                for i in 0..args.len() {
+                    if i>0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", args[i])?;
+                }
+
+                write!(f, ")")
+            },
+            Expr::AggregateFunction { name, .. } => write!(f, "{}()", name),
+        }
+    }
+}
+
 /// The LogicalPlan represents different types of relations (such as Projection, Selection, etc) and
 /// can be created by the SQL query planner and the DataFrame API.
 #[derive(Clone)]
@@ -189,10 +240,7 @@ pub enum LogicalPlan {
         schema: Rc<Schema>,
     },
     /// A Selection (essentially a WHERE clause with a predicate expression)
-    Selection {
-        expr: Expr,
-        input: Rc<LogicalPlan>,
-    },
+    Selection { expr: Expr, input: Rc<LogicalPlan> },
     /// Represents a list of aggregate expressions with optional grouping expressions
     Aggregate {
         input: Rc<LogicalPlan>,
@@ -211,20 +259,20 @@ pub enum LogicalPlan {
         schema_name: String,
         table_name: String,
         schema: Rc<Schema>,
-        projection: Option<Vec<usize>>
+        projection: Option<Vec<usize>>,
     },
     /// Represents a CSV file with a provided schema
     CsvFile {
         filename: String,
         schema: Rc<Schema>,
         has_header: bool,
-        projection: Option<Vec<usize>>
+        projection: Option<Vec<usize>>,
     },
     /// Represents a Parquet file that contains schema information
     ParquetFile {
         filename: String,
         schema: Rc<Schema>,
-        projection: Option<Vec<usize>>
+        projection: Option<Vec<usize>>,
     },
     /// An empty relation with an empty schema
     EmptyRelation { schema: Rc<Schema> },
@@ -254,28 +302,47 @@ impl LogicalPlan {
             write!(f, "  ")?;
         }
         match *self {
-            LogicalPlan::EmptyRelation { .. } => {
-                write!(f, "EmptyRelation:")
-            }
-            LogicalPlan::TableScan { ref table_name, ref projection, .. } => {
-                write!(f, "TableScan: {} projection={:?}", table_name, projection)
-            }
-            LogicalPlan::CsvFile { ref filename, ref schema, .. } => {
-                write!(f, "CsvFile: file={}, schema={:?}", filename, schema)
-            }
-            LogicalPlan::ParquetFile { .. } => {
-                write!(f, "ParquetFile:")
-            }
-            LogicalPlan::Projection { ref input, .. } => {
-                write!(f, "Projection:")?;
+            LogicalPlan::EmptyRelation { .. } => write!(f, "EmptyRelation:"),
+            LogicalPlan::TableScan {
+                ref table_name,
+                ref projection,
+                ..
+            } => write!(f, "TableScan: {} projection={:?}", table_name, projection),
+            LogicalPlan::CsvFile {
+                ref filename,
+                ref schema,
+                ..
+            } => write!(f, "CsvFile: file={}, schema={:?}", filename, schema),
+            LogicalPlan::ParquetFile { .. } => write!(f, "ParquetFile:"),
+            LogicalPlan::Projection { ref expr, ref input, .. } => {
+                write!(f, "Projection: ")?;
+                for i in 0..expr.len() {
+                    if i>0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", expr[i])?;
+                }
                 input.fmt_with_indent(f, indent + 1)
             }
-            LogicalPlan::Selection { ref expr, ref input, .. } => {
+            LogicalPlan::Selection {
+                ref expr,
+                ref input,
+                ..
+            } => {
                 write!(f, "Selection: {:?}", expr)?;
                 input.fmt_with_indent(f, indent + 1)
             }
-            LogicalPlan::Aggregate { ref input, ref group_expr, ref aggr_expr, .. } => {
-                write!(f, "Aggregate: groupBy=[{:?}], aggr=[{:?}]", group_expr, aggr_expr)?;
+            LogicalPlan::Aggregate {
+                ref input,
+                ref group_expr,
+                ref aggr_expr,
+                ..
+            } => {
+                write!(
+                    f,
+                    "Aggregate: groupBy=[{:?}], aggr=[{:?}]",
+                    group_expr, aggr_expr
+                )?;
                 input.fmt_with_indent(f, indent + 1)
             }
             LogicalPlan::Sort { ref input, .. } => {

@@ -18,7 +18,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum FileType {
     CSV,
-    Parquet
+    Parquet,
 }
 
 /// SQL Abstract Syntax Tree (AST)
@@ -33,7 +33,7 @@ pub enum ASTNode {
     },
     SQLCast {
         expr: Box<ASTNode>,
-        data_type: SQLType
+        data_type: SQLType,
     },
     SQLNested(Box<ASTNode>),
     SQLUnary {
@@ -70,7 +70,7 @@ pub enum ASTNode {
         /// For CSV files, indicate whether the file has a header row or not
         header_row: bool,
         /// Path to file or directory contianing files
-        location: String
+        location: String,
     },
 }
 

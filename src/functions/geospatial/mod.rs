@@ -12,9 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Defines data sources supported by DataFusion
-
-pub mod common;
-pub mod csv;
-pub mod parquet;
-//pub mod quiver;
+pub mod st_astext;
+pub mod st_point;

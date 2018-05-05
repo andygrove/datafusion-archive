@@ -19,7 +19,7 @@ use std::rc::Rc;
 use super::super::errors::*;
 use super::super::types::*;
 
-use arrow::array::*;
+//use arrow::array::*;
 use arrow::datatypes::*;
 
 pub struct MinFunction {
@@ -83,7 +83,7 @@ impl AggregateFunction for MinFunction {
                     Ok(())
                 }
                 _ => unimplemented!("unsupported data type in MinFunction"),
-            }
+            },
         }
     }
 

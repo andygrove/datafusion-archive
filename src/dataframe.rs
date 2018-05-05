@@ -20,8 +20,8 @@ use std::str;
 
 use arrow::datatypes::*;
 
-use super::exec::*;
 use super::errors::*;
+use super::exec::*;
 use super::logical::*;
 
 /// DataFrame is an abstraction of a logical plan and a schema
@@ -94,7 +94,7 @@ impl DataFrame for DF {
     }
 
     fn col(&self, column_name: &str) -> Result<Expr> {
-        match self.plan.schema().column(column_name) {
+        match self.plan.schema().column_with_name(column_name) {
             Some((i, _)) => Ok(Expr::Column(i)),
             _ => Err(ExecutionError::InvalidColumn(column_name.to_string())),
         }
@@ -116,4 +116,3 @@ impl DataFrame for DF {
         self.ctx.create_execution_plan(&self.plan)
     }
 }
-

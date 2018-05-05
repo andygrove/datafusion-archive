@@ -25,10 +25,11 @@ use std::time::Instant;
 
 use clap::{App, Arg};
 use datafusion::exec::*;
+use datafusion::functions::geospatial::st_point::*;
+use datafusion::functions::geospatial::st_astext::*;
+use datafusion::functions::math::*;
 use datafusion::sqlast::ASTNode::SQLCreateTable;
 use datafusion::sqlparser::*;
-use datafusion::functions::geospatial::*;
-use datafusion::functions::math::*;
 
 mod linereader;
 
@@ -97,13 +98,12 @@ struct Console {
 }
 
 impl Console {
-
     /// Create a new instance of the console
     fn new() -> Self {
         let mut ctx = ExecutionContext::local();
-        ctx.register_scalar_function(Rc::new(STPointFunc{}));
-        ctx.register_scalar_function(Rc::new(STAsText{}));
-        ctx.register_scalar_function(Rc::new(SqrtFunction{}));
+        ctx.register_scalar_function(Rc::new(STPointFunc {}));
+        ctx.register_scalar_function(Rc::new(STAsText {}));
+        ctx.register_scalar_function(Rc::new(SqrtFunction {}));
         Console { ctx }
     }
 
