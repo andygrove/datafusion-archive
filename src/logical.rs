@@ -92,9 +92,16 @@ pub enum Expr {
     /// sort expression
     Sort { expr: Rc<Expr>, asc: bool },
     /// scalar function
-    ScalarFunction { name: String, args: Vec<Expr> },
+    ScalarFunction {
+        name: String,
+        args: Vec<Expr>,
+        return_type: DataType },
     /// aggregate function
-    AggregateFunction { name: String, args: Vec<Expr> },
+    AggregateFunction {
+        name: String,
+        args: Vec<Expr>,
+        return_type: DataType
+    },
 }
 
 impl fmt::Debug for Expr {
@@ -123,6 +130,11 @@ impl fmt::Debug for Expr {
 
 
 impl Expr {
+
+    pub fn get_type(&self) -> &DataType {
+        unimplemented!()
+    }
+
     pub fn eq(&self, other: &Expr) -> Expr {
         Expr::BinaryExpr {
             left: Rc::new(self.clone()),

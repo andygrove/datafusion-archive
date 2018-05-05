@@ -26,12 +26,12 @@ use arrow::datatypes::*;
 pub struct ProjectRelation {
     schema: Rc<Schema>,
     input: Box<SimpleRelation>,
-    expr: Vec<CompiledExpr>,
+    expr: Vec<RuntimeExpr>,
 }
 
 impl ProjectRelation {
 
-    pub fn new(input: Box<SimpleRelation>, expr: Vec<CompiledExpr>, schema: Rc<Schema>) -> Self {
+    pub fn new(input: Box<SimpleRelation>, expr: Vec<RuntimeExpr>, schema: Rc<Schema>) -> Self {
         ProjectRelation { input, expr, schema }
     }
 }
@@ -45,7 +45,7 @@ impl SimpleRelation for ProjectRelation {
 
                 let projected_columns: Result<Vec<Value>> =
                     project_expr.iter()
-                        .map(|e| (*e)(batch.as_ref())).collect();
+                        .map(|e| e.get_func()(batch.as_ref())).collect();
 
                 let projected_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
                     schema: Rc::new(Schema::empty()), //TODO

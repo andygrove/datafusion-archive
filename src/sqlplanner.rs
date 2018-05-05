@@ -263,10 +263,12 @@ impl SqlToRel {
                     "min" | "max" | "count" | "sum" | "avg" => Ok(Expr::AggregateFunction {
                         name: id.clone(),
                         args: rex_args,
+                        return_type: DataType::Float64 //TODO
                     }),
                     _ => Ok(Expr::ScalarFunction {
                         name: id.clone(),
                         args: rex_args,
+                        return_type: DataType::Float64 //TODO
                     }),
                 }
             }

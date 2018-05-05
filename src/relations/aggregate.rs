@@ -33,7 +33,7 @@ use fnv::FnvHashMap;
 pub struct AggregateRelation {
     schema: Rc<Schema>,
     input: Box<SimpleRelation>,
-    group_expr: Vec<CompiledExpr>,
+    group_expr: Vec<RuntimeExpr>,
     aggr_expr: Vec<RuntimeExpr>,
 }
 
@@ -45,7 +45,7 @@ impl AggregateRelation {
 
     pub fn new(schema: Rc<Schema>,
            input: Box<SimpleRelation>,
-           group_expr: Vec<CompiledExpr>,
+           group_expr: Vec<RuntimeExpr>,
            aggr_expr: Vec<RuntimeExpr>) -> Self {
 
         AggregateRelation {
@@ -128,16 +128,16 @@ fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateE
         .iter()
         .map(|e| match e {
             RuntimeExpr::AggregateFunction {
-                ref func,
-                ref return_type,
+                ref f,
+                ref t,
                 ..
-            } => match func {
+            } => match f {
                 AggregateType::Min => {
-                    Box::new(MinFunction::new(return_type))
+                    Box::new(MinFunction::new(t))
                         as Box<AggregateFunction>
                 }
                 AggregateType::Max => {
-                    Box::new(MaxFunction::new(return_type))
+                    Box::new(MaxFunction::new(t))
                         as Box<AggregateFunction>
                 }
                 AggregateType::Count => {
@@ -203,7 +203,7 @@ impl SimpleRelation for AggregateRelation {
 
                     // evaluate the grouping expressions
                     let group_values_result: Result<Vec<Value>> =
-                        group_expr.iter().map(|e| (*e)(b.as_ref())).collect();
+                        group_expr.iter().map(|e| e.get_func()(b.as_ref())).collect();
 
                     let group_values: Vec<Value> = group_values_result.unwrap(); //TODO
 
@@ -339,12 +339,12 @@ impl SimpleRelation for AggregateRelation {
         for i in 0..aggr_expr.len() {
             match aggr_expr[i] {
                 RuntimeExpr::AggregateFunction {
-                    ref return_type, ..
+                    ref t, ..
                 } => {
 
                     let aggr_values = &result_columns[i + group_expr.len()];
 
-                    let array: Array = match return_type {
+                    let array: Array = match t {
                         DataType::UInt8 => build_aggregate_array!(u8, get_u8, aggr_values),
                         DataType::UInt16 => build_aggregate_array!(u16, get_u16, aggr_values),
                         DataType::UInt32 => build_aggregate_array!(u32, get_u32, aggr_values),
@@ -355,7 +355,7 @@ impl SimpleRelation for AggregateRelation {
                         DataType::Int64 => build_aggregate_array!(i64, get_i64, aggr_values),
                         DataType::Float32 => build_aggregate_array!(f32, get_f32, aggr_values),
                         DataType::Float64 => build_aggregate_array!(f64, get_f64, aggr_values),
-                        _ => unimplemented!("No support for aggregate with return type {:?}", return_type),
+                        _ => unimplemented!("No support for aggregate with return type {:?}", t),
                     };
 
                     aggr_batch.data.push(Value::Column(Rc::new(array)))

@@ -263,9 +263,9 @@ impl Value {
 }
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Box<Fn(&RecordBatch) -> Result<Value>>;
+pub type CompiledExpr = Rc<Fn(&RecordBatch) -> Result<Value>>;
 
-pub type CompiledCastFunction = Box<Fn(&Value) -> Result<Value>>;
+pub type CompiledCastFunction = Rc<Fn(&Value) -> Result<Value>>;
 
 pub enum AggregateType {
     Min,
@@ -278,12 +278,30 @@ pub enum AggregateType {
 
 /// Runtime expression
 pub enum RuntimeExpr {
-    Compiled(CompiledExpr),
-    AggregateFunction {
-        func: AggregateType,
-        args: Vec<CompiledExpr>,
-        return_type: DataType,
+    Compiled {
+        f: CompiledExpr,
+        t: DataType
     },
+    AggregateFunction {
+        f: AggregateType,
+        args: Vec<CompiledExpr>,
+        t: DataType,
+    },
+}
+
+impl RuntimeExpr {
+    pub fn get_func(&self) -> CompiledExpr {
+        match self {
+            &RuntimeExpr::Compiled { ref f, .. } => f.clone(),
+            _ => panic!(),
+        }
+    }
+    pub fn get_type(&self) -> DataType {
+        match self {
+            &RuntimeExpr::Compiled { ref t, .. } => t.clone(),
+            &RuntimeExpr::AggregateFunction { ref t, .. } => t.clone(),
+        }
+    }
 }
 
 /// Compiles a scalar expression into a closure
@@ -293,11 +311,13 @@ pub fn compile_expr(
     input_schema: &Schema,
 ) -> Result<RuntimeExpr> {
     match *expr {
-        Expr::AggregateFunction { ref name, ref args } => {
+        Expr::AggregateFunction { ref name, ref args, ref return_type } => {
             assert_eq!(1, args.len());
 
-            let compiled_args: Result<Vec<CompiledExpr>> =
-                args.iter().map(|e| compile_scalar_expr(ctx, e)).collect();
+            let compiled_args: Result<Vec<RuntimeExpr>> =
+                args.iter()
+                    .map(|e| compile_scalar_expr(ctx, e, input_schema))
+                    .collect();
 
             let func = match name.to_lowercase().as_ref() {
                 "min" => AggregateType::Min,
@@ -307,27 +327,29 @@ pub fn compile_expr(
             };
 
             //TODO: this is hacky
-            let return_type = match func {
-                AggregateType::Count => DataType::UInt64,
-                AggregateType::Min | AggregateType::Max => match args[0] {
-                    Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
-                    _ => {
-                        //TODO: fix this hack
-                        DataType::Float64
-                        //panic!("Aggregate expressions currently only support simple arguments")
-                    }
-                }
-                _ => panic!()
-            };
+//            let return_type = match func {
+//                AggregateType::Count => DataType::UInt64,
+//                AggregateType::Min | AggregateType::Max => match args[0] {
+//                    Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
+//                    _ => {
+//                        //TODO: fix this hack
+//                        DataType::Float64
+//                        //panic!("Aggregate expressions currently only support simple arguments")
+//                    }
+//                }
+//                _ => panic!()
+//            };
 
 
             Ok(RuntimeExpr::AggregateFunction {
-                func,
-                args: compiled_args?,
-                return_type,
+                f: func,
+                args: compiled_args?.iter()
+                    .map(|e| e.get_func().clone())
+                    .collect(),
+                t: return_type.clone(),
             })
         }
-        _ => Ok(RuntimeExpr::Compiled(compile_scalar_expr(ctx, expr)?)),
+        _ => Ok(compile_scalar_expr(ctx, expr, input_schema)?),
     }
 }
 
@@ -384,7 +406,7 @@ macro_rules! cast_utf8_to {
 }
 
 fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
-    Ok(Box::new( move|v: &Value| {
+    Ok(Rc::new( move|v: &Value| {
         match v {
             Value::Column(ref array) => {
                 match array.data() {
@@ -425,26 +447,35 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
 }
 
 /// Compiles a scalar expression into a closure
-pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<CompiledExpr> {
+pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &Schema) -> Result<RuntimeExpr> {
     match expr {
         &Expr::Literal(ref lit) => {
             let literal_value = lit.clone();
-            Ok(Box::new(move |_| {
-                // literal values are a bit special - we don't repeat them in a vector
-                // because it would be redundant, so we have a single value in a vector instead
-                Ok(Value::Scalar(Rc::new(literal_value.clone())))
-            }))
+            Ok(RuntimeExpr::Compiled {
+                f: Rc::new(move |_| {
+                    // literal values are a bit special - we don't repeat them in a vector
+                    // because it would be redundant, so we have a single value in a vector instead
+                    Ok(Value::Scalar(Rc::new(literal_value.clone())))
+                }),
+                t: DataType::Float64 //TODO
+            })
         }
-        &Expr::Column(index) => Ok(Box::new(move |batch: &RecordBatch| {
-            Ok((*batch.column(index)).clone())
-        })),
+        &Expr::Column(index) => Ok(RuntimeExpr::Compiled {
+            f: Rc::new(move |batch: &RecordBatch| {
+                Ok((*batch.column(index)).clone())
+            }),
+            t: input_schema.column(index).data_type().clone()
+        }),
         &Expr::Cast { ref expr, ref data_type } => {
             match expr.as_ref() {
                 &Expr::Column(index) => {
                     let compiled_cast_expr = compile_cast_column(data_type.clone())?;
-                    Ok(Box::new(move |batch: &RecordBatch| {
+                    Ok(RuntimeExpr::Compiled {
+                        f: Rc::new(move |batch: &RecordBatch| {
                             (compiled_cast_expr)(batch.column(index))
-                        }))
+                        }),
+                        t: data_type.clone()
+                    })
                 }
                 _ => Err(ExecutionError::NotImplemented)
             }
@@ -454,69 +485,93 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
             ref op,
             ref right,
         } => {
-            let left_expr = compile_scalar_expr(ctx, left)?;
-            let right_expr = compile_scalar_expr(ctx, right)?;
+            let left_expr = compile_scalar_expr(ctx, left, input_schema)?;
+            let right_expr = compile_scalar_expr(ctx, right, input_schema)?;
             match op {
-                &Operator::Eq => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.eq(&right_values)
-                })),
-                &Operator::NotEq => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.not_eq(&right_values)
-                })),
-                &Operator::Lt => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.lt(&right_values)
-                })),
-                &Operator::LtEq => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.lt_eq(&right_values)
-                })),
-                &Operator::Gt => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.gt(&right_values)
-                })),
-                &Operator::GtEq => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.gt_eq(&right_values)
-                })),
-                &Operator::Plus => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.add(&right_values)
-                })),
-                &Operator::Minus => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.subtract(&right_values)
-                })),
-                &Operator::Divide => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.divide(&right_values)
-                })),
-                &Operator::Multiply => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.multiply(&right_values)
-                })),
-                &Operator::And => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.and(&right_values)
-                })),
-                &Operator::Or => Ok(Box::new(move |batch: &RecordBatch| {
-                    let left_values = left_expr(batch)?;
-                    let right_values = right_expr(batch)?;
-                    left_values.or(&right_values)
-                })),
+                &Operator::Eq => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.eq(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+                &Operator::NotEq => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.not_eq(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+                &Operator::Lt => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.lt(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+                &Operator::LtEq => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.lt_eq(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+                &Operator::Gt => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.gt(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+                &Operator::GtEq => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.gt_eq(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+                &Operator::And => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.and(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+                &Operator::Or => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.or(&right_values)
+                    }),
+                    t: DataType::Boolean
+                }),
+//                &Operator::Plus => Ok(Rc::new(move |batch: &RecordBatch| {
+//                    let left_values = left_expr.get_func()(batch)?;
+//                    let right_values = right_expr.get_func()(batch)?;
+//                    left_values.add(&right_values)
+//                })),
+//                &Operator::Minus => Ok(Rc::new(move |batch: &RecordBatch| {
+//                    let left_values = left_expr.get_func()(batch)?;
+//                    let right_values = right_expr.get_func()(batch)?;
+//                    left_values.subtract(&right_values)
+//                })),
+//                &Operator::Divide => Ok(Rc::new(move |batch: &RecordBatch| {
+//                    let left_values = left_expr.get_func()(batch)?;
+//                    let right_values = right_expr.get_func()(batch)?;
+//                    left_values.divide(&right_values)
+//                })),
+//                &Operator::Multiply => Ok(Rc::new(move |batch: &RecordBatch| {
+//                    let left_values = left_expr.get_func()(batch)?;
+//                    let right_values = right_expr.get_func()(batch)?;
+//                    left_values.multiply(&right_values)
+//                })),
                 _ => {
                     return Err(ExecutionError::General(format!(
                         "Unsupported binary operator '{:?}'",
@@ -527,25 +582,30 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
         }
         &Expr::Sort { ref expr, .. } => {
             //NOTE sort order is ignored here and is handled during sort execution
-            compile_scalar_expr(ctx, expr)
+            compile_scalar_expr(ctx, expr, input_schema)
         }
-        &Expr::ScalarFunction { ref name, ref args } => {
+        &Expr::ScalarFunction { ref name, ref args, ref return_type } => {
             ////println!("Executing function {}", name);
 
             // evaluate the arguments to the function
-            let compiled_args: Result<Vec<CompiledExpr>> =
-                args.iter().map(|e| compile_scalar_expr(ctx, e)).collect();
+            let compiled_args: Result<Vec<RuntimeExpr>> =
+                args.iter().map(|e| compile_scalar_expr(ctx, e, input_schema)).collect();
 
             let compiled_args_ok = compiled_args?;
 
             let func = ctx.load_scalar_function(name.as_ref())?;
 
-            Ok(Box::new(move |batch| {
-                let arg_values: Result<Vec<Value>> =
-                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
+            //TODO type checking of args
 
-                func.execute(arg_values?)
-            }))
+            Ok(RuntimeExpr::Compiled {
+                f: Rc::new(move |batch| {
+                    let arg_values: Result<Vec<Value>> =
+                        compiled_args_ok.iter().map(|expr| expr.get_func()(batch)).collect();
+
+                    func.execute(arg_values?)
+                }),
+                t: return_type.clone()
+            })
         }
         // aggregate functions don't fit this pattern .. will need to rework this ..
         &Expr::AggregateFunction { .. } => panic!("Aggregate expressions cannot be compiled yet"),
@@ -557,7 +617,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr) -> Result<Compil
 //
 //            let compiled_args_ok = compiled_args?;
 //
-//            Ok(Box::new(move |batch| {
+//            Ok(Rc::new(move |batch| {
 //                let arg_values: Result<Vec<Value>> =
 //                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
 //
@@ -877,7 +937,8 @@ impl ExecutionContext {
                 ref input,
             } => {
                 let input_rel = self.create_execution_plan(input)?;
-                let rel = FilterRelation::new(input_rel, compile_scalar_expr(&self, expr)?);
+                let runtime_expr = compile_scalar_expr(&self, expr, input_rel.schema())?;
+                let rel = FilterRelation::new(input_rel, runtime_expr.get_func().clone());
                 Ok(Box::new(rel))
             }
 
@@ -892,8 +953,9 @@ impl ExecutionContext {
 
                 let project_schema = Rc::new(Schema::new(project_columns));
 
-                let compiled_expr: Result<Vec<CompiledExpr>> =
-                    expr.iter().map(|e| compile_scalar_expr(&self, e)).collect();
+                let compiled_expr: Result<Vec<RuntimeExpr>> =
+                    expr.iter().map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
+                        .collect();
 
                 let rel = ProjectRelation::new(input_rel, compiled_expr?, project_schema);
 
@@ -908,9 +970,9 @@ impl ExecutionContext {
             } => {
                 let input_rel = self.create_execution_plan(&input)?;
 
-                let compiled_group_expr_result: Result<Vec<CompiledExpr>> = group_expr
+                let compiled_group_expr_result: Result<Vec<RuntimeExpr>> = group_expr
                     .iter()
-                    .map(|e| compile_scalar_expr(&self, e))
+                    .map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
                     .collect();
                 let compiled_group_expr = compiled_group_expr_result?;
 
@@ -994,10 +1056,11 @@ impl ExecutionContext {
     //        }
     //    }
 
-    pub fn udf(&self, name: &str, args: Vec<Expr>) -> Expr {
+    pub fn udf(&self, name: &str, args: Vec<Expr>, return_type: DataType) -> Expr {
         Expr::ScalarFunction {
             name: name.to_string(),
             args: args.clone(),
+            return_type: return_type.clone()
         }
     }
 
@@ -1284,6 +1347,10 @@ mod tests {
         let func_expr = ctx.udf(
             "ST_Point",
             vec![df.col("lat").unwrap(), df.col("lng").unwrap()],
+            DataType::Struct(vec![
+                Field::new("lat", DataType::Float64, false),
+                Field::new("lng", DataType::Float64, false),
+            ])
         );
 
         let df2 = df.select(vec![func_expr]).unwrap();
