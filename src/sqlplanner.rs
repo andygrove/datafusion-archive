@@ -394,7 +394,7 @@ fn collect_expr(e: &Expr, accum: &mut HashSet<usize>) {
 }
 
 pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) -> Rc<LogicalPlan> {
-    println!("push_down_projection() projection={:?}", projection);
+    //println!("push_down_projection() projection={:?}", projection);
     match plan.as_ref() {
         LogicalPlan::Aggregate {
             ref input,

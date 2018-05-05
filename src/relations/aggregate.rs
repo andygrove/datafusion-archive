@@ -119,7 +119,7 @@ fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
 
 /// Create an initial aggregate entry
 fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
-    println!("Creating new aggregate entry");
+    //println!("Creating new aggregate entry");
 
     let functions = aggr_expr
         .iter()
