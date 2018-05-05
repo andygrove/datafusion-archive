@@ -15,6 +15,7 @@
 //! MAX() aggregate function
 
 use std::rc::Rc;
+use std::str;
 
 use super::super::errors::*;
 use super::super::types::*;
@@ -94,7 +95,30 @@ impl AggregateFunction for MinFunction {
                     ArrayData::Int64(ref buf) => min_in_column!(self, buf, Int64),
                     ArrayData::Float32(ref buf) => min_in_column!(self, buf, Float32),
                     ArrayData::Float64(ref buf) => min_in_column!(self, buf, Float64),
-                    _ => unimplemented!("MAX() unsupported array datatype"),
+                    ArrayData::Utf8(ref list) => {
+                        if list.len() > 0 {
+                            let mut s = str::from_utf8(list.get(0)).unwrap().to_string();
+                            for i in 1..list.len() {
+                                let s2 = str::from_utf8(list.get(i)).unwrap().to_string();
+                                if s2 < s {
+                                    s = s2;
+                                }
+                            }
+                            self.value = match &self.value {
+                                ScalarValue::Null =>
+                                    ScalarValue::Utf8(Rc::new(s)),
+                                ScalarValue::Utf8(current) => if &s < current.as_ref() {
+                                    ScalarValue::Utf8(Rc::new(s))
+                                } else {
+                                    self.value.clone()
+                                },
+                                _ => panic!()
+
+                            };
+
+                        }
+                    },
+                    _ => unimplemented!("MIN() unsupported array datatype"),
                 }
                 Ok(())
             }
@@ -109,7 +133,21 @@ impl AggregateFunction for MinFunction {
                 ScalarValue::Int64(ref value) => min_in_scalar!(self, value, Int64),
                 ScalarValue::Float32(ref value) => min_in_scalar!(self, value, Float32),
                 ScalarValue::Float64(ref value) => min_in_scalar!(self, value, Float64),
-                _ => unimplemented!("MAX() unsupported scalar datatype"),
+                ScalarValue::Utf8(ref value) => {
+                    self.value = match &self.value {
+                        ScalarValue::Null =>
+                            ScalarValue::Utf8(value.clone()),
+                        ScalarValue::Utf8(ref current) => if value < current {
+                            ScalarValue::Utf8(value.clone())
+                        } else {
+                            self.value.clone()
+                        },
+                        _ => panic!()
+
+                    };
+                    Ok(())
+                }
+                _ => unimplemented!("MIN() unsupported scalar datatype"),
             },
         }
     }
