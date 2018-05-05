@@ -26,6 +26,7 @@ use super::super::types::*;
 
 //use arrow::array::*;
 use arrow::builder::*;
+use arrow::list_builder::*;
 use arrow::datatypes::*;
 
 use fnv::FnvHashMap;
@@ -118,7 +119,7 @@ fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
 
 /// Create an initial aggregate entry
 fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
-    println!("Creating new aggregate entry");
+    //println!("Creating new aggregate entry");
 
     let functions = aggr_expr
         .iter()
@@ -304,7 +305,7 @@ impl SimpleRelation for AggregateRelation {
             //TODO: should not use string version of group keys
             let mut tmp: Vec<String> = vec![];
             for v in &result_columns[i] {
-                tmp.push(format!("{:?}", v));
+                tmp.push(format!("{}", v));
             }
             aggr_batch
                 .data
@@ -328,6 +329,13 @@ impl SimpleRelation for AggregateRelation {
                         DataType::Int64 => build_aggregate_array!(i64, get_i64, aggr_values),
                         DataType::Float32 => build_aggregate_array!(f32, get_f32, aggr_values),
                         DataType::Float64 => build_aggregate_array!(f64, get_f64, aggr_values),
+                        DataType::Utf8 => {
+                            let mut b: ListBuilder<u8> = ListBuilder::with_capacity(aggr_values.len());
+                            for v in aggr_values {
+                                b.push(v.get_string().unwrap().as_bytes());
+                            }
+                            Array::new(aggr_values.len(), ArrayData::Utf8(b.finish()))
+                        }
                         _ => unimplemented!("No support for aggregate with return type {:?}", t),
                     };
 

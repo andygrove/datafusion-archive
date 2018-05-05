@@ -273,7 +273,21 @@ impl SqlToRel {
             &ASTNode::SQLFunction { ref id, ref args } => {
                 //TODO: fix this hack
                 match id.to_lowercase().as_ref() {
-                    "min" | "max" | "count" | "sum" | "avg" => {
+                    "min" | "max" | "sum" | "avg" => {
+                        let rex_args = args.iter()
+                            .map(|a| self.sql_to_rex(a, schema))
+                            .collect::<Result<Vec<Expr>, String>>()?;
+
+                        // return type is same as the argument type for these aggregate functions
+                        let return_type = rex_args[0].get_type(schema).clone();
+
+                        Ok(Expr::AggregateFunction {
+                            name: id.clone(),
+                            args: rex_args,
+                            return_type
+                        })
+                    }
+                    "count" => {
                         let rex_args = args.iter()
                             .map(|a| self.sql_to_rex(a, schema))
                             .collect::<Result<Vec<Expr>, String>>()?;
@@ -281,7 +295,7 @@ impl SqlToRel {
                         Ok(Expr::AggregateFunction {
                             name: id.clone(),
                             args: rex_args,
-                            return_type: DataType::Float64, //TODO
+                            return_type: DataType::UInt64,
                         })
                     }
                     _ => match self.function_meta.borrow().get(&id.to_lowercase()) {
@@ -380,7 +394,7 @@ fn collect_expr(e: &Expr, accum: &mut HashSet<usize>) {
 }
 
 pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) -> Rc<LogicalPlan> {
-    println!("push_down_projection() projection={:?}", projection);
+    //println!("push_down_projection() projection={:?}", projection);
     match plan.as_ref() {
         LogicalPlan::Aggregate {
             ref input,
