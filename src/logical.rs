@@ -190,16 +190,34 @@ impl Expr {
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
-            Expr::Column(i) => write!(f, "#{}", i),
-            Expr::Literal(v) => write!(f, "{:?}", v),
-            Expr::Cast { expr, data_type } => write!(f, "CAST {:?} AS {:?}", expr, data_type),
-            Expr::BinaryExpr { left, op, right } => write!(f, "{:?} {:?} {:?}", left, op, right),
+            Expr::Column(i) => {
+                write!(f, "#{}", i)
+            },
+            Expr::Literal(v) => {
+                write!(f, "{:?}", v)
+            },
+            Expr::Cast { expr, data_type } => {
+                write!(f, "CAST {:?} AS {:?}", expr, data_type)
+            },
+            Expr::BinaryExpr { left, op, right } => {
+                write!(f, "{:?} {:?} {:?}", left, op, right)
+            },
             Expr::Sort { expr, asc } => if *asc {
                 write!(f, "{:?} ASC", expr)
             } else {
                 write!(f, "{:?} DESC", expr)
             },
-            Expr::ScalarFunction { name, .. } => write!(f, "{}()", name),
+            Expr::ScalarFunction { name, ref args, .. } => {
+                write!(f, "{}(", name)?;
+                for i in 0..args.len() {
+                    if i>0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", args[i])?;
+                }
+
+                write!(f, ")")
+            },
             Expr::AggregateFunction { name, .. } => write!(f, "{}()", name),
         }
     }
@@ -296,8 +314,14 @@ impl LogicalPlan {
                 ..
             } => write!(f, "CsvFile: file={}, schema={:?}", filename, schema),
             LogicalPlan::ParquetFile { .. } => write!(f, "ParquetFile:"),
-            LogicalPlan::Projection { ref input, .. } => {
-                write!(f, "Projection:")?;
+            LogicalPlan::Projection { ref expr, ref input, .. } => {
+                write!(f, "Projection: ")?;
+                for i in 0..expr.len() {
+                    if i>0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", expr[i])?;
+                }
                 input.fmt_with_indent(f, indent + 1)
             }
             LogicalPlan::Selection {
