@@ -21,7 +21,8 @@ use datafusion::exec::*;
 fn main() {
     let ctx = ExecutionContext::local();
 
-    let df = ctx.load_parquet("test/data/uk_cities.parquet", None).unwrap();
+    let df = ctx.load_parquet("test/data/uk_cities.parquet", None)
+        .unwrap();
     println!("schema: {}", df.schema().to_string());
 
     // show the first 10 rows

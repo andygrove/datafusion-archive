@@ -30,9 +30,12 @@ pub struct ProjectRelation {
 }
 
 impl ProjectRelation {
-
     pub fn new(input: Box<SimpleRelation>, expr: Vec<RuntimeExpr>, schema: Rc<Schema>) -> Self {
-        ProjectRelation { input, expr, schema }
+        ProjectRelation {
+            input,
+            expr,
+            schema,
+        }
     }
 }
 
@@ -42,10 +45,10 @@ impl SimpleRelation for ProjectRelation {
 
         let projection_iter = self.input.scan().map(move |r| match r {
             Ok(ref batch) => {
-
-                let projected_columns: Result<Vec<Value>> =
-                    project_expr.iter()
-                        .map(|e| e.get_func()(batch.as_ref())).collect();
+                let projected_columns: Result<Vec<Value>> = project_expr
+                    .iter()
+                    .map(|e| e.get_func()(batch.as_ref()))
+                    .collect();
 
                 let projected_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
                     schema: Rc::new(Schema::empty()), //TODO

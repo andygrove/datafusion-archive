@@ -30,34 +30,27 @@ impl ScalarFunction for SqrtFunction {
     }
 
     fn execute(&self, args: Vec<Value>) -> Result<Value> {
+        assert_eq!(1, args.len());
         match args[0] {
             Value::Column(ref arr) => match arr.data() {
-                ArrayData::Float32(ref v) => Ok(Value::Column(Rc::new(Array::from(
-                    v.iter().map(|v| v.sqrt()).collect::<Vec<f32>>(),
-                )))),
                 ArrayData::Float64(ref v) => Ok(Value::Column(Rc::new(Array::from(
                     v.iter().map(|v| v.sqrt()).collect::<Vec<f64>>(),
-                )))),
-                ArrayData::Int32(ref v) => Ok(Value::Column(Rc::new(Array::from(
-                    v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
-                )))),
-                ArrayData::Int64(ref v) => Ok(Value::Column(Rc::new(Array::from(
-                    v.iter().map(|v| (v as f64).sqrt()).collect::<Vec<f64>>(),
                 )))),
                 _ => Err(ExecutionError::General(
                     "Unsupported arg type for sqrt".to_string(),
                 )),
             },
-            _ => Err(ExecutionError::General(
-                "Unsupported arg type for sqrt".to_string(),
-            )),
+            Value::Scalar(ref v) => match v.as_ref() {
+                ScalarValue::Float64(ref n) => Ok(Value::Scalar(Rc::new(ScalarValue::Float64(n.sqrt())))),
+                _ => Err(ExecutionError::General(
+                    "Unsupported arg type for sqrt".to_string(),
+                ))
+            }
         }
     }
 
     fn args(&self) -> Vec<Field> {
-        vec![
-            Field::new("n", DataType::Float64, false),
-        ]
+        vec![Field::new("n", DataType::Float64, false)]
     }
 
     fn return_type(&self) -> DataType {

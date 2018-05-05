@@ -20,8 +20,8 @@ use super::super::datasources::common::*;
 use super::super::errors::*;
 use super::super::exec::*;
 use super::super::functions::count::CountFunction;
-use super::super::functions::min::MinFunction;
 use super::super::functions::max::MaxFunction;
+use super::super::functions::min::MinFunction;
 use super::super::types::*;
 
 //use arrow::array::*;
@@ -42,12 +42,12 @@ struct AggregateEntry {
 }
 
 impl AggregateRelation {
-
-    pub fn new(schema: Rc<Schema>,
-           input: Box<SimpleRelation>,
-           group_expr: Vec<RuntimeExpr>,
-           aggr_expr: Vec<RuntimeExpr>) -> Self {
-
+    pub fn new(
+        schema: Rc<Schema>,
+        input: Box<SimpleRelation>,
+        group_expr: Vec<RuntimeExpr>,
+        aggr_expr: Vec<RuntimeExpr>,
+    ) -> Self {
         AggregateRelation {
             schema,
             input,
@@ -58,7 +58,7 @@ impl AggregateRelation {
 }
 
 /// Enumeration of types that can be used in a GROUP BY expression
-#[derive(Debug, PartialEq,Eq,Hash,Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum GroupScalar {
     Boolean(bool),
     UInt8(u8),
@@ -69,11 +69,10 @@ enum GroupScalar {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    Utf8(Rc<String>)
+    Utf8(Rc<String>),
 }
 
 impl GroupScalar {
-
     fn as_scalar(&self) -> ScalarValue {
         match *self {
             GroupScalar::Boolean(v) => ScalarValue::Boolean(v),
@@ -85,11 +84,9 @@ impl GroupScalar {
             GroupScalar::Int16(v) => ScalarValue::Int16(v),
             GroupScalar::Int32(v) => ScalarValue::Int32(v),
             GroupScalar::Int64(v) => ScalarValue::Int64(v),
-            GroupScalar::Utf8(ref v) => ScalarValue::Utf8(v.clone())
+            GroupScalar::Utf8(ref v) => ScalarValue::Utf8(v.clone()),
         }
-
     }
-
 }
 
 /// Make a hash map key from a list of values
@@ -98,7 +95,7 @@ fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
         key[j] = match group_values[j] {
             Value::Scalar(ref vv) => match vv.as_ref() {
                 ScalarValue::Boolean(x) => GroupScalar::Boolean(*x),
-                _ => unimplemented!()
+                _ => unimplemented!(),
             },
             Value::Column(ref array) => match array.data() {
                 ArrayData::Boolean(ref buf) => GroupScalar::Boolean(*buf.get(i)),
@@ -110,10 +107,10 @@ fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
                 ArrayData::UInt16(ref buf) => GroupScalar::UInt16(*buf.get(i)),
                 ArrayData::UInt32(ref buf) => GroupScalar::UInt32(*buf.get(i)),
                 ArrayData::UInt64(ref buf) => GroupScalar::UInt64(*buf.get(i)),
-                ArrayData::Utf8(ref list) => GroupScalar::Utf8(Rc::new(str::from_utf8(list.get(i)).unwrap().to_string())),
-                _ => unimplemented!(
-                    "Unsupported datatype for aggregate grouping expression"
-                ),
+                ArrayData::Utf8(ref list) => {
+                    GroupScalar::Utf8(Rc::new(str::from_utf8(list.get(i)).unwrap().to_string()))
+                }
+                _ => unimplemented!("Unsupported datatype for aggregate grouping expression"),
             },
         };
     }
@@ -121,29 +118,15 @@ fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
 
 /// Create an initial aggregate entry
 fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
-
     println!("Creating new aggregate entry");
 
     let functions = aggr_expr
         .iter()
         .map(|e| match e {
-            RuntimeExpr::AggregateFunction {
-                ref f,
-                ref t,
-                ..
-            } => match f {
-                AggregateType::Min => {
-                    Box::new(MinFunction::new(t))
-                        as Box<AggregateFunction>
-                }
-                AggregateType::Max => {
-                    Box::new(MaxFunction::new(t))
-                        as Box<AggregateFunction>
-                }
-                AggregateType::Count => {
-                    Box::new(CountFunction::new())
-                        as Box<AggregateFunction>
-                }
+            RuntimeExpr::AggregateFunction { ref f, ref t, .. } => match f {
+                AggregateType::Min => Box::new(MinFunction::new(t)) as Box<AggregateFunction>,
+                AggregateType::Max => Box::new(MaxFunction::new(t)) as Box<AggregateFunction>,
+                AggregateType::Count => Box::new(CountFunction::new()) as Box<AggregateFunction>,
                 _ => panic!(),
             },
             _ => panic!(),
@@ -153,29 +136,25 @@ fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateE
     Rc::new(RefCell::new(AggregateEntry {
         aggr_values: functions,
     }))
-
 }
 
-
-macro_rules! build_aggregate_array{
-    ($TY:ty, $NAME:ident, $DATA:expr) => {
-        {
-            let mut b: Builder<$TY> = Builder::new();
-            for v in $DATA {
-                b.push(v.$NAME().unwrap());
-            }
-            Array::from(b.finish())
+macro_rules! build_aggregate_array {
+    ($TY:ty, $NAME:ident, $DATA:expr) => {{
+        let mut b: Builder<$TY> = Builder::new();
+        for v in $DATA {
+            b.push(v.$NAME().unwrap());
         }
-    }
+        Array::from(b.finish())
+    }};
 }
 
 impl SimpleRelation for AggregateRelation {
     fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-
         let aggr_expr = &self.aggr_expr;
         let group_expr = &self.group_expr;
-//        let mut map: HashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
-        let mut map: FnvHashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = FnvHashMap::default();
+        //        let mut map: HashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
+        let mut map: FnvHashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> =
+            FnvHashMap::default();
 
         //println!("There are {} aggregate expressions", aggr_expr.len());
 
@@ -190,9 +169,9 @@ impl SimpleRelation for AggregateRelation {
                         match aggr_expr[i] {
                             RuntimeExpr::AggregateFunction { ref args, .. } => {
                                 // arguments to the aggregate function
-                                let aggr_func_args: Result<Vec<Value>> = args.iter()
-                                    .map(|e| (*e)(b.as_ref()))
-                                    .collect();
+                                let aggr_func_args: Result<
+                                    Vec<Value>,
+                                > = args.iter().map(|e| (*e)(b.as_ref())).collect();
 
                                 // push the column onto the vector
                                 aggr_col_args.push(aggr_func_args.unwrap());
@@ -202,13 +181,14 @@ impl SimpleRelation for AggregateRelation {
                     }
 
                     // evaluate the grouping expressions
-                    let group_values_result: Result<Vec<Value>> =
-                        group_expr.iter().map(|e| e.get_func()(b.as_ref())).collect();
+                    let group_values_result: Result<Vec<Value>> = group_expr
+                        .iter()
+                        .map(|e| e.get_func()(b.as_ref()))
+                        .collect();
 
                     let group_values: Vec<Value> = group_values_result.unwrap(); //TODO
 
                     if group_values.len() == 0 {
-
                         // aggregate columns directly
                         let key: Vec<GroupScalar> = Vec::with_capacity(0);
 
@@ -221,11 +201,9 @@ impl SimpleRelation for AggregateRelation {
                                 .execute(&aggr_col_args[i])
                                 .unwrap();
                         }
-
                     } else {
-
                         let mut key: Vec<GroupScalar> = Vec::with_capacity(group_values.len());
-                        for _ in 0 .. group_values.len() {
+                        for _ in 0..group_values.len() {
                             key.push(GroupScalar::Int32(0));
                         }
 
@@ -251,9 +229,8 @@ impl SimpleRelation for AggregateRelation {
                                     }
 
                                     true
-
                                 }
-                                None => false
+                                None => false,
                             };
 
                             if !x {
@@ -273,11 +250,10 @@ impl SimpleRelation for AggregateRelation {
                                     }
                                 }
                                 map.insert(key.clone(), entry);
-
                             }
 
-//                            let entry = map.entry(key)
-//                                .or_insert_with(|| create_aggregate_entry(aggr_expr));
+                            //                            let entry = map.entry(key)
+                            //                                .or_insert_with(|| create_aggregate_entry(aggr_expr));
                         }
                     }
                 }
@@ -287,7 +263,8 @@ impl SimpleRelation for AggregateRelation {
 
         //        println!("Preparing results");
 
-        let mut result_columns: Vec<Vec<ScalarValue>> = Vec::with_capacity(group_expr.len() + aggr_expr.len());
+        let mut result_columns: Vec<Vec<ScalarValue>> =
+            Vec::with_capacity(group_expr.len() + aggr_expr.len());
         for _ in 0..group_expr.len() {
             result_columns.push(Vec::new());
         }
@@ -296,7 +273,6 @@ impl SimpleRelation for AggregateRelation {
         }
 
         for (k, v) in map.iter() {
-
             for col_index in 0..k.len() {
                 result_columns[col_index].push(k[col_index].as_scalar());
             }
@@ -338,10 +314,7 @@ impl SimpleRelation for AggregateRelation {
         // create Arrow arrays from aggregate scalar values
         for i in 0..aggr_expr.len() {
             match aggr_expr[i] {
-                RuntimeExpr::AggregateFunction {
-                    ref t, ..
-                } => {
-
+                RuntimeExpr::AggregateFunction { ref t, .. } => {
                     let aggr_values = &result_columns[i + group_expr.len()];
 
                     let array: Array = match t {
@@ -359,8 +332,7 @@ impl SimpleRelation for AggregateRelation {
                     };
 
                     aggr_batch.data.push(Value::Column(Rc::new(array)))
-
-                },
+                }
                 _ => panic!(),
             }
         }
@@ -376,4 +348,3 @@ impl SimpleRelation for AggregateRelation {
         self.schema.as_ref()
     }
 }
-

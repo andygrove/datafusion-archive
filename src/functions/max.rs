@@ -83,7 +83,7 @@ impl AggregateFunction for MaxFunction {
                     Ok(())
                 }
                 _ => unimplemented!("unsupported data type in MaxFunction"),
-            }
+            },
         }
     }
 

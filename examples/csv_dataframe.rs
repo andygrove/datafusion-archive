@@ -56,7 +56,7 @@ fn main() {
         DataType::Struct(vec![
             Field::new("lat", DataType::Float64, false),
             Field::new("lng", DataType::Float64, false),
-        ])
+        ]),
     );
 
     let df3 = df2.select(vec![st_point]).unwrap();

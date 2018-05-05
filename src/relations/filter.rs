@@ -97,15 +97,15 @@ pub fn filter(column: &Value, bools: &Array) -> Array {
     //println!("filter()");
     match column {
         &Value::Scalar(ref v) => match v.as_ref() {
-//            ScalarValue::Utf8(ref s) => {
-//                bools.map(|b|)
-//
-//            },
+            //            ScalarValue::Utf8(ref s) => {
+            //                bools.map(|b|)
+            //
+            //            },
             ScalarValue::Null => {
                 let b: Vec<i32> = vec![];
                 Array::from(b)
             }
-            _ => unimplemented!("unsupported scalar type for filter '{:?}'", v)
+            _ => unimplemented!("unsupported scalar type for filter '{:?}'", v),
         },
         &Value::Column(ref arr) => match bools.data() {
             &ArrayData::Boolean(ref b) => match arr.as_ref().data() {

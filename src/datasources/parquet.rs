@@ -19,8 +19,8 @@ use std::rc::Rc;
 
 //use arrow::array::*;
 use arrow::builder::*;
-use arrow::list_builder::*;
 use arrow::datatypes::*;
+use arrow::list_builder::*;
 
 use parquet::basic;
 use parquet::column::reader::*;
@@ -39,11 +39,10 @@ pub struct ParquetFile {
     projection: Option<Vec<usize>>,
     batch_size: usize,
     current_row_group: Option<Box<RowGroupReader>>,
-    column_readers: Vec<Option<ColumnReader>>
+    column_readers: Vec<Option<ColumnReader>>,
 }
 
 impl ParquetFile {
-
     pub fn open(file: File, projection: Option<Vec<usize>>) -> Result<Self> {
         let reader = SerializedFileReader::new(file).unwrap();
 
@@ -61,7 +60,7 @@ impl ParquetFile {
                     projection,
                     batch_size: 64 * 1024,
                     current_row_group: None,
-                    column_readers: vec![]
+                    column_readers: vec![],
                 })
             }
             _ => Err(ExecutionError::General(
@@ -84,19 +83,20 @@ impl ParquetFile {
             match &self.projection {
                 None => {
                     for i in 0..reader.num_columns() {
-                        self.column_readers.push(Some(reader.get_column_reader(i).unwrap()));
+                        self.column_readers
+                            .push(Some(reader.get_column_reader(i).unwrap()));
                     }
                 }
                 Some(proj) => {
                     for i in 0..reader.num_columns() {
                         if proj.contains(&i) {
-                            self.column_readers.push(Some(reader.get_column_reader(i).unwrap()));
+                            self.column_readers
+                                .push(Some(reader.get_column_reader(i).unwrap()));
                         } else {
                             //println!("Parquet NOT LOADING COLUMN");
                             self.column_readers.push(None);
                         }
                     }
-
                 }
             }
 
@@ -126,9 +126,8 @@ impl ParquetFile {
                                     let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(count);
                                     for j in 0..row_count {
                                         builder.push(b[j].slice(0, b[j].len()).data());
-
                                     }
-                                    Array::new(count,ArrayData::Utf8(builder.finish()))
+                                    Array::new(count, ArrayData::Utf8(builder.finish()))
                                 }
                                 _ => panic!("Error reading parquet batch (column {})", i),
                             }
@@ -151,8 +150,7 @@ impl ParquetFile {
                             }
                         }
                         Some(ColumnReader::Int32ColumnReader(ref mut r)) => {
-                            let mut builder: Builder<i32> =
-                                Builder::with_capacity(self.batch_size);
+                            let mut builder: Builder<i32> = Builder::with_capacity(self.batch_size);
                             match r.read_batch(
                                 self.batch_size,
                                 None,
@@ -168,8 +166,7 @@ impl ParquetFile {
                             }
                         }
                         Some(ColumnReader::Int64ColumnReader(ref mut r)) => {
-                            let mut builder: Builder<i64> =
-                                Builder::with_capacity(self.batch_size);
+                            let mut builder: Builder<i64> = Builder::with_capacity(self.batch_size);
                             match r.read_batch(
                                 self.batch_size,
                                 None,
@@ -191,25 +188,19 @@ impl ParquetFile {
                             }
                             // let mut slice: &[Int96] = &temp;
 
-                            match r.read_batch(
-                                self.batch_size,
-                                None,
-                                None,
-                                &mut temp
-                            ) {
+                            match r.read_batch(self.batch_size, None, None, &mut temp) {
                                 Ok((count, _)) => {
                                     row_count = count;
-//                                        builder.set_len(count);
+                                    //                                        builder.set_len(count);
 
-
-                                    let mut builder: Builder<i64> =
-                                        Builder::with_capacity(self.batch_size);
+                                    let mut builder: Builder<
+                                        i64,
+                                    > = Builder::with_capacity(self.batch_size);
                                     for i in 0..count {
                                         let v = temp[i].data();
-                                        let value: u128 =
-                                            (v[0] as u128) << 64 |
-                                                (v[1] as u128) << 32 |
-                                                (v[2] as u128);
+                                        let value: u128 = (v[0] as u128) << 64
+                                            | (v[1] as u128) << 32
+                                            | (v[2] as u128);
                                         //println!("value: {}", value);
 
                                         let ms: i64 = (value / 1000000) as i64;
@@ -222,8 +213,7 @@ impl ParquetFile {
                             }
                         }
                         Some(ColumnReader::FloatColumnReader(ref mut r)) => {
-                            let mut builder: Builder<f32> =
-                                Builder::with_capacity(self.batch_size);
+                            let mut builder: Builder<f32> = Builder::with_capacity(self.batch_size);
                             match r.read_batch(
                                 self.batch_size,
                                 None,
@@ -239,8 +229,7 @@ impl ParquetFile {
                             }
                         }
                         Some(ColumnReader::DoubleColumnReader(ref mut r)) => {
-                            let mut builder: Builder<f64> =
-                                Builder::with_capacity(self.batch_size);
+                            let mut builder: Builder<f64> = Builder::with_capacity(self.batch_size);
                             match r.read_batch(
                                 self.batch_size,
                                 None,
@@ -264,7 +253,7 @@ impl ParquetFile {
                     batch.push(Value::Column(Rc::new(array)));
                 }
 
-//                println!("Loaded batch of {} rows", row_count);
+                //                println!("Loaded batch of {} rows", row_count);
 
                 if row_count == 0 {
                     None
@@ -275,19 +264,14 @@ impl ParquetFile {
                         row_count,
                     })))
                 }
-
             }
-            _ => {
-                None
-            }
+            _ => None,
         }
     }
 }
 
 impl DataSource for ParquetFile {
-
     fn next(&mut self) -> Option<Result<Rc<RecordBatch>>> {
-
         // advance the row group reader if necessary
         if self.current_row_group.is_none() {
             self.load_next_row_group();
@@ -300,7 +284,7 @@ impl DataSource for ParquetFile {
                     self.load_batch()
                 } else {
                     None
-                }
+                },
             }
         }
     }
@@ -348,7 +332,6 @@ fn to_arrow(t: &Type) -> Field {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

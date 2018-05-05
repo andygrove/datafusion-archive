@@ -21,8 +21,8 @@ use std::result;
 
 use arrow::bitmap::*;
 use arrow::buffer::*;
-use arrow::list::*;
 use arrow::datatypes::{DataType, Field};
+use arrow::list::*;
 
 use super::errors::*;
 

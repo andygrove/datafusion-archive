@@ -83,7 +83,7 @@ impl AggregateFunction for MinFunction {
                     Ok(())
                 }
                 _ => unimplemented!("unsupported data type in MinFunction"),
-            }
+            },
         }
     }
 

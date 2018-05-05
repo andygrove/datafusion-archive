@@ -26,7 +26,7 @@ pub enum ParserError {
 macro_rules! parser_err {
     ($MSG:expr) => {
         Err(ParserError::ParserError($MSG.to_string()))
-    }
+    };
 }
 
 impl From<TokenizerError> for ParserError {
@@ -96,7 +96,7 @@ impl Parser {
                     Token::Keyword(k) => match k.to_uppercase().as_ref() {
                         "SELECT" => Ok(self.parse_select()?),
                         "CREATE" => Ok(self.parse_create()?),
-                        _ => return parser_err!(format!("No prefix parser for keyword {}", k))
+                        _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                     },
                     Token::Identifier(id) => {
                         match self.peek_token() {
@@ -110,7 +110,6 @@ impl Parser {
                                         Ok(ASTNode::SQLFunction { id, args })
                                     }
                                 }
-
                             }
                             Some(Token::Period) => {
                                 let mut id_parts: Vec<String> = vec![id];
@@ -132,17 +131,11 @@ impl Parser {
                     }
                     Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
                         Ok(n) => Ok(ASTNode::SQLLiteralDouble(n)),
-                        Err(e) => parser_err!(format!(
-                            "Could not parse '{}' as i64: {}",
-                            n, e
-                        )),
+                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => Ok(ASTNode::SQLLiteralLong(n)),
-                        Err(e) => parser_err!(format!(
-                            "Could not parse '{}' as i64: {}",
-                            n, e
-                        )),
+                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
                     Token::String(ref s) => Ok(ASTNode::SQLLiteralString(s.to_string())),
                     _ => parser_err!(format!(
@@ -151,9 +144,7 @@ impl Parser {
                     )),
                 }
             }
-            None => parser_err!(format!(
-                "Prefix parser expected a keyword but hit EOF"
-            )),
+            None => parser_err!(format!("Prefix parser expected a keyword but hit EOF")),
         }
     }
 
@@ -163,7 +154,10 @@ impl Parser {
         self.consume_token(&Token::Keyword("AS".to_string()))?;
         let data_type = self.parse_data_type()?;
         self.consume_token(&Token::RParen)?;
-        Ok(ASTNode::SQLCast { expr: Box::new(expr), data_type })
+        Ok(ASTNode::SQLCast {
+            expr: Box::new(expr),
+            data_type,
+        })
     }
 
     /// Parse an expression infix (typically an operator)
@@ -193,10 +187,7 @@ impl Parser {
                     op: self.to_sql_operator(&tok)?,
                     right: Box::new(self.parse_expr(precedence)?),
                 })),
-                _ => parser_err!(format!(
-                    "No infix parser for token {:?}",
-                    tok
-                )),
+                _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             },
             None => Ok(None),
         }
@@ -217,10 +208,7 @@ impl Parser {
             &Token::Div => Ok(SQLOperator::Divide),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
-            _ => parser_err!(format!(
-                "Unsupported SQL operator {:?}",
-                tok
-            )),
+            _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
     }
 
@@ -337,7 +325,6 @@ impl Parser {
         if self.parse_keywords(vec!["EXTERNAL", "TABLE"]) {
             match self.next_token() {
                 Some(Token::Identifier(id)) => {
-
                     // parse optional column list (schema)
                     let mut columns = vec![];
                     if self.consume_token(&Token::LParen)? {
@@ -369,11 +356,15 @@ impl Parser {
                                             break;
                                         }
                                         _ => {
-                                            return parser_err!("Expected ',' or ')' after column definition");
+                                            return parser_err!(
+                                                "Expected ',' or ')' after column definition"
+                                            );
                                         }
                                     }
                                 } else {
-                                    return parser_err!("Error parsing data type in column definition");
+                                    return parser_err!(
+                                        "Error parsing data type in column definition"
+                                    );
                                 }
                             } else {
                                 return parser_err!("Error parsing column name");
@@ -394,7 +385,10 @@ impl Parser {
                     } else if self.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
                         FileType::Parquet
                     } else {
-                        return parser_err!(format!("Expexted 'STORED AS' clause, found {:?}", self.peek_token()));
+                        return parser_err!(format!(
+                            "Expexted 'STORED AS' clause, found {:?}",
+                            self.peek_token()
+                        ));
                     };
 
                     let location: String = if self.parse_keywords(vec!["LOCATION"]) {
@@ -408,7 +402,7 @@ impl Parser {
                         columns,
                         file_type,
                         header_row: headers,
-                        location
+                        location,
                     })
                 }
                 _ => parser_err!(format!(
@@ -460,7 +454,7 @@ impl Parser {
                         Ok(SQLType::Varchar(100 as usize))
                     }
                 }
-                _ => parser_err!(format!("Invalid data type '{:?}'", k))
+                _ => parser_err!(format!("Invalid data type '{:?}'", k)),
             },
             other => parser_err!(format!("Invalid data type: '{:?}'", other)),
         }
@@ -567,10 +561,7 @@ impl Parser {
                 }
                 Some(Token::Comma) => true,
                 Some(other) => {
-                    return parser_err!(format!(
-                        "Unexpected token after ORDER BY expr: {:?}",
-                        other
-                    ))
+                    return parser_err!(format!("Unexpected token after ORDER BY expr: {:?}", other))
                 }
                 None => true,
             };
@@ -790,7 +781,13 @@ mod tests {
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
-            ASTNode::SQLCreateTable { name, columns, file_type, header_row, location } => {
+            ASTNode::SQLCreateTable {
+                name,
+                columns,
+                file_type,
+                header_row,
+                location,
+            } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(3, columns.len());
                 assert_eq!(FileType::CSV, file_type);
@@ -818,7 +815,13 @@ mod tests {
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
-            ASTNode::SQLCreateTable { name, columns, file_type, header_row, location } => {
+            ASTNode::SQLCreateTable {
+                name,
+                columns,
+                file_type,
+                header_row,
+                location,
+            } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(3, columns.len());
                 assert_eq!(FileType::CSV, file_type);
@@ -843,7 +846,13 @@ mod tests {
         let ast = parser.parse().unwrap();
         //println!("AST = {:?}", ast);
         match ast {
-            ASTNode::SQLCreateTable { name, columns, file_type, location, .. } => {
+            ASTNode::SQLCreateTable {
+                name,
+                columns,
+                file_type,
+                location,
+                ..
+            } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(0, columns.len());
                 assert_eq!(FileType::Parquet, file_type);

@@ -27,9 +27,7 @@ pub struct CountFunction {
 
 impl CountFunction {
     pub fn new() -> Self {
-        CountFunction {
-            count: 0,
-        }
+        CountFunction { count: 0 }
     }
 }
 
@@ -53,7 +51,7 @@ impl AggregateFunction for CountFunction {
                 //println!("Counting array elements");
                 self.count += array.len();
                 Ok(())
-            },
+            }
             Value::Scalar(_) => {
                 //println!("Counting scalar value");
                 self.count += 1;
@@ -63,7 +61,9 @@ impl AggregateFunction for CountFunction {
     }
 
     fn finish(&self) -> Result<Value> {
-        Ok(Value::Scalar(Rc::new(ScalarValue::UInt64(self.count as u64))))
+        Ok(Value::Scalar(Rc::new(ScalarValue::UInt64(
+            self.count as u64,
+        ))))
     }
 }
 
@@ -79,7 +79,8 @@ mod tests {
         assert_eq!(DataType::UInt64, count.return_type());
         let values: Vec<f64> = vec![12.0, 22.0, 32.0, 6.0, 58.1];
 
-        count.execute(&vec![Value::Column(Rc::new(Array::from(values)))])
+        count
+            .execute(&vec![Value::Column(Rc::new(Array::from(values)))])
             .unwrap();
         let result = count.finish().unwrap();
 

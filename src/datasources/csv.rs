@@ -38,7 +38,12 @@ pub struct CsvFile {
 }
 
 impl CsvFile {
-    pub fn open(file: File, schema: Rc<Schema>, has_headers: bool, projection: Option<Vec<usize>>) -> Result<Self> {
+    pub fn open(
+        file: File,
+        schema: Rc<Schema>,
+        has_headers: bool,
+        projection: Option<Vec<usize>>,
+    ) -> Result<Self> {
         let csv_reader = csv::ReaderBuilder::new()
             .has_headers(has_headers)
             .from_reader(BufReader::new(file));
@@ -105,19 +110,16 @@ impl DataSource for CsvFile {
             return None;
         }
 
-        let column_with_index = self.schema
-            .columns()
-            .iter()
-            .enumerate();
+        let column_with_index = self.schema.columns().iter().enumerate();
 
         let projection = match self.projection {
             Some(ref v) => v.clone(),
             None => self.schema
                 .columns()
                 .iter()
-                .enumerate().
-                map(|(i,_)| i)
-            .collect()
+                .enumerate()
+                .map(|(i, _)| i)
+                .collect(),
         };
 
         let columns: Vec<Value> = column_with_index
@@ -137,18 +139,16 @@ impl DataSource for CsvFile {
                         DataType::Float32 => collect_column!(rows, i, f32, rows.len(), 0_f32),
                         DataType::Float64 => collect_column!(rows, i, f64, rows.len(), 0_f64),
                         DataType::Utf8 => {
-                            let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(rows.len());
+                            let mut builder: ListBuilder<u8> =
+                                ListBuilder::with_capacity(rows.len());
                             rows.iter().for_each(|row| {
                                 let s = row.get(i).unwrap_or("").to_string();
                                 builder.push(s.as_bytes());
                             });
                             let buffer = builder.finish();
-                            Value::Column(Rc::new(Array::new(
-                                rows.len(),
-                                ArrayData::Utf8(buffer),
-                            )))
+                            Value::Column(Rc::new(Array::new(rows.len(), ArrayData::Utf8(buffer))))
                         }
-                        _ => unimplemented!("CSV does not support data type {:?}", c.data_type())
+                        _ => unimplemented!("CSV does not support data type {:?}", c.data_type()),
                     }
                 } else {
                     // not in the projection

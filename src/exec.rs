@@ -28,8 +28,8 @@ use std::string::String;
 
 //use arrow::array::*;
 use arrow::builder::*;
-use arrow::list_builder::*;
 use arrow::datatypes::*;
+use arrow::list_builder::*;
 
 use super::dataframe::*;
 use super::datasources::common::*;
@@ -76,9 +76,9 @@ macro_rules! compare_arrays_inner {
 
 macro_rules! compare_arrays {
     ($V1:ident, $V2:ident, $F:expr) => {
-        Ok(Value::Column(Rc::new(Array::from(
-            compare_arrays_inner!($V1, $V2, $F)?,
-        ))))
+        Ok(Value::Column(Rc::new(Array::from(compare_arrays_inner!(
+            $V1, $V2, $F
+        )?))))
     };
 }
 
@@ -280,7 +280,7 @@ pub enum AggregateType {
 pub enum RuntimeExpr {
     Compiled {
         f: CompiledExpr,
-        t: DataType
+        t: DataType,
     },
     AggregateFunction {
         f: AggregateType,
@@ -311,13 +311,16 @@ pub fn compile_expr(
     input_schema: &Schema,
 ) -> Result<RuntimeExpr> {
     match *expr {
-        Expr::AggregateFunction { ref name, ref args, ref return_type } => {
+        Expr::AggregateFunction {
+            ref name,
+            ref args,
+            ref return_type,
+        } => {
             assert_eq!(1, args.len());
 
-            let compiled_args: Result<Vec<RuntimeExpr>> =
-                args.iter()
-                    .map(|e| compile_scalar_expr(ctx, e, input_schema))
-                    .collect();
+            let compiled_args: Result<Vec<RuntimeExpr>> = args.iter()
+                .map(|e| compile_scalar_expr(ctx, e, input_schema))
+                .collect();
 
             let func = match name.to_lowercase().as_ref() {
                 "min" => AggregateType::Min,
@@ -327,23 +330,23 @@ pub fn compile_expr(
             };
 
             //TODO: this is hacky
-//            let return_type = match func {
-//                AggregateType::Count => DataType::UInt64,
-//                AggregateType::Min | AggregateType::Max => match args[0] {
-//                    Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
-//                    _ => {
-//                        //TODO: fix this hack
-//                        DataType::Float64
-//                        //panic!("Aggregate expressions currently only support simple arguments")
-//                    }
-//                }
-//                _ => panic!()
-//            };
-
+            //            let return_type = match func {
+            //                AggregateType::Count => DataType::UInt64,
+            //                AggregateType::Min | AggregateType::Max => match args[0] {
+            //                    Expr::Column(i) => input_schema.columns()[i].data_type().clone(),
+            //                    _ => {
+            //                        //TODO: fix this hack
+            //                        DataType::Float64
+            //                        //panic!("Aggregate expressions currently only support simple arguments")
+            //                    }
+            //                }
+            //                _ => panic!()
+            //            };
 
             Ok(RuntimeExpr::AggregateFunction {
                 f: func,
-                args: compiled_args?.iter()
+                args: compiled_args?
+                    .iter()
                     .map(|e| e.get_func().clone())
                     .collect(),
                 t: return_type.clone(),
@@ -362,7 +365,6 @@ macro_rules! cast_primitive {
         Ok(Value::Column(Rc::new(Array::from(b.finish()))))
     }}
 }
-
 
 macro_rules! cast_from_to {
     {$FROM:ty, $TO:ident, $LIST:expr} => {{
@@ -406,48 +408,46 @@ macro_rules! cast_utf8_to {
 }
 
 fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
-    Ok(Rc::new( move|v: &Value| {
-        match v {
-            Value::Column(ref array) => {
-                match array.data() {
-                    &ArrayData::Boolean(_) => unimplemented!("CAST from Boolean"),
-                    &ArrayData::UInt8(ref list) => cast_from_to!(u8, data_type, list),
-                    &ArrayData::UInt16(ref list) => cast_from_to!(u16, data_type, list),
-                    &ArrayData::UInt32(ref list) => cast_from_to!(u32, data_type, list),
-                    &ArrayData::UInt64(ref list) => cast_from_to!(u64, data_type, list),
-                    &ArrayData::Int8(ref list) => cast_from_to!(i8, data_type, list),
-                    &ArrayData::Int16(ref list) => cast_from_to!(i16, data_type, list),
-                    &ArrayData::Int32(ref list) => cast_from_to!(i32, data_type, list),
-                    &ArrayData::Int64(ref list) => cast_from_to!(i64, data_type, list),
-                    &ArrayData::Float32(ref list) => cast_from_to!(f32, data_type, list),
-                    &ArrayData::Float64(ref list) => cast_from_to!(f64, data_type, list),
-                    &ArrayData::Struct(_) => unimplemented!("CAST from Struct"),
-                    &ArrayData::Utf8(ref list) => {
-                        match &data_type {
-                            DataType::Boolean => cast_utf8_to!(bool, list),
-                            DataType::Int8 => cast_utf8_to!(i8, list),
-                            DataType::Int16 => cast_utf8_to!(i16, list),
-                            DataType::Int32 => cast_utf8_to!(i32, list),
-                            DataType::Int64 => cast_utf8_to!(i64, list),
-                            DataType::UInt8 => cast_utf8_to!(u8, list),
-                            DataType::UInt16 => cast_utf8_to!(u16, list),
-                            DataType::UInt32 => cast_utf8_to!(u32, list),
-                            DataType::UInt64 => cast_utf8_to!(u64, list),
-                            DataType::Float32 => cast_utf8_to!(f32, list),
-                            DataType::Float64 => cast_utf8_to!(f64, list),
-                            DataType::Utf8 => Ok(v.clone()),
-                            _ => unimplemented!("CAST from Utf8 to {:?}", data_type)
-                        }
-                    }
-                }
-            }
-            _ => unimplemented!("CAST from ScalarValue")
-        }
+    Ok(Rc::new(move |v: &Value| match v {
+        Value::Column(ref array) => match array.data() {
+            &ArrayData::Boolean(_) => unimplemented!("CAST from Boolean"),
+            &ArrayData::UInt8(ref list) => cast_from_to!(u8, data_type, list),
+            &ArrayData::UInt16(ref list) => cast_from_to!(u16, data_type, list),
+            &ArrayData::UInt32(ref list) => cast_from_to!(u32, data_type, list),
+            &ArrayData::UInt64(ref list) => cast_from_to!(u64, data_type, list),
+            &ArrayData::Int8(ref list) => cast_from_to!(i8, data_type, list),
+            &ArrayData::Int16(ref list) => cast_from_to!(i16, data_type, list),
+            &ArrayData::Int32(ref list) => cast_from_to!(i32, data_type, list),
+            &ArrayData::Int64(ref list) => cast_from_to!(i64, data_type, list),
+            &ArrayData::Float32(ref list) => cast_from_to!(f32, data_type, list),
+            &ArrayData::Float64(ref list) => cast_from_to!(f64, data_type, list),
+            &ArrayData::Struct(_) => unimplemented!("CAST from Struct"),
+            &ArrayData::Utf8(ref list) => match &data_type {
+                DataType::Boolean => cast_utf8_to!(bool, list),
+                DataType::Int8 => cast_utf8_to!(i8, list),
+                DataType::Int16 => cast_utf8_to!(i16, list),
+                DataType::Int32 => cast_utf8_to!(i32, list),
+                DataType::Int64 => cast_utf8_to!(i64, list),
+                DataType::UInt8 => cast_utf8_to!(u8, list),
+                DataType::UInt16 => cast_utf8_to!(u16, list),
+                DataType::UInt32 => cast_utf8_to!(u32, list),
+                DataType::UInt64 => cast_utf8_to!(u64, list),
+                DataType::Float32 => cast_utf8_to!(f32, list),
+                DataType::Float64 => cast_utf8_to!(f64, list),
+                DataType::Utf8 => Ok(v.clone()),
+                _ => unimplemented!("CAST from Utf8 to {:?}", data_type),
+            },
+        },
+        _ => unimplemented!("CAST from ScalarValue"),
     }))
 }
 
 /// Compiles a scalar expression into a closure
-pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &Schema) -> Result<RuntimeExpr> {
+pub fn compile_scalar_expr(
+    ctx: &ExecutionContext,
+    expr: &Expr,
+    input_schema: &Schema,
+) -> Result<RuntimeExpr> {
     match expr {
         &Expr::Literal(ref lit) => {
             let literal_value = lit.clone();
@@ -457,29 +457,28 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                     // because it would be redundant, so we have a single value in a vector instead
                     Ok(Value::Scalar(Rc::new(literal_value.clone())))
                 }),
-                t: DataType::Float64 //TODO
+                t: DataType::Float64, //TODO
             })
         }
         &Expr::Column(index) => Ok(RuntimeExpr::Compiled {
-            f: Rc::new(move |batch: &RecordBatch| {
-                Ok((*batch.column(index)).clone())
-            }),
-            t: input_schema.column(index).data_type().clone()
+            f: Rc::new(move |batch: &RecordBatch| Ok((*batch.column(index)).clone())),
+            t: input_schema.column(index).data_type().clone(),
         }),
-        &Expr::Cast { ref expr, ref data_type } => {
-            match expr.as_ref() {
-                &Expr::Column(index) => {
-                    let compiled_cast_expr = compile_cast_column(data_type.clone())?;
-                    Ok(RuntimeExpr::Compiled {
-                        f: Rc::new(move |batch: &RecordBatch| {
-                            (compiled_cast_expr)(batch.column(index))
-                        }),
-                        t: data_type.clone()
-                    })
-                }
-                _ => Err(ExecutionError::NotImplemented)
+        &Expr::Cast {
+            ref expr,
+            ref data_type,
+        } => match expr.as_ref() {
+            &Expr::Column(index) => {
+                let compiled_cast_expr = compile_cast_column(data_type.clone())?;
+                Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        (compiled_cast_expr)(batch.column(index))
+                    }),
+                    t: data_type.clone(),
+                })
             }
-        }
+            _ => Err(ExecutionError::NotImplemented),
+        },
         &Expr::BinaryExpr {
             ref left,
             ref op,
@@ -494,7 +493,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.eq(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
                 &Operator::NotEq => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -502,7 +501,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.not_eq(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
                 &Operator::Lt => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -510,7 +509,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.lt(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
                 &Operator::LtEq => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -518,7 +517,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.lt_eq(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
                 &Operator::Gt => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -526,7 +525,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.gt(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
                 &Operator::GtEq => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -534,7 +533,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.gt_eq(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
                 &Operator::And => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -542,7 +541,7 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.and(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
                 &Operator::Or => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -550,28 +549,28 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                         let right_values = right_expr.get_func()(batch)?;
                         left_values.or(&right_values)
                     }),
-                    t: DataType::Boolean
+                    t: DataType::Boolean,
                 }),
-//                &Operator::Plus => Ok(Rc::new(move |batch: &RecordBatch| {
-//                    let left_values = left_expr.get_func()(batch)?;
-//                    let right_values = right_expr.get_func()(batch)?;
-//                    left_values.add(&right_values)
-//                })),
-//                &Operator::Minus => Ok(Rc::new(move |batch: &RecordBatch| {
-//                    let left_values = left_expr.get_func()(batch)?;
-//                    let right_values = right_expr.get_func()(batch)?;
-//                    left_values.subtract(&right_values)
-//                })),
-//                &Operator::Divide => Ok(Rc::new(move |batch: &RecordBatch| {
-//                    let left_values = left_expr.get_func()(batch)?;
-//                    let right_values = right_expr.get_func()(batch)?;
-//                    left_values.divide(&right_values)
-//                })),
-//                &Operator::Multiply => Ok(Rc::new(move |batch: &RecordBatch| {
-//                    let left_values = left_expr.get_func()(batch)?;
-//                    let right_values = right_expr.get_func()(batch)?;
-//                    left_values.multiply(&right_values)
-//                })),
+                //                &Operator::Plus => Ok(Rc::new(move |batch: &RecordBatch| {
+                //                    let left_values = left_expr.get_func()(batch)?;
+                //                    let right_values = right_expr.get_func()(batch)?;
+                //                    left_values.add(&right_values)
+                //                })),
+                //                &Operator::Minus => Ok(Rc::new(move |batch: &RecordBatch| {
+                //                    let left_values = left_expr.get_func()(batch)?;
+                //                    let right_values = right_expr.get_func()(batch)?;
+                //                    left_values.subtract(&right_values)
+                //                })),
+                //                &Operator::Divide => Ok(Rc::new(move |batch: &RecordBatch| {
+                //                    let left_values = left_expr.get_func()(batch)?;
+                //                    let right_values = right_expr.get_func()(batch)?;
+                //                    left_values.divide(&right_values)
+                //                })),
+                //                &Operator::Multiply => Ok(Rc::new(move |batch: &RecordBatch| {
+                //                    let left_values = left_expr.get_func()(batch)?;
+                //                    let right_values = right_expr.get_func()(batch)?;
+                //                    left_values.multiply(&right_values)
+                //                })),
                 _ => {
                     return Err(ExecutionError::General(format!(
                         "Unsupported binary operator '{:?}'",
@@ -584,7 +583,11 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
             //NOTE sort order is ignored here and is handled during sort execution
             compile_scalar_expr(ctx, expr, input_schema)
         }
-        &Expr::ScalarFunction { ref name, ref args, ref return_type } => {
+        &Expr::ScalarFunction {
+            ref name,
+            ref args,
+            ref return_type,
+        } => {
             ////println!("Executing function {}", name);
 
             let func = ctx.load_scalar_function(name.as_ref())?;
@@ -592,14 +595,18 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
             let expected_args = func.args();
 
             if expected_args.len() != args.len() {
-                return Err(ExecutionError::General(
-                    format!("Function {} requires {} parameters but {} were provided",
-                            name, expected_args.len(), args.len())))
+                return Err(ExecutionError::General(format!(
+                    "Function {} requires {} parameters but {} were provided",
+                    name,
+                    expected_args.len(),
+                    args.len()
+                )));
             }
 
             // evaluate the arguments to the function
-            let compiled_args: Result<Vec<RuntimeExpr>> =
-                args.iter().map(|e| compile_scalar_expr(ctx, e, input_schema)).collect();
+            let compiled_args: Result<Vec<RuntimeExpr>> = args.iter()
+                .map(|e| compile_scalar_expr(ctx, e, input_schema))
+                .collect();
 
             let compiled_args_ok = compiled_args?;
 
@@ -609,38 +616,43 @@ pub fn compile_scalar_expr(ctx: &ExecutionContext, expr: &Expr, input_schema: &S
                 if expected_args[i].data_type() != &actual_type {
                     return Err(ExecutionError::General(format!(
                         "Scalar function {} requires {:?} for argument {} but got {:?}",
-                        name, expected_args[i].data_type(), i, actual_type
-                    )))
+                        name,
+                        expected_args[i].data_type(),
+                        i,
+                        actual_type
+                    )));
                 }
             }
 
             Ok(RuntimeExpr::Compiled {
                 f: Rc::new(move |batch| {
-                    let arg_values: Result<Vec<Value>> =
-                        compiled_args_ok.iter().map(|expr| expr.get_func()(batch)).collect();
+                    let arg_values: Result<Vec<Value>> = compiled_args_ok
+                        .iter()
+                        .map(|expr| expr.get_func()(batch))
+                        .collect();
 
                     func.execute(arg_values?)
                 }),
-                t: return_type.clone()
+                t: return_type.clone(),
             })
         }
         // aggregate functions don't fit this pattern .. will need to rework this ..
         &Expr::AggregateFunction { .. } => panic!("Aggregate expressions cannot be compiled yet"),
-//        &Expr::AggregateFunction { ref name, ref args } => {
-//
-//            // evaluate the arguments to the function
-//            let compiled_args: Result<Vec<CompiledExpr>> =
-//                args.iter().map(|e| compile_expr(ctx, e)).collect();
-//
-//            let compiled_args_ok = compiled_args?;
-//
-//            Ok(Rc::new(move |batch| {
-//                let arg_values: Result<Vec<Value>> =
-//                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
-//
-//                Ok(Rc::new(arg_values?))
-//            }))
-//        }
+        //        &Expr::AggregateFunction { ref name, ref args } => {
+        //
+        //            // evaluate the arguments to the function
+        //            let compiled_args: Result<Vec<CompiledExpr>> =
+        //                args.iter().map(|e| compile_expr(ctx, e)).collect();
+        //
+        //            let compiled_args_ok = compiled_args?;
+        //
+        //            Ok(Rc::new(move |batch| {
+        //                let arg_values: Result<Vec<Value>> =
+        //                    compiled_args_ok.iter().map(|expr| expr(batch)).collect();
+        //
+        //                Ok(Rc::new(arg_values?))
+        //            }))
+        //        }
     }
 }
 
@@ -787,9 +799,7 @@ impl ExecutionContext {
         let ast = Parser::parse_sql(String::from(sql))?;
 
         // create a query planner
-        let query_planner = SqlToRel::new(self.tables.clone(),
-        self.function_meta.clone()
-        );
+        let query_planner = SqlToRel::new(self.tables.clone(), self.function_meta.clone());
 
         // plan the query (create a logical relational plan)
         Ok(query_planner.sql_to_rel(&ast)?)
@@ -810,8 +820,13 @@ impl ExecutionContext {
         //println!("AST: {:?}", ast);
 
         match ast {
-            SQLCreateTable { name, columns, file_type, header_row, location } => {
-
+            SQLCreateTable {
+                name,
+                columns,
+                file_type,
+                header_row,
+                location,
+            } => {
                 let fields: Vec<Field> = columns
                     .iter()
                     .map(|c| Field::new(&c.name, convert_data_type(&c.data_type), c.allow_null))
@@ -826,10 +841,11 @@ impl ExecutionContext {
                 self.register(&name, df);
 
                 //TODO: not sure what to return here
-                Ok(Rc::new(DF::new(self.clone(),
+                Ok(Rc::new(DF::new(
+                    self.clone(),
                     Rc::new(LogicalPlan::EmptyRelation {
                         schema: Rc::new(Schema::empty()),
-                    })
+                    }),
                 )))
             }
             _ => {
@@ -844,10 +860,7 @@ impl ExecutionContext {
                 //println!("Optimized logical plan: {:?}", new_plan);
 
                 // return the DataFrame
-                Ok(Rc::new(DF::new(
-                    self.clone(),
-                    new_plan,
-                )))
+                Ok(Rc::new(DF::new(self.clone(), new_plan)))
             }
         }
     }
@@ -859,21 +872,22 @@ impl ExecutionContext {
         filename: &str,
         schema: &Schema,
         has_header: bool,
-        projection: Option<Vec<usize>>
+        projection: Option<Vec<usize>>,
     ) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::CsvFile {
             filename: filename.to_string(),
             schema: Rc::new(schema.clone()),
             has_header,
-            projection
+            projection,
         };
-        Ok(Rc::new(DF::new(
-            self.clone(),
-            Rc::new(plan),
-        )))
+        Ok(Rc::new(DF::new(self.clone(), Rc::new(plan))))
     }
 
-    pub fn load_parquet(&self, filename: &str, projection: Option<Vec<usize>>) -> Result<Rc<DataFrame>> {
+    pub fn load_parquet(
+        &self,
+        filename: &str,
+        projection: Option<Vec<usize>>,
+    ) -> Result<Rc<DataFrame>> {
         //TODO: can only get schema by assuming file is local and opening it - need catalog!!
         let file = File::open(filename)?;
         let p = ParquetFile::open(file, None)?;
@@ -881,12 +895,9 @@ impl ExecutionContext {
         let plan = LogicalPlan::ParquetFile {
             filename: filename.to_string(),
             schema: p.schema().clone(),
-            projection
+            projection,
         };
-        Ok(Rc::new(DF::new(
-            self.clone(),
-            Rc::new(plan),
-        )))
+        Ok(Rc::new(DF::new(self.clone(), Rc::new(plan))))
     }
 
     pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>> {
@@ -899,7 +910,11 @@ impl ExecutionContext {
 
             LogicalPlan::Sort { .. } => unimplemented!(),
 
-            LogicalPlan::TableScan { ref table_name, ref projection, .. } => {
+            LogicalPlan::TableScan {
+                ref table_name,
+                ref projection,
+                ..
+            } => {
                 //println!("TableScan: {}", table_name);
                 match self.tables.borrow().get(table_name) {
                     Some(df) => match projection {
@@ -909,8 +924,8 @@ impl ExecutionContext {
                                 h.insert(*i);
                             });
                             self.create_execution_plan(&push_down_projection(df.plan(), h))
-                        },
-                        None => self.create_execution_plan(df.plan())
+                        }
+                        None => self.create_execution_plan(df.plan()),
                     },
                     _ => Err(ExecutionError::General(format!(
                         "No table registered as '{}'",
@@ -923,14 +938,14 @@ impl ExecutionContext {
                 ref filename,
                 ref schema,
                 ref has_header,
-                ref projection
+                ref projection,
             } => {
                 let file = File::open(filename)?;
                 let ds = Rc::new(RefCell::new(CsvFile::open(
                     file,
                     schema.clone(),
                     *has_header,
-                    projection.clone()
+                    projection.clone(),
                 )?)) as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {
                     schema: schema.as_ref().clone(),
@@ -941,10 +956,11 @@ impl ExecutionContext {
             LogicalPlan::ParquetFile {
                 ref filename,
                 ref schema,
-                ref projection
+                ref projection,
             } => {
                 let file = File::open(filename)?;
-                let ds = Rc::new(RefCell::new(ParquetFile::open(file, projection.clone())?)) as Rc<RefCell<DataSource>>;
+                let ds = Rc::new(RefCell::new(ParquetFile::open(file, projection.clone())?))
+                    as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {
                     schema: schema.as_ref().clone(),
                     ds,
@@ -972,9 +988,9 @@ impl ExecutionContext {
 
                 let project_schema = Rc::new(Schema::new(project_columns));
 
-                let compiled_expr: Result<Vec<RuntimeExpr>> =
-                    expr.iter().map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
-                        .collect();
+                let compiled_expr: Result<Vec<RuntimeExpr>> = expr.iter()
+                    .map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
+                    .collect();
 
                 let rel = ProjectRelation::new(input_rel, compiled_expr?, project_schema);
 
@@ -1005,7 +1021,8 @@ impl ExecutionContext {
                     Rc::new(Schema::empty()), //(expr_to_field(&compiled_group_expr, &input_schema))),
                     input_rel,
                     compiled_group_expr,
-                    compiled_aggr_expr);
+                    compiled_aggr_expr,
+                );
 
                 Ok(Box::new(rel))
             }
@@ -1079,7 +1096,7 @@ impl ExecutionContext {
         Expr::ScalarFunction {
             name: name.to_string(),
             args: args.clone(),
-            return_type: return_type.clone()
+            return_type: return_type.clone(),
         }
     }
 
@@ -1193,9 +1210,7 @@ impl ExecutionContext {
                                             ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
                                             ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
                                             ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
-                                            ArrayData::Utf8(ref data) => {
-                                                w.write_bytes(data.get(i))
-                                            }
+                                            ArrayData::Utf8(ref data) => w.write_bytes(data.get(i)),
                                             ArrayData::Struct(ref v) => {
                                                 let fields = v.iter()
                                                     .map(|arr| get_value(&arr, i))
@@ -1369,7 +1384,7 @@ mod tests {
             DataType::Struct(vec![
                 Field::new("lat", DataType::Float64, false),
                 Field::new("lng", DataType::Float64, false),
-            ])
+            ]),
         );
 
         let df2 = df.select(vec![func_expr]).unwrap();
@@ -1538,10 +1553,10 @@ mod tests {
 
         // define the SQL statement
         let sql = "SELECT \
-            CAST(c_int AS INT),    CAST(c_int AS FLOAT),    CAST(c_int AS STRING), \
-            CAST(c_float AS INT),  CAST(c_float AS FLOAT),  CAST(c_float AS STRING), \
-            CAST(c_string AS FLOAT), CAST(c_string AS STRING) \
-        FROM all_types";
+                   CAST(c_int AS INT),    CAST(c_int AS FLOAT),    CAST(c_int AS STRING), \
+                   CAST(c_float AS INT),  CAST(c_float AS FLOAT),  CAST(c_float AS STRING), \
+                   CAST(c_string AS FLOAT), CAST(c_string AS STRING) \
+                   FROM all_types";
 
         // create a data frame
         let df1 = ctx.sql(&sql).unwrap();
@@ -1553,7 +1568,6 @@ mod tests {
 
         assert_eq!(expected_result, read_file("_test_cast.csv"));
     }
-
 
     fn read_file(filename: &str) -> String {
         let mut file = File::open(filename).unwrap();
@@ -1572,7 +1586,8 @@ mod tests {
                 Field::new("id", DataType::Int32, false),
                 Field::new("name", DataType::Utf8, false),
             ]),
-            true, None,
+            true,
+            None,
         ).unwrap();
 
         ctx.register("people", people);
@@ -1584,7 +1599,8 @@ mod tests {
                 Field::new("lat", DataType::Float64, false),
                 Field::new("lng", DataType::Float64, false),
             ]),
-            false, None,
+            false,
+            None,
         ).unwrap();
 
         ctx.register("uk_cities", uk_cities);
