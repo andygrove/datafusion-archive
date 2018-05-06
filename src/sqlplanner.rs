@@ -103,7 +103,7 @@ impl SqlToRel {
                     let mut all_fields: Vec<Expr> = group_expr.clone();
                     aggr_expr.iter().for_each(|x| all_fields.push(x.clone()));
 
-                    let aggr_schema = Schema::new(expr_to_field(&all_fields, input_schema));
+                    let aggr_schema = Schema::new(exprlist_to_fields(&all_fields, input_schema));
 
                     //TODO: selection, projection, everything else
                     Ok(Rc::new(LogicalPlan::Aggregate {
@@ -119,7 +119,7 @@ impl SqlToRel {
                     };
 
                     let projection_schema =
-                        Rc::new(Schema::new(expr_to_field(&expr, input_schema.as_ref())));
+                        Rc::new(Schema::new(exprlist_to_fields(&expr, input_schema.as_ref())));
 
                     let projection = LogicalPlan::Projection {
                         expr: expr,
@@ -342,23 +342,35 @@ pub fn convert_data_type(sql: &SQLType) -> DataType {
 //    }
 //}
 
-pub fn expr_to_field(expr: &Vec<Expr>, input_schema: &Schema) -> Vec<Field> {
+pub fn expr_to_field(e: &Expr, input_schema: &Schema) -> Field {
+    match e {
+        &Expr::Column(i) => input_schema.columns()[i].clone(),
+        &Expr::Literal(ref lit) => {
+            Field::new("lit", lit.get_datatype(), true)
+        }
+        &Expr::ScalarFunction {
+            ref name,
+            ref return_type,
+            ..
+        } => Field::new(name, return_type.clone(), true),
+        &Expr::AggregateFunction {
+            ref name,
+            ref return_type,
+            ..
+        } => Field::new(name, return_type.clone(), true),
+        &Expr::Cast { ref data_type, .. } => Field::new("cast", data_type.clone(), true),
+        &Expr::BinaryExpr { ref left, ref right, .. } => {
+            let left_type = left.get_type(input_schema);
+            let right_type = right.get_type(input_schema);
+            Field::new("binary_expr", get_supertype(&left_type, &right_type).unwrap(), true)
+        }
+        _ => unimplemented!("Cannot determine schema type for expression {:?}", e),
+    }
+}
+
+pub fn exprlist_to_fields(expr: &Vec<Expr>, input_schema: &Schema) -> Vec<Field> {
     expr.iter()
-        .map(|e| match e {
-            &Expr::Column(i) => input_schema.columns()[i].clone(),
-            &Expr::ScalarFunction {
-                ref name,
-                ref return_type,
-                ..
-            } => Field::new(name, return_type.clone(), true),
-            &Expr::AggregateFunction {
-                ref name,
-                ref return_type,
-                ..
-            } => Field::new(name, return_type.clone(), true),
-            &Expr::Cast { ref data_type, .. } => Field::new("cast", data_type.clone(), true),
-            _ => unimplemented!("Cannot determine schema type for expression {:?}", e),
-        })
+        .map(|e| expr_to_field(e, input_schema))
         .collect()
 }
 
@@ -460,7 +472,46 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
 mod tests {
 
     use super::*;
-    //use super::super::sqlparser::*;
+    use super::super::sqlparser::*;
+
+    #[test]
+    fn select_no_relation() {
+        quick_test("SELECT 1",
+                   "Projection: Int64(1)\
+        \n  EmptyRelation");
+    }
+
+    #[test]
+    fn select_scalar_func_with_literal_no_relation() {
+        quick_test("SELECT sqrt(9)",
+                   "Projection: sqrt(CAST Int64(9) AS Float64)\
+                   \n  EmptyRelation");
+    }
+
+    #[test]
+    fn select_simple_selection() {
+        let sql = "SELECT id, first_name, last_name \
+            FROM person WHERE state = 'CO'";
+        let expected =
+            "Projection: #0, #1, #2\
+               \n  Selection: #4 Eq Utf8(\"CO\")\
+               \n    TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_simple_aggregate() {
+        quick_test("SELECT MIN(age) FROM person",
+                   "Aggregate: groupBy=[[]], aggr=[[MIN(#3)]]\
+        \n  TableScan: person projection=None");
+    }
+
+    #[test]
+    fn select_simple_aggregate_with_groupby() {
+        quick_test("SELECT state, MIN(age), MAX(age) FROM person GROUP BY state",
+                   "Aggregate: groupBy=[[#4]], aggr=[[MIN(#3), MAX(#3)]]\
+        \n  TableScan: person projection=None");
+    }
 
     #[test]
     fn test_collect_expr() {
@@ -525,5 +576,48 @@ mod tests {
     //        //TODO: assertions
     //
     //    }
+
+    /// Create logical plan, write with formatter, compare to expected output
+    fn quick_test(sql: &str, expected: &str) {
+        let planner = SqlToRel::new(Rc::new(MockSchemaProvider {}));
+        let ast = Parser::parse_sql(sql.to_string()).unwrap();
+        let plan = planner.sql_to_rel(&ast).unwrap();
+        assert_eq!(expected, format!("{:?}", plan));
+    }
+
+
+    struct MockSchemaProvider {
+    }
+
+    impl SchemaProvider for MockSchemaProvider {
+        fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>> {
+            match name {
+                "person" => Some(Rc::new(Schema::new(vec![
+                    Field::new("id", DataType::UInt32, false),
+                    Field::new("first_name", DataType::Utf8, false),
+                    Field::new("last_name", DataType::Utf8, false),
+                    Field::new("age", DataType::UInt8, false),
+                    Field::new("state", DataType::Utf8, false),
+                    Field::new("salary", DataType::Float64, false),
+                ]))),
+                _ => None
+            }
+        }
+
+        fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
+            match name {
+                "sqrt" => Some(Rc::new(FunctionMeta {
+                        name: "sqrt".to_string(),
+                        args: vec![
+                            Field::new("n", DataType::Float64, false),
+                        ],
+                        return_type: DataType::Float64,
+                        function_type: FunctionType::Scalar ,
+                    })),
+                _ => None
+            }
+        }
+    }
+
 
 }

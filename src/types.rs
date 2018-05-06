@@ -316,6 +316,35 @@ impl fmt::Debug for Value {
 pub fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
     use self::DataType::*;
     match (l,r) {
+        
+        (UInt8, Int8) => Some(Int8),
+        (UInt8, Int16) => Some(Int16),
+        (UInt8, Int32) => Some(Int32),
+        (UInt8, Int64) => Some(Int64),
+
+        (UInt16, Int16) => Some(Int16),
+        (UInt16, Int32) => Some(Int32),
+        (UInt16, Int64) => Some(Int64),
+
+        (UInt32, Int32) => Some(Int32),
+        (UInt32, Int64) => Some(Int64),
+
+        (UInt64, Int64) => Some(Int64),
+
+        (Int8, UInt8) => Some(Int8),
+
+        (Int16, UInt8) => Some(Int16),
+        (Int16, UInt16) => Some(Int16),
+
+        (Int32, UInt8) => Some(Int32),
+        (Int32, UInt16) => Some(Int32),
+        (Int32, UInt32) => Some(Int32),
+
+        (Int64, UInt8) => Some(Int64),
+        (Int64, UInt16) => Some(Int64),
+        (Int64, UInt32) => Some(Int64),
+        (Int64, UInt64) => Some(Int64),
+
         (UInt8, UInt8) => Some(UInt8),
         (UInt8, UInt16) => Some(UInt16),
         (UInt8, UInt32) => Some(UInt32),

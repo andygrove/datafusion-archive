@@ -224,7 +224,17 @@ impl fmt::Debug for Expr {
 
                 write!(f, ")")
             },
-            Expr::AggregateFunction { name, .. } => write!(f, "{}()", name),
+            Expr::AggregateFunction { name, ref args, .. } => {
+                write!(f, "{}(", name)?;
+                for i in 0..args.len() {
+                    if i>0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", args[i])?;
+                }
+
+                write!(f, ")")
+            }
         }
     }
 }
@@ -303,12 +313,14 @@ impl LogicalPlan {
 
 impl LogicalPlan {
     fn fmt_with_indent(&self, f: &mut Formatter, indent: usize) -> Result<(), Error> {
-        write!(f, "\n")?;
-        for _ in 0..indent {
-            write!(f, "  ")?;
+        if indent>0 {
+            write!(f, "\n")?;
+            for _ in 0..indent {
+                write!(f, "  ")?;
+            }
         }
         match *self {
-            LogicalPlan::EmptyRelation { .. } => write!(f, "EmptyRelation:"),
+            LogicalPlan::EmptyRelation { .. } => write!(f, "EmptyRelation"),
             LogicalPlan::TableScan {
                 ref table_name,
                 ref projection,

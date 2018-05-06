@@ -1014,7 +1014,7 @@ impl ExecutionContext {
             } => {
                 let input_rel = self.create_execution_plan(&input)?;
 
-                let project_columns: Vec<Field> = expr_to_field(&expr, input_rel.schema());
+                let project_columns: Vec<Field> = exprlist_to_fields(&expr, input_rel.schema());
 
                 let project_schema = Rc::new(Schema::new(project_columns));
 
