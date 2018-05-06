@@ -14,36 +14,30 @@
 
 //! SQL Query Planner (produces logical plan from SQL AST)
 
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::string::String;
 
-use super::dataframe::*;
 use super::logical::*;
 use super::sqlast::*;
 use super::types::*;
 
 use arrow::datatypes::*;
 
+pub trait SchemaProvider {
+    fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>>;
+    fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>>;
+}
+
 /// SQL query planner
 pub struct SqlToRel {
-    //default_schema: Option<String>,
-    tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
-    function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
+    schema_provider: Rc<SchemaProvider>
 }
 
 impl SqlToRel {
     /// Create a new query planner
-    pub fn new(
-        tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
-        function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
-    ) -> Self {
-        SqlToRel {
-            /*default_schema: None,*/ tables,
-            function_meta,
-        }
+    pub fn new(schema_provider: Rc<SchemaProvider>) -> Self {
+        SqlToRel { schema_provider }
     }
 
     /// Generate a logic plan from a SQL AST node
@@ -179,11 +173,11 @@ impl SqlToRel {
                 }
             }
 
-            &ASTNode::SQLIdentifier(ref id) => match self.tables.borrow().get(id) {
-                Some(table) => Ok(Rc::new(LogicalPlan::TableScan {
+            &ASTNode::SQLIdentifier(ref id) => match self.schema_provider.get_table_meta(id.as_ref()) {
+                Some(schema) => Ok(Rc::new(LogicalPlan::TableScan {
                     schema_name: String::from("default"),
                     table_name: id.clone(),
-                    schema: table.schema().clone(),
+                    schema: schema.clone(),
                     projection: None,
                 })),
                 None => Err(format!("no schema found for table {}", id)),
@@ -298,7 +292,7 @@ impl SqlToRel {
                             return_type: DataType::UInt64,
                         })
                     }
-                    _ => match self.function_meta.borrow().get(&id.to_lowercase()) {
+                    _ => match self.schema_provider.get_function_meta(id) {
                         Some(fm) => {
                             let rex_args = args.iter()
                                 .map(|a| self.sql_to_rex(a, schema))

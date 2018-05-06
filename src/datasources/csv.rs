@@ -19,6 +19,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::rc::Rc;
 
 //use arrow::array::*;
+use arrow::bitmap::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::list_builder::ListBuilder;
@@ -65,10 +66,14 @@ impl CsvFile {
 /// Built an Arrow array from one column in a batch of CSV records
 macro_rules! collect_column {
     ($ROWS:expr, $COL_INDEX:expr, $TY:ty, $LEN:expr, $DEFAULT_VALUE:expr) => {{
+        let mut bitmap = Bitmap::new($LEN);
+        let mut null_count = 0;
         let mut b: Builder<$TY> = Builder::with_capacity($LEN);
         for row_index in 0..$LEN {
             b.push(match $ROWS[row_index].get($COL_INDEX) {
                 Some(s) => if s.len() == 0 {
+                    null_count += 1;
+                    bitmap.clear(row_index);
                     $DEFAULT_VALUE
                 } else {
                     match s.parse::<$TY>() {
@@ -89,7 +94,8 @@ macro_rules! collect_column {
                 ),
             })
         }
-        Value::Column(Rc::new(Array::from(b.finish())))
+        let data = ArrayData::from(b.finish());
+        Value::Column(Rc::new(Array::with_nulls($LEN, data, null_count, bitmap)))
     }};
 }
 
@@ -236,6 +242,36 @@ mod tests {
         let mut csv = CsvFile::open(file, Rc::new(schema), false, None).unwrap();
         let batch = csv.next().unwrap().unwrap();
         println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
+    }
+
+    #[test]
+    fn test_nulls() {
+        let schema = Schema::new(vec![
+            Field::new("c_int", DataType::UInt64, false),
+            Field::new("c_float", DataType::Float32, false),
+            Field::new("c_string", DataType::Utf8, false),
+        ]);
+
+        let file = File::open("test/data/null_test.csv").unwrap();
+
+        let mut csv = CsvFile::open(file, Rc::new(schema), true, None).unwrap();
+        let batch = csv.next().unwrap().unwrap();
+
+        match  batch.column(1) {
+            Value::Column(ref array) => {
+                match array.validity_bitmap() {
+                    Some(ref bitmap) => {
+                        assert_eq!(&true, &bitmap.is_set(0));
+                        assert_eq!(&true, &bitmap.is_set(1));
+                        assert_eq!(&false, &bitmap.is_set(2));
+                        assert_eq!(&true, &bitmap.is_set(3));
+                    },
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+
     }
 
     #[test]

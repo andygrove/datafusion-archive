@@ -730,16 +730,46 @@ pub enum ExecutionResult {
     Count(usize),
 }
 
+struct ExecutionContextSchemaProvider {
+    tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
+    function_meta: Rc<RefCell<HashMap<String, Rc<FunctionMeta>>>>,
+}
+
+impl SchemaProvider for ExecutionContextSchemaProvider {
+    fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>> {
+        match self.tables.borrow().get(&name.to_string().to_lowercase()) {
+            Some(table) => Some(table.schema().clone()),
+            None => None
+        }
+    }
+
+    fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
+        match self.function_meta.borrow().get(&name.to_string().to_lowercase()) {
+            Some(meta) => Some(meta.clone()),
+            None => None
+        }
+    }
+}
+
+
 #[derive(Clone)]
 pub struct ExecutionContext {
     tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
-    function_meta: Rc<RefCell<HashMap<String, FunctionMeta>>>,
+    function_meta: Rc<RefCell<HashMap<String, Rc<FunctionMeta>>>>,
     functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
     aggregate_functions: Rc<RefCell<HashMap<String, Rc<AggregateFunction>>>>,
     config: Rc<DFConfig>,
 }
 
 impl ExecutionContext {
+
+    fn create_schema_provider(&self) -> Rc<SchemaProvider> {
+        Rc::new(ExecutionContextSchemaProvider {
+            tables: self.tables.clone(),
+            function_meta: self.function_meta.clone()
+        })
+    }
+
     pub fn local() -> Self {
         ExecutionContext {
             tables: Rc::new(RefCell::new(HashMap::new())),
@@ -770,7 +800,7 @@ impl ExecutionContext {
 
         self.function_meta
             .borrow_mut()
-            .insert(func.name().to_lowercase(), fm);
+            .insert(func.name().to_lowercase(), Rc::new(fm));
 
         self.functions
             .borrow_mut()
@@ -787,7 +817,7 @@ impl ExecutionContext {
 
         self.function_meta
             .borrow_mut()
-            .insert(func.name().to_lowercase(), fm);
+            .insert(func.name().to_lowercase(), Rc::new(fm));
 
         self.aggregate_functions
             .borrow_mut()
@@ -799,7 +829,7 @@ impl ExecutionContext {
         let ast = Parser::parse_sql(String::from(sql))?;
 
         // create a query planner
-        let query_planner = SqlToRel::new(self.tables.clone(), self.function_meta.clone());
+        let query_planner = SqlToRel::new(self.create_schema_provider());
 
         // plan the query (create a logical relational plan)
         Ok(query_planner.sql_to_rel(&ast)?)
@@ -850,7 +880,7 @@ impl ExecutionContext {
             }
             _ => {
                 // create a query planner
-                let query_planner = SqlToRel::new(self.tables.clone(), self.function_meta.clone());
+                let query_planner = SqlToRel::new(self.create_schema_provider());
 
                 // plan the query (create a logical relational plan)
                 let plan = query_planner.sql_to_rel(&ast)?;
