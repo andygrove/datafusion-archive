@@ -1370,11 +1370,11 @@ mod tests {
 
         let df = ctx.sql(&"SELECT id, sqrt(id) FROM people").unwrap();
 
-        ctx.write_csv(df, "_test_sqrt.csv").unwrap();
+        ctx.write_csv(df, "./target/test_sqrt.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_sqrt.csv");
 
-        assert_eq!(expected_result, read_file("_test_sqrt.csv"));
+        assert_eq!(expected_result, read_file("./target/test_sqrt.csv"));
     }
 
     #[test]
@@ -1386,11 +1386,11 @@ mod tests {
         let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
 
-        ctx.write_csv(df, "_test_sql_udf_udt.csv").unwrap();
+        ctx.write_csv(df, "./target/test_sql_udf_udt.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_sql_udf_udt.csv");
 
-        assert_eq!(expected_result, read_file("_test_sql_udf_udt.csv"));
+        assert_eq!(expected_result, read_file("./target/test_sql_udf_udt.csv"));
     }
 
     #[test]
@@ -1420,11 +1420,11 @@ mod tests {
 
         let df2 = df.select(vec![func_expr]).unwrap();
 
-        ctx.write_csv(df2, "_test_df_udf_udt.csv").unwrap();
+        ctx.write_csv(df2, "./target/test_df_udf_udt.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_df_udf_udt.csv");
 
-        assert_eq!(expected_result, read_file("_test_df_udf_udt.csv"));
+        assert_eq!(expected_result, read_file("./target/test_df_udf_udt.csv"));
     }
 
     #[test]
@@ -1449,11 +1449,11 @@ mod tests {
             right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
         }).unwrap();
 
-        ctx.write_csv(df2, "_test_filter.csv").unwrap();
+        ctx.write_csv(df2, "./target/test_filter.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_filter.csv");
 
-        assert_eq!(expected_result, read_file("_test_filter.csv"));
+        assert_eq!(expected_result, read_file("./target/test_filter.csv"));
     }
 
     /*
@@ -1477,7 +1477,7 @@ mod tests {
             Expr::Sort { expr: Box::new(Expr::Column(2)), asc: true }
         ]).unwrap();
 
-        ctx.write(df2,"_uk_cities_sorted_by_lat_lng.csv").unwrap();
+        ctx.write(df2,"./target/uk_cities_sorted_by_lat_lng.csv").unwrap();
 
         //TODO: check that generated file has expected contents
     }
@@ -1492,11 +1492,11 @@ mod tests {
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
 
-        ctx.write_csv(df, "_test_chaining_functions.csv").unwrap();
+        ctx.write_csv(df, "./target/test_chaining_functions.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_chaining_functions.csv");
 
-        assert_eq!(expected_result, read_file("_test_chaining_functions.csv"));
+        assert_eq!(expected_result, read_file("./target/test_chaining_functions.csv"));
     }
 
     #[test]
@@ -1531,11 +1531,11 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write_csv(df1, "_test_simple_predicate.csv").unwrap();
+        ctx.write_csv(df1, "./target/test_simple_predicate.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_simple_predicate.csv");
 
-        assert_eq!(expected_result, read_file("_test_simple_predicate.csv"));
+        assert_eq!(expected_result, read_file("./target/test_simple_predicate.csv"));
     }
 
     #[test]
@@ -1560,11 +1560,11 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write_csv(df1, "_test_sql_min_max.csv").unwrap();
+        ctx.write_csv(df1, "./target/test_sql_min_max.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_sql_min_max.csv");
 
-        assert_eq!(expected_result, read_file("_test_sql_min_max.csv"));
+        assert_eq!(expected_result, read_file("./target/test_sql_min_max.csv"));
     }
 
     #[test]
@@ -1593,11 +1593,11 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write_csv(df1, "_test_cast.csv").unwrap();
+        ctx.write_csv(df1, "./target/test_cast.csv").unwrap();
 
         let expected_result = read_file("test/data/expected/test_cast.csv");
 
-        assert_eq!(expected_result, read_file("_test_cast.csv"));
+        assert_eq!(expected_result, read_file("./target/test_cast.csv"));
     }
 
     fn read_file(filename: &str) -> String {

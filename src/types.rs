@@ -312,6 +312,77 @@ impl fmt::Debug for Value {
     }
 }
 
+//TODO move to Arrow DataType impl?
+pub fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
+    use self::DataType::*;
+    match (l,r) {
+        (UInt8, UInt8) => Some(UInt8),
+        (UInt8, UInt16) => Some(UInt16),
+        (UInt8, UInt32) => Some(UInt32),
+        (UInt8, UInt64) => Some(UInt64),
+        (UInt8, Float32) => Some(Float32),
+        (UInt8, Float64) => Some(Float64),
+
+        (UInt16, UInt8) => Some(UInt16),
+        (UInt16, UInt16) => Some(UInt16),
+        (UInt16, UInt32) => Some(UInt32),
+        (UInt16, UInt64) => Some(UInt64),
+        (UInt16, Float32) => Some(Float32),
+        (UInt16, Float64) => Some(Float64),
+
+        (UInt32, UInt8) => Some(UInt32),
+        (UInt32, UInt16) => Some(UInt32),
+        (UInt32, UInt32) => Some(UInt32),
+        (UInt32, UInt64) => Some(UInt64),
+        (UInt32, Float32) => Some(Float32),
+        (UInt32, Float64) => Some(Float64),
+
+        (UInt64, UInt8) => Some(UInt64),
+        (UInt64, UInt16) => Some(UInt64),
+        (UInt64, UInt32) => Some(UInt64),
+        (UInt64, UInt64) => Some(UInt64),
+        (UInt64, Float32) => Some(Float32),
+        (UInt64, Float64) => Some(Float64),
+
+        (Int8, Int8) => Some(Int8),
+        (Int8, Int16) => Some(Int16),
+        (Int8, Int32) => Some(Int32),
+        (Int8, Int64) => Some(Int64),
+        (Int8, Float32) => Some(Float32),
+        (Int8, Float64) => Some(Float64),
+
+        (Int16, Int8) => Some(Int16),
+        (Int16, Int16) => Some(Int16),
+        (Int16, Int32) => Some(Int32),
+        (Int16, Int64) => Some(Int64),
+        (Int16, Float32) => Some(Float32),
+        (Int16, Float64) => Some(Float64),
+
+        (Int32, Int8) => Some(Int32),
+        (Int32, Int16) => Some(Int32),
+        (Int32, Int32) => Some(Int32),
+        (Int32, Int64) => Some(Int64),
+        (Int32, Float32) => Some(Float32),
+        (Int32, Float64) => Some(Float64),
+
+        (Int64, Int8) => Some(Int64),
+        (Int64, Int16) => Some(Int64),
+        (Int64, Int32) => Some(Int64),
+        (Int64, Int64) => Some(Int64),
+        (Int64, Float32) => Some(Float32),
+        (Int64, Float64) => Some(Float64),
+
+        (Float32, Float32) => Some(Float32),
+        (Float32, Float64) => Some(Float64),
+        (Float64, Float32) => Some(Float64),
+        (Float64, Float64) => Some(Float64),
+
+        (Utf8, Utf8) => Some(Utf8),
+
+        _ => None
+    }
+}
+
 /// Scalar function
 pub trait ScalarFunction {
     fn name(&self) -> String;

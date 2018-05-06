@@ -2,7 +2,6 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/datafusion.svg)](https://crates.io/crates/datafusion)
-[![Docs](https://docs.rs/datafusion/badge.svg)](https://docs.rs/datafusion)
 [![Build Status](https://travis-ci.org/datafusion-rs/datafusion.svg?branch=master)](https://travis-ci.org/datafusion-rs/datafusion)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
@@ -16,8 +15,7 @@ The project home page is now at [https://datafusion.rs](https://datafusion.rs) a
 
 # Prerequisites
 
-- Rust nightly
-- Thrift (required by `parquet-rs` crate) - instructions [here](https://github.com/sunchao/parquet-rs/)
+- Rust nightly (required by `parquet-rs` crate)
 
 # Building DataFusion
 
@@ -27,11 +25,9 @@ See [BUILDING.md](/BUILDING.md).
 
 There is a [Gitter channel](https://gitter.im/datafusion-rs/Lobby) where you can ask questions about the project or make feature suggestions too.
 
-
 # Contributing
 
 Contributors are welcome! Please see [CONTRIBUTING.md](/CONTRIBUTING.md) for details.
-
 
 
  

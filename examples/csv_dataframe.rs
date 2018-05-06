@@ -63,6 +63,6 @@ fn main() {
     let df3 = df2.select(vec![st_point]).unwrap();
     println!("df3: {}", df1.schema().to_string());
 
-    // write the results to a file
-    ctx.write_csv(df3, "_northern_cities.csv").unwrap();
+    // show the first 10 rows of output
+    df3.show(10)
 }

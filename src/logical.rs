@@ -117,7 +117,13 @@ impl Expr {
             Expr::Literal(l) => l.get_datatype(),
             Expr::Cast { data_type, .. } => data_type.clone(),
             Expr::ScalarFunction { return_type, .. } => return_type.clone(),
-            _ => unimplemented!(),
+            Expr::AggregateFunction { return_type, .. } => return_type.clone(),
+            Expr::BinaryExpr { ref left, ref right, .. } => {
+                let left_type = left.get_type(schema);
+                let right_type = right.get_type(schema);
+                get_supertype(&left_type, &right_type).unwrap_or(DataType::Utf8) //TODO ???
+            },
+            Expr::Sort { ref expr, .. } => expr.get_type(schema),
         }
     }
 
@@ -363,50 +369,3 @@ impl fmt::Debug for LogicalPlan {
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//
-//    use super::Expr::*;
-//    use super::LogicalPlan::*;
-//    use super::ScalarValue::*;
-//    use super::*;
-//
-//    #[test]
-//    fn serde() {
-//        let schema = Schema {
-//            columns: vec![
-//                Field {
-//                    name: "id".to_string(),
-//                    data_type: DataType::Int32,
-//                    nullable: false,
-//                },
-//                Field {
-//                    name: "name".to_string(),
-//                    data_type: DataType::Utf8,
-//                    nullable: false,
-//                },
-//            ],
-//        };
-//
-//        let csv = CsvFile {
-//            filename: "test/data/people.csv".to_string(),
-//            schema: schema.clone(),
-//        };
-//
-//        let filter_expr = BinaryExpr {
-//            left: Rc::new(Column(0)),
-//            op: Operator::Eq,
-//            right: Rc::new(Literal(Int64(2))),
-//        };
-//
-//        let _ = Selection {
-//            expr: filter_expr,
-//            input: Rc::new(csv),
-//            schema: schema.clone(),
-//        };
-//
-//        //        let s = serde_json::to_string(&plan).unwrap();
-//        //        println!("serialized: {}", s);
-//    }
-//
-//}

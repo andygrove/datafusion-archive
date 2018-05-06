@@ -57,15 +57,11 @@ fn main() {
                             WHERE base_pay != 'Not Provided' AND base_pay != '' \
                             GROUP BY year";
 
-//            let sql = "SELECT MIN(to_float64(base_pay)), MAX(to_float64(base_pay)) \
-//                            FROM salaries \
-//                            WHERE base_pay != 'Not Provided' AND base_pay != ''";
-
             // create a data frame
             let df = ctx.sql(&sql).unwrap();
 
-            ctx.write_csv(df, "_min_max_salaries.csv").unwrap();
-
+            // show the first 10 rows of output
+            df.show(10);
         }
         _ => println!("Could not locate {} - try downloading it from https://www.kaggle.com/kaggle/sf-salaries/discussion/18736", path)
     }

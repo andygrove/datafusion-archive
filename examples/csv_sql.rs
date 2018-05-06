@@ -49,6 +49,6 @@ fn main() {
     // create a data frame
     let df1 = ctx.sql(&sql).unwrap();
 
-    // write the results to a file
-    ctx.write_csv(df1, "_southern_cities.csv").unwrap();
+    // show the first 10 rows of output
+    df1.show(10)
 }
