@@ -7,18 +7,18 @@
 
 DataFusion is a SQL parser, planner, and query execution library for Rust. A DataFrame API is also provided.
 
-The current features are currently supported:
+The following features are currently supported:
 
 - SQL Parser, Planner and Optimizer
-- Support for local CSV and []Apache Parquet](https://parquet.apache.org/) data sources
+- DataFrame API
 - Columnar processing using [Apache Arrow](https://arrow.apache.org/)
+- Support for local CSV and [Apache Parquet](https://parquet.apache.org/) files
 - Single-threaded execution of SQL queries, supporting:
   - Projection
   - Selection
   - Scalar Functions
   - Aggregates (Min, Max, Count)
   - Grouping
-- DataFrame API
 - User-defined Scalar Functions (UDFs)
 
 DataFusion can be used as a crate dependency in your project to add SQL support for custom data sources.
