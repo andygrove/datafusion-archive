@@ -363,12 +363,18 @@ impl LogicalPlan {
                 )?;
                 input.fmt_with_indent(f, indent + 1)
             }
-            LogicalPlan::Sort { ref input, .. } => {
-                write!(f, "Sort:")?;
+            LogicalPlan::Sort { ref input, ref expr, .. } => {
+                write!(f, "Sort: ")?;
+                for i in 0..expr.len() {
+                    if i>0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", expr[i])?;
+                }
                 input.fmt_with_indent(f, indent + 1)
             }
-            LogicalPlan::Limit { ref input, .. } => {
-                write!(f, "Limit:")?;
+            LogicalPlan::Limit { ref input, limit, .. } => {
+                write!(f, "Limit: {}", limit)?;
                 input.fmt_with_indent(f, indent + 1)
             }
         }

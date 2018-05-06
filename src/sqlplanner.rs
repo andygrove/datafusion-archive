@@ -514,6 +514,56 @@ mod tests {
     }
 
     #[test]
+    fn select_count_one() {
+        let sql = "SELECT COUNT(1) FROM person";
+        let expected =
+            "Aggregate: groupBy=[[]], aggr=[[COUNT(Int64(1))]]\
+            \n  TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_order_by() {
+        let sql = "SELECT id FROM person ORDER BY id";
+        let expected =
+            "Sort: #0 ASC\
+            \n  Projection: #0\
+            \n    TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_order_by_desc() {
+        let sql = "SELECT id FROM person ORDER BY id DESC";
+        let expected =
+            "Sort: #0 DESC\
+            \n  Projection: #0\
+            \n    TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_order_limit() {
+        let sql = "SELECT id FROM person ORDER BY id DESC LIMIT 10";
+        let expected =
+            "Limit: 10\
+            \n  Sort: #0 DESC\
+            \n    Projection: #0\
+            \n      TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_limit() {
+        let sql = "SELECT id FROM person LIMIT 10";
+        let expected =
+            "Limit: 10\
+            \n  Projection: #0\
+            \n    TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
     fn test_collect_expr() {
         let mut accum: HashSet<usize> = HashSet::new();
         collect_expr(
