@@ -14,8 +14,9 @@
 
 //! # DataFusion
 //!
-//! `datafusion` is a modern distributed compute platform for Rust that can also be used as a
-//! crate dependency for in-process SQL and DataFrame queries against CSV and Parquet files.
+//! DataFusion is a SQL parser, planner, and query execution library for Rust. It is data source
+//! agnostic but provides implementations for CSV and Apache Parquet file formats. A DataFrame API
+//! is also provided.
 
 extern crate arrow;
 extern crate byteorder;
