@@ -48,6 +48,16 @@ impl Array {
         }
     }
 
+    /// Create a new array where there are no null values
+    pub fn with_nulls(len: usize, data: ArrayData, null_count: usize, bitmap: Bitmap) -> Self {
+        Array {
+            len: len as i32,
+            data,
+            validity_bitmap: Some(bitmap),
+            null_count: null_count as i32
+        }
+    }
+
     /// Get a reference to the array data
     pub fn data(&self) -> &ArrayData {
         &self.data
