@@ -210,6 +210,12 @@ impl SqlToRel {
                 }
             }
 
+            &ASTNode::SQLWildcard => {
+//                schema.columns().iter().enumerate()
+//                    .map(|(i,c)| Ok(Expr::Column(i))).collect()
+                unimplemented!("SQL wildcard operator is not supported in projection - please use explicit column names")
+            }
+
             &ASTNode::SQLCast {
                 ref expr,
                 ref data_type,

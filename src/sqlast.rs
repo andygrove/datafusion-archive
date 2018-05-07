@@ -25,6 +25,7 @@ pub enum FileType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     SQLIdentifier(String),
+    SQLWildcard,
     SQLCompoundIdentifier(Vec<String>),
     SQLBinaryExpr {
         left: Box<ASTNode>,

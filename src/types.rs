@@ -314,6 +314,16 @@ impl fmt::Debug for Value {
 
 //TODO move to Arrow DataType impl?
 pub fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
+    match _get_supertype(l, r) {
+        Some(dt) => Some(dt),
+        None => match _get_supertype(r, l) {
+            Some(dt) => Some(dt),
+            None => None
+        }
+    }
+}
+
+fn _get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
     use self::DataType::*;
     match (l,r) {
         

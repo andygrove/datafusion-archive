@@ -85,6 +85,30 @@ macro_rules! compare_arrays {
 macro_rules! compare_array_with_scalar_inner {
     ($V1:ident, $V2:ident, $F:expr) => {
         match ($V1.data(), $V2.as_ref()) {
+            (&ArrayData::UInt8(ref a), &ScalarValue::UInt8(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
+            (&ArrayData::UInt16(ref a), &ScalarValue::UInt16(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
+            (&ArrayData::UInt32(ref a), &ScalarValue::UInt32(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
+            (&ArrayData::UInt64(ref a), &ScalarValue::UInt64(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
+            (&ArrayData::Int8(ref a), &ScalarValue::Int8(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
+            (&ArrayData::Int16(ref a), &ScalarValue::Int16(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
+            (&ArrayData::Int32(ref a), &ScalarValue::Int32(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
+            (&ArrayData::Int64(ref a), &ScalarValue::Int64(b)) => {
+                Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
+            }
             (&ArrayData::Float32(ref a), &ScalarValue::Float32(b)) => {
                 Ok(a.iter().map(|aa| (aa, b)).map($F).collect::<Vec<bool>>())
             }
@@ -477,7 +501,7 @@ pub fn compile_scalar_expr(
                     t: data_type.clone(),
                 })
             }
-            _ => Err(ExecutionError::NotImplemented),
+            other => Err(ExecutionError::General(format!("CAST not implemented for expression {:?}", other))),
         },
         &Expr::BinaryExpr {
             ref left,
@@ -1139,7 +1163,7 @@ impl ExecutionContext {
 
         match self.execute(&physical_plan)? {
             ExecutionResult::Count(count) => Ok(count),
-            _ => Err(ExecutionError::NotImplemented), //TODO better error
+            _ => Err(ExecutionError::General("Unexpected result in show".to_string())),
         }
     }
 
@@ -1151,7 +1175,7 @@ impl ExecutionContext {
 
         match self.execute(&physical_plan)? {
             ExecutionResult::Count(count) => Ok(count),
-            _ => Err(ExecutionError::NotImplemented), //TODO better error
+            _ => Err(ExecutionError::General("Unexpected result in write_csv".to_string())),
         }
     }
 

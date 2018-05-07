@@ -98,6 +98,9 @@ impl Parser {
                         "CREATE" => Ok(self.parse_create()?),
                         _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                     },
+                    Token::Mult => {
+                        Ok(ASTNode::SQLWildcard)
+                    }
                     Token::Identifier(id) => {
                         match self.peek_token() {
                             Some(Token::LParen) => {
@@ -614,6 +617,36 @@ mod tests {
             } => {
                 assert_eq!(3, projection.len());
                 assert_eq!(Some(Box::new(ASTNode::SQLLiteralLong(5))), limit);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_select_wildcard() {
+        let sql = String::from("SELECT * FROM customer");
+        let ast = parse_sql(&sql);
+        match ast {
+            ASTNode::SQLSelect {
+                projection, ..
+            } => {
+                assert_eq!(1, projection.len());
+                assert_eq!(ASTNode::SQLWildcard, projection[0]);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_select_count_wildcard() {
+        let sql = String::from("SELECT COUNT(*) FROM customer");
+        let ast = parse_sql(&sql);
+        match ast {
+            ASTNode::SQLSelect {
+                projection, ..
+            } => {
+                assert_eq!(1, projection.len());
+                assert_eq!(ASTNode::SQLFunction { id: "COUNT".to_string(), args: vec![ASTNode::SQLWildcard] }, projection[0]);
             }
             _ => assert!(false),
         }
