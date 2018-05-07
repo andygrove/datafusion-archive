@@ -331,11 +331,14 @@ impl Parser {
                         loop {
                             if let Some(Token::Identifier(column_name)) = self.next_token() {
                                 if let Ok(data_type) = self.parse_data_type() {
-                                    if self.parse_keywords(vec!["NOT", "NULL"]) {
-                                        //TODO:
+
+                                    let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
+                                        false
                                     } else if self.parse_keyword("NULL") {
-                                        //TODO:
-                                    }
+                                        true
+                                    } else {
+                                        true
+                                    };
 
                                     match self.peek_token() {
                                         Some(Token::Comma) => {
@@ -343,7 +346,7 @@ impl Parser {
                                             columns.push(SQLColumnDef {
                                                 name: column_name,
                                                 data_type: data_type,
-                                                allow_null: true, // TODO
+                                                allow_null
                                             });
                                         }
                                         Some(Token::RParen) => {
@@ -351,7 +354,7 @@ impl Parser {
                                             columns.push(SQLColumnDef {
                                                 name: column_name,
                                                 data_type: data_type,
-                                                allow_null: true, // TODO
+                                                allow_null
                                             });
                                             break;
                                         }
@@ -604,11 +607,7 @@ mod tests {
     #[test]
     fn parse_simple_select() {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLSelect {
                 projection, limit, ..
@@ -626,23 +625,15 @@ mod tests {
             "SELECT id, fname, lname FROM customer \
              WHERE salary != 'Not Provided' AND salary != ''",
         );
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        println!("{:?}", ast);
+        let _ast = parse_sql(&sql);
         //TODO: add assertions
     }
 
     #[test]
     fn parse_projection_nested_type() {
         let sql = String::from("SELECT customer.address.state FROM foo");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        println!("{:?}", tokens);
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        println!("{:?}", ast);
+        let _ast = parse_sql(&sql);
+        //TODO: add assertions
     }
 
     #[test]
@@ -650,11 +641,7 @@ mod tests {
         use self::ASTNode::*;
         use self::SQLOperator::*;
         let sql = String::from("a + b * c");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         assert_eq!(
             SQLBinaryExpr {
                 left: Box::new(SQLIdentifier("a".to_string())),
@@ -674,11 +661,7 @@ mod tests {
         use self::ASTNode::*;
         use self::SQLOperator::*;
         let sql = String::from("a * b + c");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         assert_eq!(
             SQLBinaryExpr {
                 left: Box::new(SQLBinaryExpr {
@@ -698,11 +681,7 @@ mod tests {
         let sql = String::from(
             "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC",
         );
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLSelect { order_by, .. } => {
                 assert_eq!(
@@ -726,11 +705,7 @@ mod tests {
     #[test]
     fn parse_select_group_by() {
         let sql = String::from("SELECT id, fname, lname FROM customer GROUP BY lname, fname");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLSelect { group_by, .. } => {
                 assert_eq!(
@@ -748,11 +723,7 @@ mod tests {
     #[test]
     fn parse_limit_accepts_all() {
         let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLSelect {
                 projection, limit, ..
@@ -765,21 +736,32 @@ mod tests {
     }
 
     #[test]
+    fn parse_cast() {
+        let sql = String::from("SELECT CAST(id AS DOUBLE) FROM customer");
+        let ast = parse_sql(&sql);
+        match ast {
+            ASTNode::SQLSelect { projection, .. } => {
+                assert_eq!(1, projection.len());
+                assert_eq!(ASTNode::SQLCast {
+                    expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
+                    data_type: SQLType::Double
+                }, projection[0]);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
     fn parse_create_external_table_csv_with_header_row() {
         let sql = String::from(
             "CREATE EXTERNAL TABLE uk_cities (\
              name VARCHAR(100) NOT NULL,\
-             lat DOUBLE NOT NULL,\
-             lng DOUBLE NOT NULL) \
+             lat DOUBLE NULL,\
+             lng DOUBLE NULL) \
              STORED AS CSV WITH HEADER ROW \
              LOCATION '/mnt/ssd/uk_cities.csv'",
         );
-
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLCreateTable {
                 name,
@@ -793,6 +775,21 @@ mod tests {
                 assert_eq!(FileType::CSV, file_type);
                 assert_eq!(true, header_row);
                 assert_eq!("/mnt/ssd/uk_cities.csv", location);
+
+                let c_name = &columns[0];
+                assert_eq!("name", c_name.name);
+                assert_eq!(SQLType::Varchar(100), c_name.data_type);
+                assert_eq!(false, c_name.allow_null);
+
+                let c_lat = &columns[1];
+                assert_eq!("lat", c_lat.name);
+                assert_eq!(SQLType::Double, c_lat.data_type);
+                assert_eq!(true, c_lat.allow_null);
+
+                let c_lng = &columns[2];
+                assert_eq!("lng", c_lng.name);
+                assert_eq!(SQLType::Double, c_lng.data_type);
+                assert_eq!(true, c_lng.allow_null);
             }
             _ => assert!(false),
         }
@@ -808,12 +805,7 @@ mod tests {
              STORED AS CSV WITHOUT HEADER ROW \
              LOCATION '/mnt/ssd/uk_cities.csv'",
         );
-
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLCreateTable {
                 name,
@@ -839,12 +831,7 @@ mod tests {
              STORED AS PARQUET \
              LOCATION '/mnt/ssd/uk_cities.parquet'",
         );
-
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLCreateTable {
                 name,
@@ -865,11 +852,7 @@ mod tests {
     #[test]
     fn parse_scalar_function_in_projection() {
         let sql = String::from("SELECT sqrt(id) FROM foo");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        //println!("AST = {:?}", ast);
+        let ast = parse_sql(&sql);
         if let ASTNode::SQLSelect { projection, .. } = ast {
             assert_eq!(
                 vec![ASTNode::SQLFunction {
@@ -886,20 +869,16 @@ mod tests {
     #[test]
     fn parse_aggregate_with_group_by() {
         let sql = String::from("SELECT a, COUNT(1), MIN(b), MAX(b) FROM foo GROUP BY a");
-        let mut tokenizer = Tokenizer::new(&sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let _ = parser.parse().unwrap();
+        let _ast = parse_sql(&sql);
         //TODO: assertions
     }
 
-    #[test]
-    fn parse_cast() {
-        let sql = String::from("SELECT CAST(a AS FLOAT), CAST(123 AS DOUBLE) FROM foo");
+    fn parse_sql(sql: &String) -> ASTNode {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
-        let _ = parser.parse().unwrap();
-        //TODO: assertions
+        let ast = parser.parse().unwrap();
+        ast
     }
+
 }

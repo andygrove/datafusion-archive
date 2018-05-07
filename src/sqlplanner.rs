@@ -301,13 +301,13 @@ impl SqlToRel {
                             let mut safe_args: Vec<Expr> = vec![];
                             for i in 0..rex_args.len() {
                                 safe_args
-                                    .push(rex_args[i].cast_to(fm.args[i].data_type(), schema)?);
+                                    .push(rex_args[i].cast_to(fm.args()[i].data_type(), schema)?);
                             }
 
                             Ok(Expr::ScalarFunction {
                                 name: id.clone(),
                                 args: safe_args,
-                                return_type: fm.return_type.clone(),
+                                return_type: fm.return_type().clone(),
                             })
                         }
                         _ => Err(format!("Invalid function '{}'", id)),
@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn select_scalar_func_with_literal_no_relation() {
         quick_test("SELECT sqrt(9)",
-                   "Projection: sqrt(CAST Int64(9) AS Float64)\
+                   "Projection: sqrt(CAST(Int64(9) AS Float64))\
                    \n  EmptyRelation");
     }
 
@@ -496,6 +496,39 @@ mod tests {
             "Projection: #0, #1, #2\
                \n  Selection: #4 Eq Utf8(\"CO\")\
                \n    TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_compound_selection() {
+        let sql = "SELECT id, first_name, last_name \
+            FROM person WHERE state = 'CO' AND age >= 21 AND age <= 65";
+        let expected =
+            "Projection: #0, #1, #2\
+            \n  Selection: #4 Eq Utf8(\"CO\") And CAST(#3 AS Int64) GtEq Int64(21) And CAST(#3 AS Int64) LtEq Int64(65)\
+            \n    TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_all_boolean_operators() {
+        let sql = "SELECT age, first_name, last_name \
+            FROM person \
+            WHERE age = 21 \
+            AND age != 21 \
+            AND age > 21 \
+            AND age >= 21 \
+            AND age < 65 \
+            AND age <= 65";
+        let expected =
+            "Projection: #3, #1, #2\
+            \n  Selection: CAST(#3 AS Int64) Eq Int64(21) \
+            And CAST(#3 AS Int64) NotEq Int64(21) \
+            And CAST(#3 AS Int64) Gt Int64(21) \
+            And CAST(#3 AS Int64) GtEq Int64(21) \
+            And CAST(#3 AS Int64) Lt Int64(65) \
+            And CAST(#3 AS Int64) LtEq Int64(65)\
+            \n    TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
@@ -518,6 +551,15 @@ mod tests {
         let sql = "SELECT COUNT(1) FROM person";
         let expected =
             "Aggregate: groupBy=[[]], aggr=[[COUNT(Int64(1))]]\
+            \n  TableScan: person projection=None";
+        quick_test(sql, expected);
+    }
+
+    #[test]
+    fn select_scalar_func() {
+        let sql = "SELECT sqrt(age) FROM person";
+        let expected =
+            "Projection: sqrt(CAST(#3 AS Float64))\
             \n  TableScan: person projection=None";
         quick_test(sql, expected);
     }
@@ -646,7 +688,7 @@ mod tests {
                     Field::new("id", DataType::UInt32, false),
                     Field::new("first_name", DataType::Utf8, false),
                     Field::new("last_name", DataType::Utf8, false),
-                    Field::new("age", DataType::UInt8, false),
+                    Field::new("age", DataType::Int32, false),
                     Field::new("state", DataType::Utf8, false),
                     Field::new("salary", DataType::Float64, false),
                 ]))),
@@ -656,14 +698,14 @@ mod tests {
 
         fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
             match name {
-                "sqrt" => Some(Rc::new(FunctionMeta {
-                        name: "sqrt".to_string(),
-                        args: vec![
+                "sqrt" => Some(Rc::new(FunctionMeta::new(
+                        "sqrt".to_string(),
+                        vec![
                             Field::new("n", DataType::Float64, false),
                         ],
-                        return_type: DataType::Float64,
-                        function_type: FunctionType::Scalar ,
-                    })),
+                        DataType::Float64,
+                        FunctionType::Scalar ,
+                ))),
                 _ => None
             }
         }

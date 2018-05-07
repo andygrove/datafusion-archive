@@ -408,6 +408,8 @@ pub fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
 
         (Utf8, Utf8) => Some(Utf8),
 
+        (Boolean, Boolean) => Some(Boolean),
+
         _ => None
     }
 }

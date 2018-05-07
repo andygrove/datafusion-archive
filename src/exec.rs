@@ -791,12 +791,12 @@ impl ExecutionContext {
     }
 
     pub fn register_scalar_function(&mut self, func: Rc<ScalarFunction>) {
-        let fm = FunctionMeta {
-            name: func.name(),
-            args: func.args(),
-            return_type: func.return_type(),
-            function_type: FunctionType::Scalar,
-        };
+        let fm = FunctionMeta::new(
+            func.name(),
+            func.args(),
+            func.return_type(),
+            FunctionType::Scalar,
+        );
 
         self.function_meta
             .borrow_mut()
@@ -808,12 +808,12 @@ impl ExecutionContext {
     }
 
     pub fn register_aggregate_function(&mut self, func: Rc<AggregateFunction>) {
-        let fm = FunctionMeta {
-            name: func.name(),
-            args: func.args(),
-            return_type: func.return_type(),
-            function_type: FunctionType::Aggregate,
-        };
+        let fm = FunctionMeta::new(
+            func.name(),
+            func.args(),
+            func.return_type(),
+            FunctionType::Aggregate
+        );
 
         self.function_meta
             .borrow_mut()

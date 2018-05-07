@@ -30,27 +30,35 @@ pub enum FunctionType {
 
 #[derive(Debug, Clone)]
 pub struct FunctionMeta {
-    pub name: String,
-    pub args: Vec<Field>,
-    pub return_type: DataType,
-    pub function_type: FunctionType,
+    name: String,
+    args: Vec<Field>,
+    return_type: DataType,
+    function_type: FunctionType,
 }
 
-pub trait Row {
-    fn get(&self, index: usize) -> &ScalarValue;
-    fn to_string(&self) -> String;
-}
-
-impl Row for Vec<ScalarValue> {
-    fn get(&self, index: usize) -> &ScalarValue {
-        &self[index]
+impl FunctionMeta {
+    pub fn new( name: String,
+                args: Vec<Field>,
+                return_type: DataType,
+                function_type: FunctionType) -> Self {
+        FunctionMeta {
+            name,
+            args,
+            return_type,
+            function_type,
+        }
     }
-
-    fn to_string(&self) -> String {
-        let value_strings: Vec<String> = self.iter().map(|v| v.to_string()).collect();
-
-        // return comma-separated
-        value_strings.join(",")
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+    pub fn args(&self) -> &Vec<Field> {
+        &self.args
+    }
+    pub fn return_type(&self) -> &DataType {
+        &self.return_type
+    }
+    pub fn function_type(&self) -> &FunctionType {
+        &self.function_type
     }
 }
 
@@ -118,10 +126,18 @@ impl Expr {
             Expr::Cast { data_type, .. } => data_type.clone(),
             Expr::ScalarFunction { return_type, .. } => return_type.clone(),
             Expr::AggregateFunction { return_type, .. } => return_type.clone(),
-            Expr::BinaryExpr { ref left, ref right, .. } => {
-                let left_type = left.get_type(schema);
-                let right_type = right.get_type(schema);
-                get_supertype(&left_type, &right_type).unwrap_or(DataType::Utf8) //TODO ???
+            Expr::BinaryExpr { ref left, ref right, ref op } => {
+                match op {
+                    Operator::Eq | Operator::NotEq => DataType::Boolean,
+                    Operator::Lt | Operator::LtEq => DataType::Boolean,
+                    Operator::Gt | Operator::GtEq => DataType::Boolean,
+                    Operator::And | Operator::Or => DataType::Boolean,
+                    _ => {
+                        let left_type = left.get_type(schema);
+                        let right_type = right.get_type(schema);
+                        get_supertype(&left_type, &right_type).unwrap_or(DataType::Utf8) //TODO ???
+                    }
+                }
             },
             Expr::Sort { ref expr, .. } => expr.get_type(schema),
         }
@@ -203,7 +219,7 @@ impl fmt::Debug for Expr {
                 write!(f, "{:?}", v)
             },
             Expr::Cast { expr, data_type } => {
-                write!(f, "CAST {:?} AS {:?}", expr, data_type)
+                write!(f, "CAST({:?} AS {:?})", expr, data_type)
             },
             Expr::BinaryExpr { left, op, right } => {
                 write!(f, "{:?} {:?} {:?}", left, op, right)
