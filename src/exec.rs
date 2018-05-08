@@ -390,7 +390,7 @@ macro_rules! cast_primitive {
     }}
 }
 
-macro_rules! cast_from_to {
+macro_rules! cast_array_from_to {
     {$FROM:ty, $TO:ident, $LIST:expr} => {{
         match &$TO {
             DataType::UInt8 => cast_primitive!(u8, $LIST),
@@ -435,16 +435,16 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
     Ok(Rc::new(move |v: &Value| match v {
         Value::Column(ref array) => match array.data() {
             &ArrayData::Boolean(_) => unimplemented!("CAST from Boolean"),
-            &ArrayData::UInt8(ref list) => cast_from_to!(u8, data_type, list),
-            &ArrayData::UInt16(ref list) => cast_from_to!(u16, data_type, list),
-            &ArrayData::UInt32(ref list) => cast_from_to!(u32, data_type, list),
-            &ArrayData::UInt64(ref list) => cast_from_to!(u64, data_type, list),
-            &ArrayData::Int8(ref list) => cast_from_to!(i8, data_type, list),
-            &ArrayData::Int16(ref list) => cast_from_to!(i16, data_type, list),
-            &ArrayData::Int32(ref list) => cast_from_to!(i32, data_type, list),
-            &ArrayData::Int64(ref list) => cast_from_to!(i64, data_type, list),
-            &ArrayData::Float32(ref list) => cast_from_to!(f32, data_type, list),
-            &ArrayData::Float64(ref list) => cast_from_to!(f64, data_type, list),
+            &ArrayData::UInt8(ref list) => cast_array_from_to!(u8, data_type, list),
+            &ArrayData::UInt16(ref list) => cast_array_from_to!(u16, data_type, list),
+            &ArrayData::UInt32(ref list) => cast_array_from_to!(u32, data_type, list),
+            &ArrayData::UInt64(ref list) => cast_array_from_to!(u64, data_type, list),
+            &ArrayData::Int8(ref list) => cast_array_from_to!(i8, data_type, list),
+            &ArrayData::Int16(ref list) => cast_array_from_to!(i16, data_type, list),
+            &ArrayData::Int32(ref list) => cast_array_from_to!(i32, data_type, list),
+            &ArrayData::Int64(ref list) => cast_array_from_to!(i64, data_type, list),
+            &ArrayData::Float32(ref list) => cast_array_from_to!(f32, data_type, list),
+            &ArrayData::Float64(ref list) => cast_array_from_to!(f64, data_type, list),
             &ArrayData::Struct(_) => unimplemented!("CAST from Struct"),
             &ArrayData::Utf8(ref list) => match &data_type {
                 DataType::Boolean => cast_utf8_to!(bool, list),
@@ -465,6 +465,86 @@ fn compile_cast_column(data_type: DataType) -> Result<CompiledCastFunction> {
         _ => unimplemented!("CAST from ScalarValue"),
     }))
 }
+
+macro_rules! cast_scalar_from_to {
+    {$SCALAR:expr, $TO:ident} => {{
+        match &$TO {
+            DataType::UInt8 => {
+                let cast_value = *$SCALAR as u8;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt8(cast_value)))) ))
+            }
+            DataType::UInt16 => {
+                let cast_value = *$SCALAR as u16;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt16(cast_value)))) ))
+            }
+            DataType::UInt32 => {
+                let cast_value = *$SCALAR as u32;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt32(cast_value)))) ))
+            }
+            DataType::UInt64 => {
+                let cast_value = *$SCALAR as u64;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt64(cast_value)))) ))
+            }
+            DataType::Int8 => {
+                let cast_value = *$SCALAR as i8;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int8(cast_value)))) ))
+            }
+            DataType::Int16 => {
+                let cast_value = *$SCALAR as i16;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int16(cast_value)))) ))
+            }
+            DataType::Int32 => {
+                let cast_value = *$SCALAR as i32;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int32(cast_value)))) ))
+            }
+            DataType::Int64 => {
+                let cast_value = *$SCALAR as i64;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int64(cast_value)))) ))
+            }
+            DataType::Float32 => {
+                let cast_value = *$SCALAR as f32;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Float32(cast_value)))) ))
+            }
+            DataType::Float64 => {
+                let cast_value = *$SCALAR as f64;
+                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Float64(cast_value)))) ))
+            }
+            
+//            DataType::Utf8 => {
+//                let mut b: ListBuilder<u8> = ListBuilder::with_capacity($LIST.len() as usize);
+//                for i in 0..$LIST.len() as usize {
+//                    let s = format!("{:?}", *$LIST.get(i));
+//                    b.push(s.as_bytes());
+//                }
+//                Ok(Value::Column(Rc::new(Array::new($LIST.len() as usize,ArrayData::Utf8(b.finish())))))
+//            },
+            _ => unimplemented!("CAST from {:?} to {:?}", stringify!($SCALAR), stringify!($TO))
+        }
+    }}
+}
+
+fn compile_cast_scalar(scalar: &ScalarValue, data_type: &DataType) -> Result<CompiledCastFunction> {
+    match scalar {
+        ScalarValue::Boolean(_) => unimplemented!("CAST from scalar Boolean"),
+        ScalarValue::UInt8(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::UInt16(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::UInt32(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::UInt64(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::Int8(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::Int16(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::Int32(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::Int64(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::Float32(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::Float64(v) => cast_scalar_from_to!(v, data_type),
+        ScalarValue::Utf8(_) => unimplemented!("CAST from scalar Utf8"),
+        ScalarValue::Struct(_) => unimplemented!("CAST from scalar Struct"),
+        ScalarValue::Null => unimplemented!("CAST from scalar NULL"),
+    }
+}
+
+
+//Ok(Rc::new(move |_: &Value|
+
 
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(
@@ -501,6 +581,16 @@ pub fn compile_scalar_expr(
                     t: data_type.clone(),
                 })
             }
+            &Expr::Literal(ref lit) => {
+                let compiled_cast_expr = compile_cast_scalar(lit, data_type)?;
+                Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |_: &RecordBatch| {
+                        (compiled_cast_expr)(&Value::Scalar(Rc::new(ScalarValue::Null))) // pointless arg
+                    }),
+                    t: data_type.clone(),
+                })
+
+            },
             other => Err(ExecutionError::General(format!("CAST not implemented for expression {:?}", other))),
         },
         &Expr::BinaryExpr {

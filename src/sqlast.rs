@@ -86,11 +86,18 @@ pub struct SQLColumnDef {
 /// SQL datatypes for literals in SQL statements
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLType {
-    Varchar(usize),
-    Float,
-    Double,
-    Int,
-    Long,
+    Boolean,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Double64,
+    Utf8(usize),
 }
 
 /// SQL Operator

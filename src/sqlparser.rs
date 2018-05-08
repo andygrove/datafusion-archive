@@ -446,18 +446,25 @@ impl Parser {
     fn parse_data_type(&mut self) -> Result<SQLType, ParserError> {
         match self.next_token() {
             Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
-                "INT" | "INTEGER" => Ok(SQLType::Int),
-                "LONG" => Ok(SQLType::Long),
-                "FLOAT" => Ok(SQLType::Float),
-                "DOUBLE" => Ok(SQLType::Double),
-                "VARCHAR" | "STRING" => {
+                "BOOLEAN" => Ok(SQLType::Boolean),
+                "UINT8" => Ok(SQLType::UInt8),
+                "UINT16" => Ok(SQLType::UInt16),
+                "UINT32" => Ok(SQLType::UInt32),
+                "UINT64" => Ok(SQLType::UInt64),
+                "INT8" => Ok(SQLType::Int8),
+                "INT16" => Ok(SQLType::Int16),
+                "INT32" | "INT" | "INTEGER" => Ok(SQLType::Int32),
+                "INT64" | "LONG" => Ok(SQLType::Int64),
+                "FLOAT32" | "FLOAT" => Ok(SQLType::Float32),
+                "FLOAT64" | "DOUBLE" => Ok(SQLType::Double64),
+                "UTF8" | "VARCHAR" | "STRING" => {
                     // optional length
                     if self.consume_token(&Token::LParen)? {
                         let n = self.parse_literal_int()?;
                         self.consume_token(&Token::RParen)?;
-                        Ok(SQLType::Varchar(n as usize))
+                        Ok(SQLType::Utf8(n as usize))
                     } else {
-                        Ok(SQLType::Varchar(100 as usize))
+                        Ok(SQLType::Utf8(100 as usize))
                     }
                 }
                 _ => parser_err!(format!("Invalid data type '{:?}'", k)),
@@ -777,7 +784,7 @@ mod tests {
                 assert_eq!(1, projection.len());
                 assert_eq!(ASTNode::SQLCast {
                     expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
-                    data_type: SQLType::Double
+                    data_type: SQLType::Double64
                 }, projection[0]);
             }
             _ => assert!(false),
@@ -811,17 +818,17 @@ mod tests {
 
                 let c_name = &columns[0];
                 assert_eq!("name", c_name.name);
-                assert_eq!(SQLType::Varchar(100), c_name.data_type);
+                assert_eq!(SQLType::Utf8(100), c_name.data_type);
                 assert_eq!(false, c_name.allow_null);
 
                 let c_lat = &columns[1];
                 assert_eq!("lat", c_lat.name);
-                assert_eq!(SQLType::Double, c_lat.data_type);
+                assert_eq!(SQLType::Double64, c_lat.data_type);
                 assert_eq!(true, c_lat.allow_null);
 
                 let c_lng = &columns[2];
                 assert_eq!("lng", c_lng.name);
-                assert_eq!(SQLType::Double, c_lng.data_type);
+                assert_eq!(SQLType::Double64, c_lng.data_type);
                 assert_eq!(true, c_lng.allow_null);
             }
             _ => assert!(false),

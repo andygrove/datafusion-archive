@@ -94,14 +94,7 @@ lazy_static! {
         m.insert("AND");
         m.insert("OR");
         m.insert("NOT");
-        m.insert("AS"); // Alias
-        m.insert("STRING");
-        m.insert("VARCHAR");
-        m.insert("FLOAT");
-        m.insert("DOUBLE");
-        m.insert("INT");
-        m.insert("INTEGER");
-        m.insert("LONG");
+        m.insert("AS");
         m.insert("STORED");
         m.insert("CSV");
         m.insert("PARQUET");
@@ -109,7 +102,31 @@ lazy_static! {
         m.insert("WITH");
         m.insert("WITHOUT");
         m.insert("HEADER");
-        m.insert("ROW"); // used in CREATE EXTERNAL TABLE
+        m.insert("ROW");
+
+        // SQL types
+        m.insert("STRING");
+        m.insert("VARCHAR");
+        m.insert("FLOAT");
+        m.insert("DOUBLE");
+        m.insert("INT");
+        m.insert("INTEGER");
+        m.insert("LONG");
+
+        // Arrow native types
+        m.insert("BOOLEAN");
+        m.insert("UINT8");
+        m.insert("UINT16");
+        m.insert("UINT32");
+        m.insert("UINT64");
+        m.insert("INT8");
+        m.insert("INT16");
+        m.insert("INT32");
+        m.insert("INT64");
+        m.insert("FLOAT32");
+        m.insert("FLOAT64");
+        m.insert("UTF8");
+
         m
     };
 }
@@ -167,8 +184,9 @@ impl Tokenizer {
                             _ => break,
                         }
                     }
-                    if KEYWORDS.contains(s.as_str()) {
-                        Ok(Some(Token::Keyword(s)))
+                    let upper_str = s.to_uppercase();
+                    if KEYWORDS.contains(upper_str.as_str()) {
+                        Ok(Some(Token::Keyword(upper_str)))
                     } else {
                         Ok(Some(Token::Identifier(s)))
                     }
