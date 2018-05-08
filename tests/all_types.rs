@@ -87,8 +87,92 @@ fn parquet_query_all_types() {
     assert_eq!(expected_result, read_file("./target/parquet_query_all_types.csv"));
 }
 
+#[test]
+fn parquet_aggregate() {
+    let mut ctx = ExecutionContext::local();
+    load_parquet(&mut ctx, "test/data/all_types_flat.parquet");
 
+    // define the SQL statement
+    let sql = "SELECT \
+        MIN(c_bool), MAX(c_bool), \
+        MIN(c_uint8), MAX(c_uint8), \
+        MIN(c_uint16), MAX(c_uint16), \
+        MIN(c_uint32), MAX(c_uint32), \
+        MIN(c_uint64), MAX(c_uint64), \
+        MIN(c_int8), MAX(c_int8), \
+        MIN(c_int16), MAX(c_int16), \
+        MIN(c_int32), MAX(c_int32), \
+        MIN(c_int64), MAX(c_int64), \
+        MIN(c_float32), MAX(c_float32), \
+        MIN(c_float64), MAX(c_float64), \
+        MIN(c_utf8), MAX(c_utf8)
+    FROM all_types";
 
+    // create a data frame
+    let df = ctx.sql(&sql).unwrap();
+    ctx.write_csv(df, "target/parquet_aggregate_all_types.csv").unwrap();
+
+    let expected_result = read_file("test/data/expected/parquet_aggregate_all_types.csv");
+    assert_eq!(expected_result, read_file("./target/parquet_aggregate_all_types.csv"));
+}
+
+#[test]
+fn csv_aggregate() {
+    let mut ctx = ExecutionContext::local();
+    load_csv(&mut ctx, "test/data/all_types_flat.csv");
+
+    // define the SQL statement
+    let sql = "SELECT \
+        MIN(c_bool), MAX(c_bool), \
+        MIN(c_uint8), MAX(c_uint8), \
+        MIN(c_uint16), MAX(c_uint16), \
+        MIN(c_uint32), MAX(c_uint32), \
+        MIN(c_uint64), MAX(c_uint64), \
+        MIN(c_int8), MAX(c_int8), \
+        MIN(c_int16), MAX(c_int16), \
+        MIN(c_int32), MAX(c_int32), \
+        MIN(c_int64), MAX(c_int64), \
+        MIN(c_float32), MAX(c_float32), \
+        MIN(c_float64), MAX(c_float64), \
+        MIN(c_utf8), MAX(c_utf8)
+    FROM all_types";
+
+    // create a data frame
+    let df = ctx.sql(&sql).unwrap();
+    ctx.write_csv(df, "target/csv_aggregate_all_types.csv").unwrap();
+
+    let expected_result = read_file("test/data/expected/csv_aggregate_all_types.csv");
+    assert_eq!(expected_result, read_file("./target/csv_aggregate_all_types.csv"));
+}
+
+#[test]
+fn csv_aggregate_group_by_bool() {
+    let mut ctx = ExecutionContext::local();
+    load_csv(&mut ctx, "test/data/all_types_flat.csv");
+
+    // define the SQL statement
+    let sql = "SELECT \
+        c_bool, \
+        MIN(c_uint8), MAX(c_uint8), \
+        MIN(c_uint16), MAX(c_uint16), \
+        MIN(c_uint32), MAX(c_uint32), \
+        MIN(c_uint64), MAX(c_uint64), \
+        MIN(c_int8), MAX(c_int8), \
+        MIN(c_int16), MAX(c_int16), \
+        MIN(c_int32), MAX(c_int32), \
+        MIN(c_int64), MAX(c_int64), \
+        MIN(c_float32), MAX(c_float32), \
+        MIN(c_float64), MAX(c_float64), \
+        MIN(c_utf8), MAX(c_utf8)
+    FROM all_types GROUP BY c_bool";
+
+    // create a data frame
+    let df = ctx.sql(&sql).unwrap();
+    ctx.write_csv(df, "target/csv_aggregate_by_c_bool.csv").unwrap();
+
+    let expected_result = read_file("test/data/expected/csv_aggregate_by_c_bool.csv");
+    assert_eq!(expected_result, read_file("./target/csv_aggregate_by_c_bool.csv"));
+}
 
 fn csv_project_filter_test(col: &str, expr: &str, filename: &str) {
     let output_filename = format!("target/{}_{}.csv", col, filename);

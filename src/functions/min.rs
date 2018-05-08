@@ -69,7 +69,7 @@ macro_rules! min_in_scalar {
 
 impl AggregateFunction for MinFunction {
     fn name(&self) -> String {
-        "MAX".to_string()
+        "MIN".to_string()
     }
 
     fn args(&self) -> Vec<Field> {
@@ -85,6 +85,7 @@ impl AggregateFunction for MinFunction {
         match args[0] {
             Value::Column(ref array) => {
                 match array.data() {
+                    ArrayData::Boolean(ref buf) => min_in_column!(self, buf, Boolean),
                     ArrayData::UInt8(ref buf) => min_in_column!(self, buf, UInt8),
                     ArrayData::UInt16(ref buf) => min_in_column!(self, buf, UInt16),
                     ArrayData::UInt32(ref buf) => min_in_column!(self, buf, UInt32),
@@ -118,7 +119,7 @@ impl AggregateFunction for MinFunction {
 
                         }
                     },
-                    _ => unimplemented!("MIN() unsupported array datatype"),
+                    ArrayData::Struct(_) => unimplemented!("MIN() does not support struct types")
                 }
                 Ok(())
             }

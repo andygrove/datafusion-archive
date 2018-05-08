@@ -85,6 +85,7 @@ impl AggregateFunction for MaxFunction {
         match args[0] {
             Value::Column(ref array) => {
                 match array.data() {
+                    ArrayData::Boolean(ref buf) => max_in_column!(self, buf, Boolean),
                     ArrayData::UInt8(ref buf) => max_in_column!(self, buf, UInt8),
                     ArrayData::UInt16(ref buf) => max_in_column!(self, buf, UInt16),
                     ArrayData::UInt32(ref buf) => max_in_column!(self, buf, UInt32),
@@ -118,7 +119,7 @@ impl AggregateFunction for MaxFunction {
 
                         }
                     },
-                    _ => unimplemented!("MAX() unsupported array datatype"),
+                    ArrayData::Struct(_) => unimplemented!("MAX() does not support struct types")
                 }
                 Ok(())
             }

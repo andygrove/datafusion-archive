@@ -319,6 +319,7 @@ impl SimpleRelation for AggregateRelation {
                     let aggr_values = &result_columns[i + group_expr.len()];
 
                     let array: Array = match t {
+                        DataType::Boolean => build_aggregate_array!(bool, get_bool, aggr_values),
                         DataType::UInt8 => build_aggregate_array!(u8, get_u8, aggr_values),
                         DataType::UInt16 => build_aggregate_array!(u16, get_u16, aggr_values),
                         DataType::UInt32 => build_aggregate_array!(u32, get_u32, aggr_values),
