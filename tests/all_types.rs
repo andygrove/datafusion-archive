@@ -65,6 +65,31 @@ fn csv_test_float64() {
     csv_project_filter_test("c_float64", "c_float64 < 0.5", "low");
 }
 
+#[test]
+fn parquet_query_all_types() {
+    let mut ctx = ExecutionContext::local();
+    load_parquet(&mut ctx, "test/data/all_types_flat.parquet");
+
+    // define the SQL statement
+    let sql = "SELECT c_bool, \
+        c_uint8, c_uint16, c_uint32, c_uint64, \
+        c_int8, c_int16, c_int32, c_int64, \
+        c_float32, c_float64, \
+        c_utf8
+    FROM all_types
+    WHERE c_float64 > 0.0 AND c_float64 < 0.1";
+
+    // create a data frame
+    let df = ctx.sql(&sql).unwrap();
+    ctx.write_csv(df, "target/parquet_query_all_types.csv").unwrap();
+
+    let expected_result = read_file("test/data/expected/parquet_query_all_types.csv");
+    assert_eq!(expected_result, read_file("./target/parquet_query_all_types.csv"));
+}
+
+
+
+
 fn csv_project_filter_test(col: &str, expr: &str, filename: &str) {
     let output_filename = format!("target/{}_{}.csv", col, filename);
     let expected_filename = format!("test/data/expected/{}_{}.csv", col, filename);
@@ -87,6 +112,11 @@ fn read_file(filename: &str) -> String {
 fn load_csv(ctx: &mut ExecutionContext, filename: &str) {
     let schema = create_schema();
     let csv = ctx.load_csv(filename, &schema, false, None).unwrap();
+    ctx.register("all_types", csv);
+}
+
+fn load_parquet(ctx: &mut ExecutionContext, filename: &str) {
+    let csv = ctx.load_parquet(filename, None).unwrap();
     ctx.register("all_types", csv);
 }
 
