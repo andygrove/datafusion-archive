@@ -32,9 +32,6 @@ pub trait DataFrame {
     /// Selection
     fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>>;
 
-    /// Sorting
-    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>>;
-
     /// Return an expression representing the specified column
     fn col(&self, column_name: &str) -> Result<Expr>;
 
@@ -44,8 +41,6 @@ pub trait DataFrame {
 
     /// show N rows (useful for debugging)
     fn show(&self, count: usize);
-
-    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>>;
 }
 
 pub struct DF {
@@ -78,15 +73,15 @@ impl DataFrame for DF {
         Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
-    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
-        let plan = LogicalPlan::Sort {
-            expr: expr,
-            input: self.plan.clone(),
-            schema: self.plan.schema().clone(),
-        };
-
-        Ok(Rc::new(self.with_plan(Rc::new(plan))))
-    }
+//    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
+//        let plan = LogicalPlan::Sort {
+//            expr: expr,
+//            input: self.plan.clone(),
+//            schema: self.plan.schema().clone(),
+//        };
+//
+//        Ok(Rc::new(self.with_plan(Rc::new(plan))))
+//    }
 
     fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::Selection {
@@ -114,9 +109,5 @@ impl DataFrame for DF {
 
     fn show(&self, count: usize) {
         self.ctx.show(self, count).unwrap();
-    }
-
-    fn create_execution_plan(&self) -> Result<Box<SimpleRelation>> {
-        self.ctx.create_execution_plan(&self.plan)
     }
 }

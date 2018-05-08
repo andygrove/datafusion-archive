@@ -23,6 +23,7 @@ fn csv_query_all_types() {
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();
+    df.show(10);
     ctx.write_csv(df, "target/csv_query_all_types.csv").unwrap();
 
     let expected_result = read_file("test/data/expected/csv_query_all_types.csv");

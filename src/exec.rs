@@ -1477,16 +1477,18 @@ mod tests {
 
     }
 
-    //TODO: when sort is implemented again
-//    #[test]
-//    fn test_dataframe_sort() {
-//    }
-
     #[test]
     fn test_dataframe_col() {
         let mut ctx = create_context();
         let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
         assert_eq!(Expr::Column(2), df.col("lng").unwrap());
+    }
+
+    #[test]
+    fn test_dataframe_col_not_found() {
+        let mut ctx = create_context();
+        let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
+        assert!(df.col("banana").is_err());
     }
 
     #[test]

@@ -440,3 +440,65 @@ pub trait AggregateFunction {
     fn execute(&mut self, args: &Vec<Value>) -> Result<()>;
     fn finish(&self) -> Result<Value>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_value_scalar_fmt_debug() {
+        let value = Value::Scalar(Rc::new(ScalarValue::Float64(1.23456)));
+        let str = format!("{:?}", value);
+        assert_eq!("Float64(1.23456)", str);
+    }
+
+    #[test]
+    fn test_value_column_fmt_debug() {
+        let value = Value::Column(Rc::new(Array::from(vec!["one", "two", "three"])));
+        let str = format!("{:?}", value);
+        assert_eq!("[array with length 3]", str);
+    }
+
+    #[test]
+    fn test_scalar_fmt_display() {
+        let values: Vec<ScalarValue> = vec![
+            ScalarValue::Null,
+            ScalarValue::Boolean(true),
+            ScalarValue::UInt8(123),
+            ScalarValue::UInt16(123),
+            ScalarValue::UInt32(123),
+            ScalarValue::UInt64(123),
+            ScalarValue::Int8(-123),
+            ScalarValue::Int16(-123),
+            ScalarValue::Int32(-123),
+            ScalarValue::Int64(-123),
+            ScalarValue::Float32(1.23),
+            ScalarValue::Float64(1.23),
+            ScalarValue::Utf8(Rc::new("Hello".to_string())),
+            ScalarValue::Struct(vec![
+                ScalarValue::Null,
+                ScalarValue::Boolean(false),
+                ScalarValue::UInt8(55),
+                ScalarValue::UInt16(55),
+                ScalarValue::UInt32(55),
+                ScalarValue::UInt64(55),
+                ScalarValue::Int8(-55),
+                ScalarValue::Int16(-55),
+                ScalarValue::Int32(-55),
+                ScalarValue::Int64(-55),
+                ScalarValue::Float32(5.5),
+                ScalarValue::Float64(5.5),
+                ScalarValue::Utf8(Rc::new("Hello".to_string())),
+            ])
+        ];
+
+        let str = values.iter()
+            .map(|v| format!("{}", v))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        assert_eq!("NULL\ntrue\n123\n123\n123\n123\n-123\n-123\n-123\n-123\n1.23\n1.23\
+        \nHello\nNULL, false, 55, 55, 55, 55, -55, -55, -55, -55, 5.5, 5.5, Hello", str);
+
+    }
+}
