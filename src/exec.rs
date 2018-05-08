@@ -871,7 +871,6 @@ pub struct ExecutionContext {
     tables: Rc<RefCell<HashMap<String, Rc<DataFrame>>>>,
     function_meta: Rc<RefCell<HashMap<String, Rc<FunctionMeta>>>>,
     functions: Rc<RefCell<HashMap<String, Rc<ScalarFunction>>>>,
-    aggregate_functions: Rc<RefCell<HashMap<String, Rc<AggregateFunction>>>>,
     config: Rc<DFConfig>,
 }
 
@@ -889,19 +888,8 @@ impl ExecutionContext {
             tables: Rc::new(RefCell::new(HashMap::new())),
             function_meta: Rc::new(RefCell::new(HashMap::new())),
             functions: Rc::new(RefCell::new(HashMap::new())),
-            aggregate_functions: Rc::new(RefCell::new(HashMap::new())),
             config: Rc::new(DFConfig::Local),
         }
-    }
-
-    pub fn remote(_etcd: String) -> Self {
-        unimplemented!("this feature is disabled at the moment")
-        //        ExecutionContext {
-        //            schemas: Rc::new(RefCell::new(HashMap::new())),
-        //            function_meta: Rc::new(RefCell::new(HashMap::new())),
-        //            tables: Rc::new(RefCell::new(HashMap::new())),
-        //            config: Rc::new(DFConfig::Remote { etcd: etcd }),
-        //        }
     }
 
     pub fn register_scalar_function(&mut self, func: Rc<ScalarFunction>) {
@@ -917,23 +905,6 @@ impl ExecutionContext {
             .insert(func.name().to_lowercase(), Rc::new(fm));
 
         self.functions
-            .borrow_mut()
-            .insert(func.name().to_lowercase(), func.clone());
-    }
-
-    pub fn register_aggregate_function(&mut self, func: Rc<AggregateFunction>) {
-        let fm = FunctionMeta::new(
-            func.name(),
-            func.args(),
-            func.return_type(),
-            FunctionType::Aggregate
-        );
-
-        self.function_meta
-            .borrow_mut()
-            .insert(func.name().to_lowercase(), Rc::new(fm));
-
-        self.aggregate_functions
             .borrow_mut()
             .insert(func.name().to_lowercase(), func.clone());
     }
@@ -1475,6 +1446,84 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::prelude::*;
+
+
+    #[test]
+    fn test_dataframe_show() {
+        let mut ctx = create_context();
+        let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
+        df.show(10);
+    }
+
+    #[test]
+    fn test_dataframe_select() {
+        let mut ctx = create_context();
+        let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
+        let df2 = df.select(vec![Expr::Column(1)]).unwrap();
+        assert_eq!(1, df2.schema().columns().len());
+    }
+
+    #[test]
+    fn test_dataframe_filter() {
+        let mut ctx = create_context();
+        let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
+        let df2 = df.filter(Expr::BinaryExpr {
+            left: Rc::new(Expr::Column(1)),
+            op: Operator::Lt,
+            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.1)))
+        }).unwrap();
+        df2.show(10);
+        //TODO assertions
+
+    }
+
+    //TODO: when sort is implemented again
+//    #[test]
+//    fn test_dataframe_sort() {
+//    }
+
+    #[test]
+    fn test_dataframe_col() {
+        let mut ctx = create_context();
+        let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
+        assert_eq!(Expr::Column(2), df.col("lng").unwrap());
+    }
+
+    #[test]
+    fn test_dataframe_plan() {
+        let mut ctx = create_context();
+        let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
+        let plan = df.plan();
+        assert_eq!("Projection: #0, #1, #2\
+        \n  TableScan: uk_cities projection=None", format!("{:?}", plan));
+    }
+
+    #[test]
+    fn test_create_external_table() {
+        let mut ctx = ExecutionContext::local();
+        let sql = "CREATE EXTERNAL TABLE new_uk_cities (\
+                     city VARCHAR(100), \
+                     lat DOUBLE, \
+                     lng DOUBLE) \
+                     STORED AS CSV \
+                     WITHOUT HEADER ROW \
+                     LOCATION 'test/data/uk_cities.csv";
+        ctx.sql(sql).unwrap();
+
+        let df = ctx.sql("SELECT city, lat, lng FROM new_uk_cities").unwrap();
+        //TODO: assertions
+        df.show(10);
+    }
+
+    #[test]
+    fn test_create_logical_plan() {
+        let mut ctx = create_context();
+        ctx.register_scalar_function(Rc::new(SqrtFunction {}));
+        let plan = ctx.create_logical_plan(&"SELECT id, sqrt(id) FROM people").unwrap();
+        let expected_plan = "Projection: #0, sqrt(CAST(#0 AS Float64))\
+            \n  TableScan: people projection=None";
+        assert_eq!(expected_plan, format!("{:?}", plan));
+    }
 
     #[test]
     fn test_sqrt() {

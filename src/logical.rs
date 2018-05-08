@@ -62,7 +62,7 @@ impl FunctionMeta {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operator {
     Eq,
     NotEq,
@@ -88,7 +88,7 @@ impl Operator {
 }
 
 /// Relation Expression
-#[derive(Clone)]
+#[derive(Clone,PartialEq)]
 pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),

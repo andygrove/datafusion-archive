@@ -28,7 +28,7 @@ after_success:
   - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
         cargo bench;
     fi
-  - cargo coveralls --verbose --exclude-pattern '/datafusion-rs/src/bin'
+  - cargo coveralls --verbose --exclude-pattern '/datafusion/src/bin'
 
 
 env:

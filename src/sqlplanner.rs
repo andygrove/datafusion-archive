@@ -347,14 +347,6 @@ pub fn convert_data_type(sql: &SQLType) -> DataType {
     }
 }
 
-//pub fn create_projection(expr: Vec<Expr>, input: &LogicalPlan) -> LogicalPlan {
-//    LogicalPlan::Projection {
-//        expr: expr,
-//        input: input.clone(),
-//        schema: projection_schema.clone(),
-//    }
-//}
-
 pub fn expr_to_field(e: &Expr, input_schema: &Schema) -> Field {
     match e {
         &Expr::Column(i) => input_schema.columns()[i].clone(),

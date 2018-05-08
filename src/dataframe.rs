@@ -65,10 +65,14 @@ impl DF {
 
 impl DataFrame for DF {
     fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
+        use sqlplanner::exprlist_to_fields;
+        let projection_schema =
+            Rc::new(Schema::new(exprlist_to_fields(&expr, self.schema())));
+
         let plan = LogicalPlan::Projection {
             expr: expr,
             input: self.plan.clone(),
-            schema: self.plan.schema().clone(),
+            schema: projection_schema,
         };
 
         Ok(Rc::new(self.with_plan(Rc::new(plan))))

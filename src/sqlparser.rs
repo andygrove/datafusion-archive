@@ -392,7 +392,7 @@ impl Parser {
                         FileType::Parquet
                     } else {
                         return parser_err!(format!(
-                            "Expexted 'STORED AS' clause, found {:?}",
+                            "Expected 'STORED AS' clause, found {:?}",
                             self.peek_token()
                         ));
                     };
