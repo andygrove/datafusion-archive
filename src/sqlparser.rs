@@ -897,12 +897,10 @@ mod tests {
         let ast = parse_sql(&sql);
         if let ASTNode::SQLSelect { projection, .. } = ast {
             assert_eq!(
-                vec![
-                    ASTNode::SQLFunction {
-                        id: String::from("sqrt"),
-                        args: vec![ASTNode::SQLIdentifier(String::from("id"))],
-                    },
-                ],
+                vec![ASTNode::SQLFunction {
+                    id: String::from("sqrt"),
+                    args: vec![ASTNode::SQLIdentifier(String::from("id"))],
+                }],
                 projection
             );
         } else {

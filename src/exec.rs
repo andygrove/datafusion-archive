@@ -77,9 +77,7 @@ macro_rules! compare_arrays_inner {
 macro_rules! compare_arrays {
     ($V1:ident, $V2:ident, $F:expr) => {
         Ok(Value::Column(Rc::new(Array::from(compare_arrays_inner!(
-            $V1,
-            $V2,
-            $F
+            $V1, $V2, $F
         )?))))
     };
 }

@@ -221,8 +221,7 @@ impl SimpleRelation for AggregateRelation {
                                     for j in 0..aggr_expr.len() {
                                         let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
                                             .map(|col| match col {
-                                                Value::Column(ref col) => Value::Scalar(
-                                                    Rc::new(get_value(col, i))),
+                                                Value::Column(ref col) => Value::Scalar(Rc::new(get_value(col, i))),
                                                 Value::Scalar(ref v) => Value::Scalar(v.clone())
                                             }).collect();
                                         (*entry_mut).aggr_values[j]
@@ -236,13 +235,23 @@ impl SimpleRelation for AggregateRelation {
                             };
 
                             if !x {
-                                AggregateRelation::create_entry(
-                                    aggr_expr,
-                                    &mut map,
-                                    aggr_col_args,
-                                    key,
-                                    i,
-                                );
+                                let entry = create_aggregate_entry(aggr_expr);
+                                {
+                                    let mut entry_mut = entry.borrow_mut();
+
+                                    for j in 0..aggr_expr.len() {
+                                        let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
+                                            .map(|col| match col {
+                                                Value::Column(ref col) =>
+                                                    Value::Scalar(Rc::new(get_value(col, i))),
+                                                Value::Scalar(ref v) => Value::Scalar(v.clone())
+                                            }).collect();
+                                        (*entry_mut).aggr_values[j]
+                                            .execute(&row_aggr_values)
+                                            .unwrap();
+                                    }
+                                }
+                                map.insert(key.clone(), entry);
                             }
                         }
                     }
@@ -345,34 +354,5 @@ impl SimpleRelation for AggregateRelation {
 
     fn schema<'a>(&'a self) -> &'a Schema {
         self.schema.as_ref()
-    }
-}
-
-impl AggregateRelation {
-    fn create_entry(
-        aggr_expr: &Vec<RuntimeExpr>,
-        mut map: &mut HashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>, RandomState>,
-        mut aggr_col_args: Vec<Vec<Value>>,
-        mut key: Vec<GroupScalar>,
-        i: usize,
-    ) {
-        let entry = create_aggregate_entry(aggr_expr);
-        {
-            let mut entry_mut = entry.borrow_mut();
-
-            for j in 0..aggr_expr.len() {
-                let row_aggr_values: Vec<Value> = aggr_col_args[j]
-                    .iter()
-                    .map(|col| match col {
-                        Value::Column(ref col) => Value::Scalar(Rc::new(get_value(col, i))),
-                        Value::Scalar(ref v) => Value::Scalar(v.clone()),
-                    })
-                    .collect();
-                (*entry_mut).aggr_values[j]
-                    .execute(&row_aggr_values)
-                    .unwrap();
-            }
-        }
-        map.insert(key.clone(), entry);
     }
 }

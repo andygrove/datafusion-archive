@@ -15,6 +15,8 @@ trap cleanup EXIT
 # run tests
 cargo fmt
 cargo test
+
+#TODO: check output from examples
 cargo run --example csv_sql
 cargo run --example csv_dataframe
 cargo run --example parquet_sql
@@ -26,7 +28,7 @@ cargo bench
 ## NOTE that distributed queries are broken since moving to Arrow ... will be be fixed later
 
 #./scripts/docker/worker/build.sh
-#./scripts/docker/console/build.sh
+./scripts/docker/console/build.sh
 #
 ## stop etcd
 #docker kill etcd
@@ -63,24 +65,23 @@ cargo bench
 ## give the worker a chance to start up
 #sleep 2
 #
-## run the console in interactive mode and run a test script
-#docker run \
-#  --network=host \
-#  -v`pwd`/test/data:/test/data \
-#  -it datafusionrs/console:latest \
-# --etcd http://127.0.0.1:2379 \
-# --script /test/data/smoketest.sql \
-# > $output_file
-#
-#
-#echo "###### Verifying smoke test results"
-#
-#file_diff="$(diff -bBZ -I seconds $output_file $expected_file)"
-#if [ -n "$file_diff" ]
-#then
-#   echo "${file_diff}"
-#   echo "ERROR: smoke test output differs from expected output"
-#   exit 1
-#fi
-#echo "SUCCESS: smoke test successfully executed"
+# run the console in interactive mode and run a test script
+docker run \
+  --network=host \
+  -v`pwd`/test/data:/test/data \
+  -it datafusionrs/console:latest \
+ --script /test/data/smoketest.sql \
+ > $output_file
+
+
+echo "###### Verifying smoke test results"
+
+file_diff="$(diff -bBZ -I seconds $output_file $expected_file)"
+if [ -n "$file_diff" ]
+then
+   echo "${file_diff}"
+   echo "ERROR: smoke test output differs from expected output"
+   exit 1
+fi
+echo "SUCCESS: smoke test successfully executed"
 

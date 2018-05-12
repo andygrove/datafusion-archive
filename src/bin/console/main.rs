@@ -37,6 +37,9 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     println!("DataFusion Console");
+    //    println!("");
+    //    println!("Enter SQL statements terminated with semicolon, or 'quit' to leave.");
+    //    println!("");
 
     let cmdline = App::new("DataFusion Console")
             .version(VERSION)
@@ -66,17 +69,27 @@ fn main() {
     match cmdline.value_of("SCRIPT") {
         Some(filename) => match File::open(filename) {
             Ok(f) => {
+                let mut cmd_buffer = String::new();
                 let mut reader = BufReader::new(&f);
                 for line in reader.lines() {
                     match line {
-                        Ok(cmd) => console.execute(&cmd),
+                        Ok(cmd) => {
+                            cmd_buffer.push_str(&cmd);
+                            if cmd_buffer.as_str().ends_with(";") {
+                                console.execute(&cmd_buffer[0..cmd_buffer.len() - 2]);
+                                cmd_buffer = String::new();
+                            }
+                        }
                         Err(e) => println!("Error: {}", e),
                     }
+                }
+                if cmd_buffer.as_str().ends_with(";") {
+                    console.execute(&cmd_buffer[0..cmd_buffer.len() - 2]);
                 }
             }
             Err(e) => println!("Could not open file {}: {}", filename, e),
         },
-        None => {
+        _ => {
             let mut reader = linereader::LineReader::new();
             loop {
                 let result = reader.read_lines();
