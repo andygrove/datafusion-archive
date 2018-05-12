@@ -19,8 +19,8 @@ extern crate datafusion;
 
 use arrow::datatypes::*;
 use datafusion::exec::*;
-use datafusion::functions::geospatial::st_point::*;
 use datafusion::functions::geospatial::st_astext::*;
+use datafusion::functions::geospatial::st_point::*;
 use datafusion::logical::*;
 use datafusion::types::*;
 

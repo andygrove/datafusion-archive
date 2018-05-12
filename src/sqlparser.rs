@@ -98,9 +98,7 @@ impl Parser {
                         "CREATE" => Ok(self.parse_create()?),
                         _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                     },
-                    Token::Mult => {
-                        Ok(ASTNode::SQLWildcard)
-                    }
+                    Token::Mult => Ok(ASTNode::SQLWildcard),
                     Token::Identifier(id) => {
                         match self.peek_token() {
                             Some(Token::LParen) => {
@@ -334,7 +332,6 @@ impl Parser {
                         loop {
                             if let Some(Token::Identifier(column_name)) = self.next_token() {
                                 if let Ok(data_type) = self.parse_data_type() {
-
                                     let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
                                         false
                                     } else if self.parse_keyword("NULL") {
@@ -349,7 +346,7 @@ impl Parser {
                                             columns.push(SQLColumnDef {
                                                 name: column_name,
                                                 data_type: data_type,
-                                                allow_null
+                                                allow_null,
                                             });
                                         }
                                         Some(Token::RParen) => {
@@ -357,7 +354,7 @@ impl Parser {
                                             columns.push(SQLColumnDef {
                                                 name: column_name,
                                                 data_type: data_type,
-                                                allow_null
+                                                allow_null,
                                             });
                                             break;
                                         }
@@ -634,9 +631,7 @@ mod tests {
         let sql = String::from("SELECT * FROM customer");
         let ast = parse_sql(&sql);
         match ast {
-            ASTNode::SQLSelect {
-                projection, ..
-            } => {
+            ASTNode::SQLSelect { projection, .. } => {
                 assert_eq!(1, projection.len());
                 assert_eq!(ASTNode::SQLWildcard, projection[0]);
             }
@@ -649,11 +644,15 @@ mod tests {
         let sql = String::from("SELECT COUNT(*) FROM customer");
         let ast = parse_sql(&sql);
         match ast {
-            ASTNode::SQLSelect {
-                projection, ..
-            } => {
+            ASTNode::SQLSelect { projection, .. } => {
                 assert_eq!(1, projection.len());
-                assert_eq!(ASTNode::SQLFunction { id: "COUNT".to_string(), args: vec![ASTNode::SQLWildcard] }, projection[0]);
+                assert_eq!(
+                    ASTNode::SQLFunction {
+                        id: "COUNT".to_string(),
+                        args: vec![ASTNode::SQLWildcard],
+                    },
+                    projection[0]
+                );
             }
             _ => assert!(false),
         }
@@ -782,10 +781,13 @@ mod tests {
         match ast {
             ASTNode::SQLSelect { projection, .. } => {
                 assert_eq!(1, projection.len());
-                assert_eq!(ASTNode::SQLCast {
-                    expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
-                    data_type: SQLType::Double64
-                }, projection[0]);
+                assert_eq!(
+                    ASTNode::SQLCast {
+                        expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
+                        data_type: SQLType::Double64
+                    },
+                    projection[0]
+                );
             }
             _ => assert!(false),
         }
@@ -895,10 +897,12 @@ mod tests {
         let ast = parse_sql(&sql);
         if let ASTNode::SQLSelect { projection, .. } = ast {
             assert_eq!(
-                vec![ASTNode::SQLFunction {
-                    id: String::from("sqrt"),
-                    args: vec![ASTNode::SQLIdentifier(String::from("id"))],
-                }],
+                vec![
+                    ASTNode::SQLFunction {
+                        id: String::from("sqrt"),
+                        args: vec![ASTNode::SQLIdentifier(String::from("id"))],
+                    },
+                ],
                 projection
             );
         } else {

@@ -37,7 +37,6 @@ impl MinFunction {
     }
 }
 
-
 macro_rules! min_in_column {
     ($SELF:ident, $BUF:ident, $VARIANT:ident) => {{
         for i in 0..$BUF.len() as usize {
@@ -47,11 +46,14 @@ macro_rules! min_in_column {
                 ScalarValue::$VARIANT(x) => if value < x {
                     $SELF.value = ScalarValue::$VARIANT(value)
                 },
-                ref other => panic!("Type mismatch in MAX() for datatype {} - {:?}",
-                stringify!($VARIANT), other),
+                ref other => panic!(
+                    "Type mismatch in MAX() for datatype {} - {:?}",
+                    stringify!($VARIANT),
+                    other
+                ),
             }
         }
-    }}
+    }};
 }
 macro_rules! min_in_scalar {
     ($SELF:ident, $VALUE:ident, $VARIANT:ident) => {{
@@ -63,8 +65,7 @@ macro_rules! min_in_scalar {
             _ => panic!("type mismatch in MIN()"),
         }
         Ok(())
-
-    }}
+    }};
 }
 
 impl AggregateFunction for MinFunction {
@@ -106,20 +107,17 @@ impl AggregateFunction for MinFunction {
                                 }
                             }
                             self.value = match &self.value {
-                                ScalarValue::Null =>
-                                    ScalarValue::Utf8(Rc::new(s)),
+                                ScalarValue::Null => ScalarValue::Utf8(Rc::new(s)),
                                 ScalarValue::Utf8(current) => if &s < current.as_ref() {
                                     ScalarValue::Utf8(Rc::new(s))
                                 } else {
                                     self.value.clone()
                                 },
-                                _ => panic!()
-
+                                _ => panic!(),
                             };
-
                         }
-                    },
-                    ArrayData::Struct(_) => unimplemented!("MIN() does not support struct types")
+                    }
+                    ArrayData::Struct(_) => unimplemented!("MIN() does not support struct types"),
                 }
                 Ok(())
             }
@@ -136,15 +134,13 @@ impl AggregateFunction for MinFunction {
                 ScalarValue::Float64(ref value) => min_in_scalar!(self, value, Float64),
                 ScalarValue::Utf8(ref value) => {
                     self.value = match &self.value {
-                        ScalarValue::Null =>
-                            ScalarValue::Utf8(value.clone()),
+                        ScalarValue::Null => ScalarValue::Utf8(value.clone()),
                         ScalarValue::Utf8(ref current) => if value < current {
                             ScalarValue::Utf8(value.clone())
                         } else {
                             self.value.clone()
                         },
-                        _ => panic!()
-
+                        _ => panic!(),
                     };
                     Ok(())
                 }

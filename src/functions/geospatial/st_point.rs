@@ -63,4 +63,3 @@ impl ScalarFunction for STPointFunc {
         ])
     }
 }
-

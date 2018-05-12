@@ -19,8 +19,8 @@ extern crate datafusion;
 
 use arrow::datatypes::*;
 use datafusion::exec::*;
-use datafusion::functions::geospatial::st_point::*;
 use datafusion::functions::geospatial::st_astext::*;
+use datafusion::functions::geospatial::st_point::*;
 
 /// This example shows the steps to parse, plan, and execute simple SQL in the current process
 fn main() {

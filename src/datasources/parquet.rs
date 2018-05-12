@@ -123,7 +123,8 @@ impl ParquetFile {
                                 Ok((count, _)) => {
                                     row_count = count;
 
-                                    let mut builder: ListBuilder<u8> = ListBuilder::with_capacity(count);
+                                    let mut builder: ListBuilder<u8> =
+                                        ListBuilder::with_capacity(count);
                                     for j in 0..row_count {
                                         builder.push(b[j].slice(0, b[j].len()).data());
                                     }

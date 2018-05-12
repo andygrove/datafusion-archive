@@ -57,14 +57,16 @@ impl ScalarFunction for STAsText {
     }
 
     fn args(&self) -> Vec<Field> {
-        vec![Field::new(
-            "point",
-            DataType::Struct(vec![
-                Field::new("x", DataType::Float64, false),
-                Field::new("y", DataType::Float64, false),
-            ]),
-            false,
-        )]
+        vec![
+            Field::new(
+                "point",
+                DataType::Struct(vec![
+                    Field::new("x", DataType::Float64, false),
+                    Field::new("y", DataType::Float64, false),
+                ]),
+                false,
+            ),
+        ]
     }
 
     fn return_type(&self) -> DataType {

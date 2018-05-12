@@ -31,7 +31,7 @@ pub trait SchemaProvider {
 
 /// SQL query planner
 pub struct SqlToRel {
-    schema_provider: Rc<SchemaProvider>
+    schema_provider: Rc<SchemaProvider>,
 }
 
 impl SqlToRel {
@@ -118,8 +118,10 @@ impl SqlToRel {
                         _ => input.clone(),
                     };
 
-                    let projection_schema =
-                        Rc::new(Schema::new(exprlist_to_fields(&expr, input_schema.as_ref())));
+                    let projection_schema = Rc::new(Schema::new(exprlist_to_fields(
+                        &expr,
+                        input_schema.as_ref(),
+                    )));
 
                     let projection = LogicalPlan::Projection {
                         expr: expr,
@@ -173,15 +175,17 @@ impl SqlToRel {
                 }
             }
 
-            &ASTNode::SQLIdentifier(ref id) => match self.schema_provider.get_table_meta(id.as_ref()) {
-                Some(schema) => Ok(Rc::new(LogicalPlan::TableScan {
-                    schema_name: String::from("default"),
-                    table_name: id.clone(),
-                    schema: schema.clone(),
-                    projection: None,
-                })),
-                None => Err(format!("no schema found for table {}", id)),
-            },
+            &ASTNode::SQLIdentifier(ref id) => {
+                match self.schema_provider.get_table_meta(id.as_ref()) {
+                    Some(schema) => Ok(Rc::new(LogicalPlan::TableScan {
+                        schema_name: String::from("default"),
+                        table_name: id.clone(),
+                        schema: schema.clone(),
+                        projection: None,
+                    })),
+                    None => Err(format!("no schema found for table {}", id)),
+                }
+            }
 
             _ => Err(format!(
                 "sql_to_rel does not support this relation: {:?}",
@@ -211,8 +215,8 @@ impl SqlToRel {
             }
 
             &ASTNode::SQLWildcard => {
-//                schema.columns().iter().enumerate()
-//                    .map(|(i,c)| Ok(Expr::Column(i))).collect()
+                //                schema.columns().iter().enumerate()
+                //                    .map(|(i,c)| Ok(Expr::Column(i))).collect()
                 unimplemented!("SQL wildcard operator is not supported in projection - please use explicit column names")
             }
 
@@ -251,18 +255,19 @@ impl SqlToRel {
                 let right_type = right_expr.get_type(schema);
 
                 match get_supertype(&left_type, &right_type) {
-                    Some(supertype) => {
-                        Ok(Expr::BinaryExpr {
-                            left: Rc::new(left_expr.cast_to(&supertype, schema)?),
-                            op: operator,
-                            right: Rc::new(right_expr.cast_to(&supertype, schema)?),
-                        })
-                    },
-                    None => return Err(
-                        format!("No common supertype found for binary operator {:?} \
-                            with input types {:?} and {:?}", operator, left_type, right_type))
+                    Some(supertype) => Ok(Expr::BinaryExpr {
+                        left: Rc::new(left_expr.cast_to(&supertype, schema)?),
+                        op: operator,
+                        right: Rc::new(right_expr.cast_to(&supertype, schema)?),
+                    }),
+                    None => {
+                        return Err(format!(
+                            "No common supertype found for binary operator {:?} \
+                             with input types {:?} and {:?}",
+                            operator, left_type, right_type
+                        ))
+                    }
                 }
-
             }
 
             &ASTNode::SQLOrderBy { ref expr, asc } => Ok(Expr::Sort {
@@ -284,7 +289,7 @@ impl SqlToRel {
                         Ok(Expr::AggregateFunction {
                             name: id.clone(),
                             args: rex_args,
-                            return_type
+                            return_type,
                         })
                     }
                     "count" => {
@@ -350,9 +355,7 @@ pub fn convert_data_type(sql: &SQLType) -> DataType {
 pub fn expr_to_field(e: &Expr, input_schema: &Schema) -> Field {
     match e {
         &Expr::Column(i) => input_schema.columns()[i].clone(),
-        &Expr::Literal(ref lit) => {
-            Field::new("lit", lit.get_datatype(), true)
-        }
+        &Expr::Literal(ref lit) => Field::new("lit", lit.get_datatype(), true),
         &Expr::ScalarFunction {
             ref name,
             ref return_type,
@@ -364,10 +367,18 @@ pub fn expr_to_field(e: &Expr, input_schema: &Schema) -> Field {
             ..
         } => Field::new(name, return_type.clone(), true),
         &Expr::Cast { ref data_type, .. } => Field::new("cast", data_type.clone(), true),
-        &Expr::BinaryExpr { ref left, ref right, .. } => {
+        &Expr::BinaryExpr {
+            ref left,
+            ref right,
+            ..
+        } => {
             let left_type = left.get_type(input_schema);
             let right_type = right.get_type(input_schema);
-            Field::new("binary_expr", get_supertype(&left_type, &right_type).unwrap(), true)
+            Field::new(
+                "binary_expr",
+                get_supertype(&left_type, &right_type).unwrap(),
+                true,
+            )
         }
         _ => unimplemented!("Cannot determine schema type for expression {:?}", e),
     }
@@ -476,38 +487,41 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
 #[cfg(test)]
 mod tests {
 
-    use super::*;
     use super::super::sqlparser::*;
+    use super::*;
 
     #[test]
     fn select_no_relation() {
-        quick_test("SELECT 1",
-                   "Projection: Int64(1)\
-        \n  EmptyRelation");
+        quick_test(
+            "SELECT 1",
+            "Projection: Int64(1)\
+             \n  EmptyRelation",
+        );
     }
 
     #[test]
     fn select_scalar_func_with_literal_no_relation() {
-        quick_test("SELECT sqrt(9)",
-                   "Projection: sqrt(CAST(Int64(9) AS Float64))\
-                   \n  EmptyRelation");
+        quick_test(
+            "SELECT sqrt(9)",
+            "Projection: sqrt(CAST(Int64(9) AS Float64))\
+             \n  EmptyRelation",
+        );
     }
 
     #[test]
     fn select_simple_selection() {
         let sql = "SELECT id, first_name, last_name \
-            FROM person WHERE state = 'CO'";
-        let expected =
-            "Projection: #0, #1, #2\
-               \n  Selection: #4 Eq Utf8(\"CO\")\
-               \n    TableScan: person projection=None";
+                   FROM person WHERE state = 'CO'";
+        let expected = "Projection: #0, #1, #2\
+                        \n  Selection: #4 Eq Utf8(\"CO\")\
+                        \n    TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
     #[test]
     fn select_compound_selection() {
         let sql = "SELECT id, first_name, last_name \
-            FROM person WHERE state = 'CO' AND age >= 21 AND age <= 65";
+                   FROM person WHERE state = 'CO' AND age >= 21 AND age <= 65";
         let expected =
             "Projection: #0, #1, #2\
             \n  Selection: #4 Eq Utf8(\"CO\") And CAST(#3 AS Int64) GtEq Int64(21) And CAST(#3 AS Int64) LtEq Int64(65)\
@@ -518,95 +532,92 @@ mod tests {
     #[test]
     fn select_all_boolean_operators() {
         let sql = "SELECT age, first_name, last_name \
-            FROM person \
-            WHERE age = 21 \
-            AND age != 21 \
-            AND age > 21 \
-            AND age >= 21 \
-            AND age < 65 \
-            AND age <= 65";
-        let expected =
-            "Projection: #3, #1, #2\
-            \n  Selection: CAST(#3 AS Int64) Eq Int64(21) \
-            And CAST(#3 AS Int64) NotEq Int64(21) \
-            And CAST(#3 AS Int64) Gt Int64(21) \
-            And CAST(#3 AS Int64) GtEq Int64(21) \
-            And CAST(#3 AS Int64) Lt Int64(65) \
-            And CAST(#3 AS Int64) LtEq Int64(65)\
-            \n    TableScan: person projection=None";
+                   FROM person \
+                   WHERE age = 21 \
+                   AND age != 21 \
+                   AND age > 21 \
+                   AND age >= 21 \
+                   AND age < 65 \
+                   AND age <= 65";
+        let expected = "Projection: #3, #1, #2\
+                        \n  Selection: CAST(#3 AS Int64) Eq Int64(21) \
+                        And CAST(#3 AS Int64) NotEq Int64(21) \
+                        And CAST(#3 AS Int64) Gt Int64(21) \
+                        And CAST(#3 AS Int64) GtEq Int64(21) \
+                        And CAST(#3 AS Int64) Lt Int64(65) \
+                        And CAST(#3 AS Int64) LtEq Int64(65)\
+                        \n    TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
     #[test]
     fn select_simple_aggregate() {
-        quick_test("SELECT MIN(age) FROM person",
-                   "Aggregate: groupBy=[[]], aggr=[[MIN(#3)]]\
-        \n  TableScan: person projection=None");
+        quick_test(
+            "SELECT MIN(age) FROM person",
+            "Aggregate: groupBy=[[]], aggr=[[MIN(#3)]]\
+             \n  TableScan: person projection=None",
+        );
     }
 
     #[test]
     fn select_simple_aggregate_with_groupby() {
-        quick_test("SELECT state, MIN(age), MAX(age) FROM person GROUP BY state",
-                   "Aggregate: groupBy=[[#4]], aggr=[[MIN(#3), MAX(#3)]]\
-        \n  TableScan: person projection=None");
+        quick_test(
+            "SELECT state, MIN(age), MAX(age) FROM person GROUP BY state",
+            "Aggregate: groupBy=[[#4]], aggr=[[MIN(#3), MAX(#3)]]\
+             \n  TableScan: person projection=None",
+        );
     }
 
     #[test]
     fn select_count_one() {
         let sql = "SELECT COUNT(1) FROM person";
-        let expected =
-            "Aggregate: groupBy=[[]], aggr=[[COUNT(Int64(1))]]\
-            \n  TableScan: person projection=None";
+        let expected = "Aggregate: groupBy=[[]], aggr=[[COUNT(Int64(1))]]\
+                        \n  TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
     #[test]
     fn select_scalar_func() {
         let sql = "SELECT sqrt(age) FROM person";
-        let expected =
-            "Projection: sqrt(CAST(#3 AS Float64))\
-            \n  TableScan: person projection=None";
+        let expected = "Projection: sqrt(CAST(#3 AS Float64))\
+                        \n  TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
     #[test]
     fn select_order_by() {
         let sql = "SELECT id FROM person ORDER BY id";
-        let expected =
-            "Sort: #0 ASC\
-            \n  Projection: #0\
-            \n    TableScan: person projection=None";
+        let expected = "Sort: #0 ASC\
+                        \n  Projection: #0\
+                        \n    TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
     #[test]
     fn select_order_by_desc() {
         let sql = "SELECT id FROM person ORDER BY id DESC";
-        let expected =
-            "Sort: #0 DESC\
-            \n  Projection: #0\
-            \n    TableScan: person projection=None";
+        let expected = "Sort: #0 DESC\
+                        \n  Projection: #0\
+                        \n    TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
     #[test]
     fn select_order_limit() {
         let sql = "SELECT id FROM person ORDER BY id DESC LIMIT 10";
-        let expected =
-            "Limit: 10\
-            \n  Sort: #0 DESC\
-            \n    Projection: #0\
-            \n      TableScan: person projection=None";
+        let expected = "Limit: 10\
+                        \n  Sort: #0 DESC\
+                        \n    Projection: #0\
+                        \n      TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
     #[test]
     fn select_limit() {
         let sql = "SELECT id FROM person LIMIT 10";
-        let expected =
-            "Limit: 10\
-            \n  Projection: #0\
-            \n    TableScan: person projection=None";
+        let expected = "Limit: 10\
+                        \n  Projection: #0\
+                        \n    TableScan: person projection=None";
         quick_test(sql, expected);
     }
 
@@ -682,9 +693,7 @@ mod tests {
         assert_eq!(expected, format!("{:?}", plan));
     }
 
-
-    struct MockSchemaProvider {
-    }
+    struct MockSchemaProvider {}
 
     impl SchemaProvider for MockSchemaProvider {
         fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>> {
@@ -697,24 +706,21 @@ mod tests {
                     Field::new("state", DataType::Utf8, false),
                     Field::new("salary", DataType::Float64, false),
                 ]))),
-                _ => None
+                _ => None,
             }
         }
 
         fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
             match name {
                 "sqrt" => Some(Rc::new(FunctionMeta::new(
-                        "sqrt".to_string(),
-                        vec![
-                            Field::new("n", DataType::Float64, false),
-                        ],
-                        DataType::Float64,
-                        FunctionType::Scalar ,
+                    "sqrt".to_string(),
+                    vec![Field::new("n", DataType::Float64, false)],
+                    DataType::Float64,
+                    FunctionType::Scalar,
                 ))),
-                _ => None
+                _ => None,
             }
         }
     }
-
 
 }

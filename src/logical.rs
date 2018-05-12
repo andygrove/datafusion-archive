@@ -37,10 +37,12 @@ pub struct FunctionMeta {
 }
 
 impl FunctionMeta {
-    pub fn new( name: String,
-                args: Vec<Field>,
-                return_type: DataType,
-                function_type: FunctionType) -> Self {
+    pub fn new(
+        name: String,
+        args: Vec<Field>,
+        return_type: DataType,
+        function_type: FunctionType,
+    ) -> Self {
         FunctionMeta {
             name,
             args,
@@ -81,14 +83,14 @@ pub enum Operator {
 
 impl Operator {
     /// Get the result type of applying this operation to its left and right inputs
-    pub fn get_datatype(&self, l: &Expr, _r:&Expr, schema: &Schema) -> DataType {
+    pub fn get_datatype(&self, l: &Expr, _r: &Expr, schema: &Schema) -> DataType {
         //TODO: implement correctly, just go with left side for now
         l.get_type(schema).clone()
     }
 }
 
 /// Relation Expression
-#[derive(Clone,PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),
@@ -126,7 +128,11 @@ impl Expr {
             Expr::Cast { data_type, .. } => data_type.clone(),
             Expr::ScalarFunction { return_type, .. } => return_type.clone(),
             Expr::AggregateFunction { return_type, .. } => return_type.clone(),
-            Expr::BinaryExpr { ref left, ref right, ref op } => {
+            Expr::BinaryExpr {
+                ref left,
+                ref right,
+                ref op,
+            } => {
                 match op {
                     Operator::Eq | Operator::NotEq => DataType::Boolean,
                     Operator::Lt | Operator::LtEq => DataType::Boolean,
@@ -138,7 +144,7 @@ impl Expr {
                         get_supertype(&left_type, &right_type).unwrap_or(DataType::Utf8) //TODO ???
                     }
                 }
-            },
+            }
             Expr::Sort { ref expr, .. } => expr.get_type(schema),
         }
     }
@@ -212,18 +218,10 @@ impl Expr {
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
-            Expr::Column(i) => {
-                write!(f, "#{}", i)
-            },
-            Expr::Literal(v) => {
-                write!(f, "{:?}", v)
-            },
-            Expr::Cast { expr, data_type } => {
-                write!(f, "CAST({:?} AS {:?})", expr, data_type)
-            },
-            Expr::BinaryExpr { left, op, right } => {
-                write!(f, "{:?} {:?} {:?}", left, op, right)
-            },
+            Expr::Column(i) => write!(f, "#{}", i),
+            Expr::Literal(v) => write!(f, "{:?}", v),
+            Expr::Cast { expr, data_type } => write!(f, "CAST({:?} AS {:?})", expr, data_type),
+            Expr::BinaryExpr { left, op, right } => write!(f, "{:?} {:?} {:?}", left, op, right),
             Expr::Sort { expr, asc } => if *asc {
                 write!(f, "{:?} ASC", expr)
             } else {
@@ -232,18 +230,18 @@ impl fmt::Debug for Expr {
             Expr::ScalarFunction { name, ref args, .. } => {
                 write!(f, "{}(", name)?;
                 for i in 0..args.len() {
-                    if i>0 {
+                    if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{:?}", args[i])?;
                 }
 
                 write!(f, ")")
-            },
+            }
             Expr::AggregateFunction { name, ref args, .. } => {
                 write!(f, "{}(", name)?;
                 for i in 0..args.len() {
-                    if i>0 {
+                    if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{:?}", args[i])?;
@@ -329,7 +327,7 @@ impl LogicalPlan {
 
 impl LogicalPlan {
     fn fmt_with_indent(&self, f: &mut Formatter, indent: usize) -> Result<(), Error> {
-        if indent>0 {
+        if indent > 0 {
             write!(f, "\n")?;
             for _ in 0..indent {
                 write!(f, "  ")?;
@@ -348,10 +346,14 @@ impl LogicalPlan {
                 ..
             } => write!(f, "CsvFile: file={}, schema={:?}", filename, schema),
             LogicalPlan::ParquetFile { .. } => write!(f, "ParquetFile:"),
-            LogicalPlan::Projection { ref expr, ref input, .. } => {
+            LogicalPlan::Projection {
+                ref expr,
+                ref input,
+                ..
+            } => {
                 write!(f, "Projection: ")?;
                 for i in 0..expr.len() {
-                    if i>0 {
+                    if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{:?}", expr[i])?;
@@ -379,17 +381,23 @@ impl LogicalPlan {
                 )?;
                 input.fmt_with_indent(f, indent + 1)
             }
-            LogicalPlan::Sort { ref input, ref expr, .. } => {
+            LogicalPlan::Sort {
+                ref input,
+                ref expr,
+                ..
+            } => {
                 write!(f, "Sort: ")?;
                 for i in 0..expr.len() {
-                    if i>0 {
+                    if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{:?}", expr[i])?;
                 }
                 input.fmt_with_indent(f, indent + 1)
             }
-            LogicalPlan::Limit { ref input, limit, .. } => {
+            LogicalPlan::Limit {
+                ref input, limit, ..
+            } => {
                 write!(f, "Limit: {}", limit)?;
                 input.fmt_with_indent(f, indent + 1)
             }
@@ -402,4 +410,3 @@ impl fmt::Debug for LogicalPlan {
         self.fmt_with_indent(f, 0)
     }
 }
-

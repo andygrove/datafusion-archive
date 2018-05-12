@@ -27,7 +27,10 @@ fn csv_query_all_types() {
     ctx.write_csv(df, "target/csv_query_all_types.csv").unwrap();
 
     let expected_result = read_file("test/data/expected/csv_query_all_types.csv");
-    assert_eq!(expected_result, read_file("./target/csv_query_all_types.csv"));
+    assert_eq!(
+        expected_result,
+        read_file("./target/csv_query_all_types.csv")
+    );
 }
 
 #[test]
@@ -139,10 +142,14 @@ fn parquet_query_all_types() {
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();
-    ctx.write_csv(df, "target/parquet_query_all_types.csv").unwrap();
+    ctx.write_csv(df, "target/parquet_query_all_types.csv")
+        .unwrap();
 
     let expected_result = read_file("test/data/expected/parquet_query_all_types.csv");
-    assert_eq!(expected_result, read_file("./target/parquet_query_all_types.csv"));
+    assert_eq!(
+        expected_result,
+        read_file("./target/parquet_query_all_types.csv")
+    );
 }
 
 #[test]
@@ -168,10 +175,14 @@ fn parquet_aggregate() {
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();
-    ctx.write_csv(df, "target/parquet_aggregate_all_types.csv").unwrap();
+    ctx.write_csv(df, "target/parquet_aggregate_all_types.csv")
+        .unwrap();
 
     let expected_result = read_file("test/data/expected/parquet_aggregate_all_types.csv");
-    assert_eq!(expected_result, read_file("./target/parquet_aggregate_all_types.csv"));
+    assert_eq!(
+        expected_result,
+        read_file("./target/parquet_aggregate_all_types.csv")
+    );
 }
 
 #[test]
@@ -197,10 +208,14 @@ fn csv_aggregate() {
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();
-    ctx.write_csv(df, "target/csv_aggregate_all_types.csv").unwrap();
+    ctx.write_csv(df, "target/csv_aggregate_all_types.csv")
+        .unwrap();
 
     let expected_result = read_file("test/data/expected/csv_aggregate_all_types.csv");
-    assert_eq!(expected_result, read_file("./target/csv_aggregate_all_types.csv"));
+    assert_eq!(
+        expected_result,
+        read_file("./target/csv_aggregate_all_types.csv")
+    );
 }
 
 #[test]
@@ -226,10 +241,14 @@ fn csv_aggregate_group_by_bool() {
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();
-    ctx.write_csv(df, "target/csv_aggregate_by_c_bool.csv").unwrap();
+    ctx.write_csv(df, "target/csv_aggregate_by_c_bool.csv")
+        .unwrap();
 
     let expected_result = read_file("test/data/expected/csv_aggregate_by_c_bool.csv");
-    assert_eq!(expected_result, read_file("./target/csv_aggregate_by_c_bool.csv"));
+    assert_eq!(
+        expected_result,
+        read_file("./target/csv_aggregate_by_c_bool.csv")
+    );
 }
 
 fn csv_project_filter_test(col: &str, expr: &str, filename: &str) {

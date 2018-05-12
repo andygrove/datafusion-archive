@@ -257,21 +257,18 @@ mod tests {
         let mut csv = CsvFile::open(file, Rc::new(schema), true, None).unwrap();
         let batch = csv.next().unwrap().unwrap();
 
-        match  batch.column(1) {
-            Value::Column(ref array) => {
-                match array.validity_bitmap() {
-                    Some(ref bitmap) => {
-                        assert_eq!(&true, &bitmap.is_set(0));
-                        assert_eq!(&true, &bitmap.is_set(1));
-                        assert_eq!(&false, &bitmap.is_set(2));
-                        assert_eq!(&true, &bitmap.is_set(3));
-                    },
-                    _ => panic!()
+        match batch.column(1) {
+            Value::Column(ref array) => match array.validity_bitmap() {
+                Some(ref bitmap) => {
+                    assert_eq!(&true, &bitmap.is_set(0));
+                    assert_eq!(&true, &bitmap.is_set(1));
+                    assert_eq!(&false, &bitmap.is_set(2));
+                    assert_eq!(&true, &bitmap.is_set(3));
                 }
-            }
-            _ => panic!()
+                _ => panic!(),
+            },
+            _ => panic!(),
         }
-
     }
 
     #[test]

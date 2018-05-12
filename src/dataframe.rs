@@ -61,8 +61,7 @@ impl DF {
 impl DataFrame for DF {
     fn select(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
         use sqlplanner::exprlist_to_fields;
-        let projection_schema =
-            Rc::new(Schema::new(exprlist_to_fields(&expr, self.schema())));
+        let projection_schema = Rc::new(Schema::new(exprlist_to_fields(&expr, self.schema())));
 
         let plan = LogicalPlan::Projection {
             expr: expr,
@@ -73,15 +72,15 @@ impl DataFrame for DF {
         Ok(Rc::new(self.with_plan(Rc::new(plan))))
     }
 
-//    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
-//        let plan = LogicalPlan::Sort {
-//            expr: expr,
-//            input: self.plan.clone(),
-//            schema: self.plan.schema().clone(),
-//        };
-//
-//        Ok(Rc::new(self.with_plan(Rc::new(plan))))
-//    }
+    //    fn sort(&self, expr: Vec<Expr>) -> Result<Rc<DataFrame>> {
+    //        let plan = LogicalPlan::Sort {
+    //            expr: expr,
+    //            input: self.plan.clone(),
+    //            schema: self.plan.schema().clone(),
+    //        };
+    //
+    //        Ok(Rc::new(self.with_plan(Rc::new(plan))))
+    //    }
 
     fn filter(&self, expr: Expr) -> Result<Rc<DataFrame>> {
         let plan = LogicalPlan::Selection {

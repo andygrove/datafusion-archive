@@ -41,11 +41,13 @@ impl ScalarFunction for SqrtFunction {
                 )),
             },
             Value::Scalar(ref v) => match v.as_ref() {
-                ScalarValue::Float64(ref n) => Ok(Value::Scalar(Rc::new(ScalarValue::Float64(n.sqrt())))),
+                ScalarValue::Float64(ref n) => {
+                    Ok(Value::Scalar(Rc::new(ScalarValue::Float64(n.sqrt()))))
+                }
                 _ => Err(ExecutionError::General(
                     "Unsupported arg type for sqrt".to_string(),
-                ))
-            }
+                )),
+            },
         }
     }
 

@@ -54,7 +54,7 @@ impl Array {
             len: len as i32,
             data,
             validity_bitmap: Some(bitmap),
-            null_count: null_count as i32
+            null_count: null_count as i32,
         }
     }
 
@@ -223,7 +223,7 @@ impl ScalarValue {
             ScalarValue::Float64(_) => DataType::Float64,
             ScalarValue::Utf8(_) => DataType::Utf8,
             ScalarValue::Struct(_) => unimplemented!(),
-            ScalarValue::Null => unimplemented!()
+            ScalarValue::Null => unimplemented!(),
         }
     }
 }
@@ -318,15 +318,14 @@ pub fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
         Some(dt) => Some(dt),
         None => match _get_supertype(r, l) {
             Some(dt) => Some(dt),
-            None => None
-        }
+            None => None,
+        },
     }
 }
 
 fn _get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
     use self::DataType::*;
-    match (l,r) {
-        
+    match (l, r) {
         (UInt8, Int8) => Some(Int8),
         (UInt8, Int16) => Some(Int16),
         (UInt8, Int32) => Some(Int32),
@@ -420,7 +419,7 @@ fn _get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
 
         (Boolean, Boolean) => Some(Boolean),
 
-        _ => None
+        _ => None,
     }
 }
 
@@ -489,16 +488,19 @@ mod tests {
                 ScalarValue::Float32(5.5),
                 ScalarValue::Float64(5.5),
                 ScalarValue::Utf8(Rc::new("Hello".to_string())),
-            ])
+            ]),
         ];
 
-        let str = values.iter()
+        let str = values
+            .iter()
             .map(|v| format!("{}", v))
             .collect::<Vec<String>>()
             .join("\n");
 
-        assert_eq!("NULL\ntrue\n123\n123\n123\n123\n-123\n-123\n-123\n-123\n1.23\n1.23\
-        \nHello\nNULL, false, 55, 55, 55, 55, -55, -55, -55, -55, 5.5, 5.5, Hello", str);
-
+        assert_eq!(
+            "NULL\ntrue\n123\n123\n123\n123\n-123\n-123\n-123\n-123\n1.23\n1.23\
+             \nHello\nNULL, false, 55, 55, 55, 55, -55, -55, -55, -55, 5.5, 5.5, Hello",
+            str
+        );
     }
 }

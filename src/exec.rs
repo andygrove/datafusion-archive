@@ -77,7 +77,9 @@ macro_rules! compare_arrays_inner {
 macro_rules! compare_arrays {
     ($V1:ident, $V2:ident, $F:expr) => {
         Ok(Value::Column(Rc::new(Array::from(compare_arrays_inner!(
-            $V1, $V2, $F
+            $V1,
+            $V2,
+            $F
         )?))))
     };
 }
@@ -409,7 +411,8 @@ macro_rules! cast_array_from_to {
                     let s = format!("{:?}", *$LIST.get(i));
                     b.push(s.as_bytes());
                 }
-                Ok(Value::Column(Rc::new(Array::new($LIST.len() as usize,ArrayData::Utf8(b.finish())))))
+                Ok(Value::Column(Rc::new(Array::new($LIST.len() as usize,
+                  ArrayData::Utf8(b.finish())))))
             },
             _ => unimplemented!("CAST from {:?} to {:?}", stringify!($FROM), stringify!($TO))
         }
@@ -471,53 +474,54 @@ macro_rules! cast_scalar_from_to {
         match &$TO {
             DataType::UInt8 => {
                 let cast_value = *$SCALAR as u8;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt8(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt8(cast_value)))) ))
             }
             DataType::UInt16 => {
                 let cast_value = *$SCALAR as u16;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt16(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt16(cast_value)))) ))
             }
             DataType::UInt32 => {
                 let cast_value = *$SCALAR as u32;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt32(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt32(cast_value)))) ))
             }
             DataType::UInt64 => {
                 let cast_value = *$SCALAR as u64;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::UInt64(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt64(cast_value)))) ))
             }
             DataType::Int8 => {
                 let cast_value = *$SCALAR as i8;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int8(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int8(cast_value)))) ))
             }
             DataType::Int16 => {
                 let cast_value = *$SCALAR as i16;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int16(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int16(cast_value)))) ))
             }
             DataType::Int32 => {
                 let cast_value = *$SCALAR as i32;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int32(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int32(cast_value)))) ))
             }
             DataType::Int64 => {
                 let cast_value = *$SCALAR as i64;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Int64(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                 Ok(Value::Scalar(Rc::new(ScalarValue::Int64(cast_value)))) ))
             }
             DataType::Float32 => {
                 let cast_value = *$SCALAR as f32;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Float32(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::Float32(cast_value)))) ))
             }
             DataType::Float64 => {
                 let cast_value = *$SCALAR as f64;
-                Ok(Rc::new(move |_: &Value| Ok(Value::Scalar(Rc::new(ScalarValue::Float64(cast_value)))) ))
+                Ok(Rc::new(move |_: &Value|
+                Ok(Value::Scalar(Rc::new(ScalarValue::Float64(cast_value)))) ))
             }
-            
-//            DataType::Utf8 => {
-//                let mut b: ListBuilder<u8> = ListBuilder::with_capacity($LIST.len() as usize);
-//                for i in 0..$LIST.len() as usize {
-//                    let s = format!("{:?}", *$LIST.get(i));
-//                    b.push(s.as_bytes());
-//                }
-//                Ok(Value::Column(Rc::new(Array::new($LIST.len() as usize,ArrayData::Utf8(b.finish())))))
-//            },
             _ => unimplemented!("CAST from {:?} to {:?}", stringify!($SCALAR), stringify!($TO))
         }
     }}
@@ -542,9 +546,7 @@ fn compile_cast_scalar(scalar: &ScalarValue, data_type: &DataType) -> Result<Com
     }
 }
 
-
 //Ok(Rc::new(move |_: &Value|
-
 
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(
@@ -589,9 +591,11 @@ pub fn compile_scalar_expr(
                     }),
                     t: data_type.clone(),
                 })
-
-            },
-            other => Err(ExecutionError::General(format!("CAST not implemented for expression {:?}", other))),
+            }
+            other => Err(ExecutionError::General(format!(
+                "CAST not implemented for expression {:?}",
+                other
+            ))),
         },
         &Expr::BinaryExpr {
             ref left,
@@ -853,18 +857,20 @@ impl SchemaProvider for ExecutionContextSchemaProvider {
     fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>> {
         match self.tables.borrow().get(&name.to_string().to_lowercase()) {
             Some(table) => Some(table.schema().clone()),
-            None => None
+            None => None,
         }
     }
 
     fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
-        match self.function_meta.borrow().get(&name.to_string().to_lowercase()) {
+        match self.function_meta
+            .borrow()
+            .get(&name.to_string().to_lowercase())
+        {
             Some(meta) => Some(meta.clone()),
-            None => None
+            None => None,
         }
     }
 }
-
 
 #[derive(Clone)]
 pub struct ExecutionContext {
@@ -875,11 +881,10 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-
     fn create_schema_provider(&self) -> Rc<SchemaProvider> {
         Rc::new(ExecutionContextSchemaProvider {
             tables: self.tables.clone(),
-            function_meta: self.function_meta.clone()
+            function_meta: self.function_meta.clone(),
         })
     }
 
@@ -1224,7 +1229,9 @@ impl ExecutionContext {
 
         match self.execute(&physical_plan)? {
             ExecutionResult::Count(count) => Ok(count),
-            _ => Err(ExecutionError::General("Unexpected result in show".to_string())),
+            _ => Err(ExecutionError::General(
+                "Unexpected result in show".to_string(),
+            )),
         }
     }
 
@@ -1236,7 +1243,9 @@ impl ExecutionContext {
 
         match self.execute(&physical_plan)? {
             ExecutionResult::Count(count) => Ok(count),
-            _ => Err(ExecutionError::General("Unexpected result in write_csv".to_string())),
+            _ => Err(ExecutionError::General(
+                "Unexpected result in write_csv".to_string(),
+            )),
         }
     }
 
@@ -1447,7 +1456,6 @@ mod tests {
     use std::fs::File;
     use std::io::prelude::*;
 
-
     #[test]
     fn test_dataframe_show() {
         let mut ctx = create_context();
@@ -1470,11 +1478,10 @@ mod tests {
         let df2 = df.filter(Expr::BinaryExpr {
             left: Rc::new(Expr::Column(1)),
             op: Operator::Lt,
-            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.1)))
+            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.1))),
         }).unwrap();
         df2.show(10);
         //TODO assertions
-
     }
 
     #[test]
@@ -1496,20 +1503,23 @@ mod tests {
         let mut ctx = create_context();
         let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
         let plan = df.plan();
-        assert_eq!("Projection: #0, #1, #2\
-        \n  TableScan: uk_cities projection=None", format!("{:?}", plan));
+        assert_eq!(
+            "Projection: #0, #1, #2\
+             \n  TableScan: uk_cities projection=None",
+            format!("{:?}", plan)
+        );
     }
 
     #[test]
     fn test_create_external_table() {
         let mut ctx = ExecutionContext::local();
         let sql = "CREATE EXTERNAL TABLE new_uk_cities (\
-                     city VARCHAR(100), \
-                     lat DOUBLE, \
-                     lng DOUBLE) \
-                     STORED AS CSV \
-                     WITHOUT HEADER ROW \
-                     LOCATION 'test/data/uk_cities.csv";
+                   city VARCHAR(100), \
+                   lat DOUBLE, \
+                   lng DOUBLE) \
+                   STORED AS CSV \
+                   WITHOUT HEADER ROW \
+                   LOCATION 'test/data/uk_cities.csv";
         ctx.sql(sql).unwrap();
 
         let df = ctx.sql("SELECT city, lat, lng FROM new_uk_cities").unwrap();
@@ -1521,9 +1531,10 @@ mod tests {
     fn test_create_logical_plan() {
         let mut ctx = create_context();
         ctx.register_scalar_function(Rc::new(SqrtFunction {}));
-        let plan = ctx.create_logical_plan(&"SELECT id, sqrt(id) FROM people").unwrap();
+        let plan = ctx.create_logical_plan(&"SELECT id, sqrt(id) FROM people")
+            .unwrap();
         let expected_plan = "Projection: #0, sqrt(CAST(#0 AS Float64))\
-            \n  TableScan: people projection=None";
+                             \n  TableScan: people projection=None";
         assert_eq!(expected_plan, format!("{:?}", plan));
     }
 
@@ -1657,11 +1668,15 @@ mod tests {
         let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
 
-        ctx.write_csv(df, "./target/test_chaining_functions.csv").unwrap();
+        ctx.write_csv(df, "./target/test_chaining_functions.csv")
+            .unwrap();
 
         let expected_result = read_file("test/data/expected/test_chaining_functions.csv");
 
-        assert_eq!(expected_result, read_file("./target/test_chaining_functions.csv"));
+        assert_eq!(
+            expected_result,
+            read_file("./target/test_chaining_functions.csv")
+        );
     }
 
     #[test]
@@ -1696,11 +1711,15 @@ mod tests {
         let df1 = ctx.sql(&sql).unwrap();
 
         // write the results to a file
-        ctx.write_csv(df1, "./target/test_simple_predicate.csv").unwrap();
+        ctx.write_csv(df1, "./target/test_simple_predicate.csv")
+            .unwrap();
 
         let expected_result = read_file("test/data/expected/test_simple_predicate.csv");
 
-        assert_eq!(expected_result, read_file("./target/test_simple_predicate.csv"));
+        assert_eq!(
+            expected_result,
+            read_file("./target/test_simple_predicate.csv")
+        );
     }
 
     #[test]
