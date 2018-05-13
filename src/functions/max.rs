@@ -62,7 +62,7 @@ macro_rules! max_in_scalar {
             ScalarValue::$VARIANT(x) => if *$VALUE > x {
                 $SELF.value = ScalarValue::$VARIANT(*$VALUE)
             },
-            _ => panic!("Yype mismatch in MAX()"),
+            _ => panic!("Type mismatch in MAX()"),
         }
         Ok(())
     }};
