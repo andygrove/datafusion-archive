@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! MIN() aggregate function
+//! MAX() aggregate function
 
 use std::rc::Rc;
 use std::str;
@@ -47,7 +47,7 @@ macro_rules! min_in_column {
                     $SELF.value = ScalarValue::$VARIANT(value)
                 },
                 ref other => panic!(
-                    "Type mismatch in MIN() for datatype {} - {:?}",
+                    "Type mismatch in MAX() for datatype {} - {:?}",
                     stringify!($VARIANT),
                     other
                 ),
