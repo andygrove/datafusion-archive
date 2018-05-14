@@ -350,6 +350,7 @@ pub fn compile_expr(
                 "min" => AggregateType::Min,
                 "max" => AggregateType::Max,
                 "count" => AggregateType::Count,
+                "sum" => AggregateType::Sum,
                 _ => unimplemented!("Unsupported aggregate function '{}'", name),
             };
 

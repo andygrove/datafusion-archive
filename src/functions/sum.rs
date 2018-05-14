@@ -43,7 +43,6 @@ macro_rules! sum_of_scalar {
             ScalarValue::$VARIANT(x) => $SELF.value = ScalarValue::$VARIANT(x + *$VALUE),
             _ => panic!("type mismatch :("),
         }
-        //Ok(());
     }};
 }
 
@@ -70,7 +69,13 @@ impl AggregateFunction for SumFunction {
                 ArrayData::UInt64(ref buf) => sum_of_column!(self, buf, UInt64),
                 ArrayData::Float32(ref buf) => sum_of_column!(self, buf, Float32),
                 ArrayData::Float64(ref buf) => sum_of_column!(self, buf, Float64),
-                _ => unimplemented!("Not done for this type"),
+                ArrayData::Int8(ref buf) => sum_of_column!(self, buf, Int8),
+                ArrayData::Int16(ref buf) => sum_of_column!(self, buf, Int16),
+                ArrayData::Int32(ref buf) => sum_of_column!(self, buf, Int32),
+                ArrayData::Int64(ref buf) => sum_of_column!(self, buf, Int64),
+                ArrayData::Utf8(_) => unimplemented!("Not done for this type: Utf8"),
+                ArrayData::Boolean(_) => unimplemented!("Not done for this type: Bool"),
+                ArrayData::Struct(_) => unimplemented!("Not done for this type: Struct"),
             },
             Value::Scalar(ref v) => match v.as_ref() {
                 ScalarValue::UInt8(ref value) => sum_of_scalar!(self, value, UInt8),

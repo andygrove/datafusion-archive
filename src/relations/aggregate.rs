@@ -22,6 +22,7 @@ use super::super::exec::*;
 use super::super::functions::count::CountFunction;
 use super::super::functions::max::MaxFunction;
 use super::super::functions::min::MinFunction;
+use super::super::functions::sum::SumFunction;
 use super::super::types::*;
 
 //use arrow::array::*;
@@ -128,6 +129,7 @@ fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateE
                 AggregateType::Min => Box::new(MinFunction::new(t)) as Box<AggregateFunction>,
                 AggregateType::Max => Box::new(MaxFunction::new(t)) as Box<AggregateFunction>,
                 AggregateType::Count => Box::new(CountFunction::new()) as Box<AggregateFunction>,
+                AggregateType::Sum => Box::new(SumFunction::new(t)) as Box<AggregateFunction>,
                 _ => panic!(),
             },
             _ => panic!(),
