@@ -24,7 +24,7 @@ The following features are currently supported:
 
 DataFusion can be used as a crate dependency in your project to add SQL support for custom data sources.
 
-A Docker image is also available if you just want to run SQL queries against your CSV and Parquet files.
+A [Docker image](https://datafusion.rs/guides/getting-started-docker/) is also available if you just want to run SQL queries against your CSV and Parquet files.
 
 I have plans to make DataFusion a fully distributed compute platform with features similar to Apache Spark, but I need help from contributors to get there.
 

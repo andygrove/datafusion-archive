@@ -39,6 +39,7 @@ use super::errors::*;
 use super::logical::*;
 use super::relations::aggregate::*;
 use super::relations::filter::*;
+use super::relations::limit::*;
 use super::relations::projection::*;
 use super::sqlast::ASTNode::*;
 use super::sqlast::FileType;
@@ -782,12 +783,6 @@ pub fn compile_scalar_expr(
 //
 //}
 
-pub struct LimitRelation {
-    schema: Rc<Schema>,
-    input: Box<SimpleRelation>,
-    _limit: usize,
-}
-
 /// trait for all relations (a relation is essentially just an iterator over rows with
 /// a known schema)
 pub trait SimpleRelation {
@@ -810,16 +805,6 @@ impl SimpleRelation for DataSourceRelation {
 
     fn schema<'a>(&'a self) -> &'a Schema {
         &self.schema
-    }
-}
-
-impl SimpleRelation for LimitRelation {
-    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-        unimplemented!()
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        self.schema.as_ref()
     }
 }
 
@@ -1176,11 +1161,7 @@ impl ExecutionContext {
                 ..
             } => {
                 let input_rel = self.create_execution_plan(input)?;
-                let rel = LimitRelation {
-                    input: input_rel,
-                    _limit: limit,
-                    schema: schema.clone(),
-                };
+                let rel = LimitRelation::new(schema.clone(),input_rel, limit);
                 Ok(Box::new(rel))
             }
         }
@@ -1566,6 +1547,21 @@ mod tests {
         let expected_result = read_file("test/data/expected/test_sql_udf_udt.csv");
 
         assert_eq!(expected_result, read_file("./target/test_sql_udf_udt.csv"));
+    }
+
+    #[test]
+    fn test_limit() {
+        let mut ctx = create_context();
+
+        ctx.register_scalar_function(Rc::new(SqrtFunction {}));
+
+        let df = ctx.sql(&"SELECT id, sqrt(id) FROM people LIMIT 5").unwrap();
+
+        ctx.write_csv(df, "./target/test_limit.csv").unwrap();
+
+        let expected_result = read_file("test/data/expected/test_limit.csv");
+
+        assert_eq!(expected_result, read_file("./target/test_limit.csv"));
     }
 
     #[test]
