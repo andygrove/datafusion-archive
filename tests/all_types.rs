@@ -159,6 +159,7 @@ fn parquet_aggregate() {
 
     // define the SQL statement
     let sql = "SELECT \
+        COUNT(1), COUNT(*), \
         MIN(c_bool), MAX(c_bool), \
         MIN(c_uint8), MAX(c_uint8), \
         MIN(c_uint16), MAX(c_uint16), \
@@ -192,6 +193,7 @@ fn csv_aggregate() {
 
     // define the SQL statement
     let sql = "SELECT \
+        COUNT(1), COUNT(*), \
         MIN(c_bool), MAX(c_bool), \
         MIN(c_uint8), MAX(c_uint8), \
         MIN(c_uint16), MAX(c_uint16), \

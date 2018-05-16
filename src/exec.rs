@@ -1160,7 +1160,7 @@ impl ExecutionContext {
                 ..
             } => {
                 let input_rel = self.create_execution_plan(input)?;
-                let rel = LimitRelation::new(schema.clone(),input_rel, limit);
+                let rel = LimitRelation::new(schema.clone(), input_rel, limit);
                 Ok(Box::new(rel))
             }
         }
