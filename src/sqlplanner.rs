@@ -294,7 +294,12 @@ impl SqlToRel {
                     }
                     "count" => {
                         let rex_args = args.iter()
-                            .map(|a| self.sql_to_rex(a, schema))
+                            .map(|a| match a {
+                                // this feels hacky but translate COUNT(1)/COUNT(*) to COUNT(first_column)
+                                ASTNode::SQLLiteralLong(1) => Ok(Expr::Column(0)),
+                                ASTNode::SQLWildcard => Ok(Expr::Column(0)),
+                                _ => self.sql_to_rex(a, schema)
+                            })
                             .collect::<Result<Vec<Expr>, String>>()?;
 
                         Ok(Expr::AggregateFunction {
@@ -571,7 +576,7 @@ mod tests {
     #[test]
     fn select_count_one() {
         let sql = "SELECT COUNT(1) FROM person";
-        let expected = "Aggregate: groupBy=[[]], aggr=[[COUNT(Int64(1))]]\
+        let expected = "Aggregate: groupBy=[[]], aggr=[[COUNT(#0)]]\
                         \n  TableScan: person projection=None";
         quick_test(sql, expected);
     }
