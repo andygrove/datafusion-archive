@@ -173,12 +173,14 @@ fn parquet_aggregate() {
         MIN(c_utf8), MAX(c_utf8), \
         SUM(c_int8), \
         SUM(c_int16), \
+        SUM(c_int32), \
+        SUM(c_int64), \
         SUM(c_uint8), \
         SUM(c_uint16), \
         SUM(c_uint32), \
         SUM(c_uint64), \
         SUM(c_float32), \
-        SUM(c_float64)
+        SUM(c_float64) \
     FROM all_types";
 
     // create a data frame

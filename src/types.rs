@@ -274,13 +274,16 @@ impl Add for ScalarValue {
     fn add(self, rhs: ScalarValue) -> ScalarValue {
         assert_eq!(self.get_datatype(), rhs.get_datatype());
         match self {
-            ScalarValue::Boolean(x) => ScalarValue::Boolean(x && rhs.get_bool().unwrap()),
             ScalarValue::UInt8(x) => ScalarValue::UInt8(x + rhs.get_u8().unwrap()),
             ScalarValue::UInt16(x) => ScalarValue::UInt16(x + rhs.get_u16().unwrap()),
             ScalarValue::UInt32(x) => ScalarValue::UInt32(x + rhs.get_u32().unwrap()),
             ScalarValue::UInt64(x) => ScalarValue::UInt64(x + rhs.get_u64().unwrap()),
             ScalarValue::Float32(x) => ScalarValue::Float32(x + rhs.get_f32().unwrap()),
             ScalarValue::Float64(x) => ScalarValue::Float64(x + rhs.get_f64().unwrap()),
+            ScalarValue::Int8(x)    => ScalarValue::Int8(x.saturating_add(rhs.get_i8().unwrap())),
+            ScalarValue::Int16(x)   => ScalarValue::Int16(x.saturating_add(rhs.get_i16().unwrap())),
+            ScalarValue::Int32(x)   => ScalarValue::Int32(x.saturating_add(rhs.get_i32().unwrap())),
+            ScalarValue::Int64(x)   => ScalarValue::Int64(x.saturating_add(rhs.get_i64().unwrap())),
             _ => panic!("Unsupported type for addition"),
         }
     }

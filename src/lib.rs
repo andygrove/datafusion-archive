@@ -24,6 +24,7 @@ extern crate bytes;
 extern crate clap;
 extern crate csv;
 extern crate fnv;
+#[cfg(target_os = "unix")]
 extern crate liner;
 extern crate parquet;
 

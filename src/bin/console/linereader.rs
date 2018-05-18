@@ -12,22 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(target_os = "unix")]
 use liner::Context;
 use std::io;
 
 const DEFAULT_PROMPT: &'static str = "datafusion> ";
 const CONTINUE_PROMPT: &'static str = "> ";
 
+#[cfg(target_os = "unix")]
 pub enum LineResult {
     Break,
     Input(String),
 }
 
+#[cfg(target_os = "unix")]
 pub struct LineReader<'a> {
     reader: Context,
     prompt: &'a str,
 }
 
+#[cfg(target_os = "unix")]
 impl<'a> LineReader<'a> {
     pub fn new() -> Self {
         LineReader {

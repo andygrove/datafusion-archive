@@ -12,8 +12,22 @@ pub struct SumFunction {
 
 impl SumFunction {
     pub fn new(dt: &DataType) -> Self {
+        let t;
+        match *dt {
+            DataType::Int8 => t = ScalarValue::Int8(0),
+            DataType::Int16 => t = ScalarValue::Int16(0),
+            DataType::Int32 => t = ScalarValue::Int32(0),
+            DataType::Int64 => t = ScalarValue::Int64(0),
+            DataType::UInt8 => t = ScalarValue::UInt8(0),
+            DataType::UInt16 => t = ScalarValue::UInt16(0),
+            DataType::UInt32 => t = ScalarValue::UInt32(0),
+            DataType::UInt64 => t = ScalarValue::UInt64(0),
+            DataType::Float32 => t = ScalarValue::Float32(0.0),
+            DataType::Float64 => t = ScalarValue::Float64(0.0),
+            d => panic!("Unsupported Datatype for SUM Aggregate: {:?}", stringify!(d))
+        };
         SumFunction {
-            value: ScalarValue::Null,
+            value: t,
             data_type: dt.clone(),
         }
     }
@@ -25,12 +39,21 @@ macro_rules! sum_of_column {
             let value = *$BUF.get(i);
             match $SELF.value {
                 ScalarValue::Null => $SELF.value = ScalarValue::$VARIANT(value),
+                ScalarValue::$VARIANT(x) => $SELF.value = ScalarValue::$VARIANT(value.saturating_add(x)),
+                ref other => panic!("Type mismatch in SUM() for datatype {} - {:?}", stringify!($VARIANT), other),
+            }
+        }
+    }};
+}
+
+macro_rules! sum_of_column_float {
+    ($SELF:ident, $BUF:ident, $VARIANT:ident) => {{
+        for i in 0..$BUF.len() as usize {
+            let value = *$BUF.get(i);
+            match $SELF.value {
+                ScalarValue::Null => $SELF.value = ScalarValue::$VARIANT(value),
                 ScalarValue::$VARIANT(x) => $SELF.value = ScalarValue::$VARIANT(x + value),
-                ref other => panic!(
-                    "Type mismatch in SUM() for datatype {} - {:?}",
-                    stringify!($VARIANT),
-                    other
-                ),
+                ref other => panic!("Type mismatch in SUM() for datatype {} - {:?}", stringify!($VARIANT), other),
             }
         }
     }};
@@ -41,7 +64,7 @@ macro_rules! sum_of_scalar {
         match $SELF.value {
             ScalarValue::Null => $SELF.value = ScalarValue::$VARIANT(*$VALUE),
             ScalarValue::$VARIANT(x) => $SELF.value = ScalarValue::$VARIANT(x + *$VALUE),
-            _ => panic!("type mismatch :("),
+            ref other => panic!("Type mismatch in SUM() for datatype {} - {:?}", stringify!($VARIANT), other),
         }
     }};
 }
@@ -52,7 +75,7 @@ impl AggregateFunction for SumFunction {
     }
 
     fn args(&self) -> Vec<Field> {
-        vec![Field::new("arg", DataType::UInt32, true)]
+        vec![Field::new("arg", self.data_type.clone(), true)]
     }
 
     fn return_type(&self) -> DataType {
@@ -63,25 +86,27 @@ impl AggregateFunction for SumFunction {
         assert_eq!(1, args.len());
         match args[0] {
             Value::Column(ref array) => match array.data() {
-                ArrayData::UInt8(ref buf) => sum_of_column!(self, buf, UInt8),
-                ArrayData::UInt16(ref buf) => sum_of_column!(self, buf, UInt16),
-                ArrayData::UInt32(ref buf) => sum_of_column!(self, buf, UInt32),
-                ArrayData::UInt64(ref buf) => sum_of_column!(self, buf, UInt64),
-                ArrayData::Float32(ref buf) => sum_of_column!(self, buf, Float32),
-                ArrayData::Float64(ref buf) => sum_of_column!(self, buf, Float64),
-                ArrayData::Int8(ref buf) => sum_of_column!(self, buf, Int8),
-                ArrayData::Int16(ref buf) => sum_of_column!(self, buf, Int16),
-                ArrayData::Int32(ref buf) => sum_of_column!(self, buf, Int32),
-                ArrayData::Int64(ref buf) => sum_of_column!(self, buf, Int64),
-                ArrayData::Utf8(_) => unimplemented!("Not done for this type: Utf8"),
-                ArrayData::Boolean(_) => unimplemented!("Not done for this type: Bool"),
-                ArrayData::Struct(_) => unimplemented!("Not done for this type: Struct"),
+                ArrayData::UInt8(ref buf)   => sum_of_column!(self, buf, UInt8),
+                ArrayData::UInt16(ref buf)  => sum_of_column!(self, buf, UInt16),
+                ArrayData::UInt32(ref buf)  => sum_of_column!(self, buf, UInt32),
+                ArrayData::UInt64(ref buf)  => sum_of_column!(self, buf, UInt64),
+                ArrayData::Float32(ref buf) => sum_of_column_float!(self, buf, Float32),
+                ArrayData::Float64(ref buf) => sum_of_column_float!(self, buf, Float64),
+                ArrayData::Int8(ref buf)    => sum_of_column!(self, buf, Int8),
+                ArrayData::Int16(ref buf)   => sum_of_column!(self, buf, Int16),
+                ArrayData::Int32(ref buf)   => sum_of_column!(self, buf, Int32),
+                ArrayData::Int64(ref buf)   => sum_of_column!(self, buf, Int64),
+                _ => unimplemented!("Not done for this type: Utf8"),
             },
             Value::Scalar(ref v) => match v.as_ref() {
                 ScalarValue::UInt8(ref value) => sum_of_scalar!(self, value, UInt8),
                 ScalarValue::UInt16(ref value) => sum_of_scalar!(self, value, UInt16),
                 ScalarValue::UInt32(ref value) => sum_of_scalar!(self, value, UInt32),
                 ScalarValue::UInt64(ref value) => sum_of_scalar!(self, value, UInt64),
+                ScalarValue::Int8(ref value) => sum_of_scalar!(self, value, Int8),
+                ScalarValue::Int16(ref value) => sum_of_scalar!(self, value, Int16),
+                ScalarValue::Int32(ref value) => sum_of_scalar!(self, value, Int32),
+                ScalarValue::Int64(ref value) => sum_of_scalar!(self, value, Int64),
                 ScalarValue::Float32(ref value) => sum_of_scalar!(self, value, Float32),
                 ScalarValue::Float64(ref value) => sum_of_scalar!(self, value, Float64),
                 _ => unimplemented!("Not done for type"),
