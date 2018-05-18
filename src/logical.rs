@@ -328,7 +328,7 @@ impl LogicalPlan {
 impl LogicalPlan {
     fn fmt_with_indent(&self, f: &mut Formatter, indent: usize) -> Result<(), Error> {
         if indent > 0 {
-            write!(f, "\n")?;
+            writeln!(f)?;
             for _ in 0..indent {
                 write!(f, "  ")?;
             }

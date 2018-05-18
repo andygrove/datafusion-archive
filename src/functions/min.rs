@@ -81,7 +81,7 @@ impl AggregateFunction for MinFunction {
         self.data_type.clone()
     }
 
-    fn execute(&mut self, args: &Vec<Value>) -> Result<()> {
+    fn execute(&mut self, args: &[Value]) -> Result<()> {
         assert_eq!(1, args.len());
         match args[0] {
             Value::Column(ref array) => {

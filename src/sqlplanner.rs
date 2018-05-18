@@ -294,7 +294,12 @@ impl SqlToRel {
                     }
                     "count" => {
                         let rex_args = args.iter()
-                            .map(|a| self.sql_to_rex(a, schema))
+                            .map(|a| match a {
+                                // this feels hacky but translate COUNT(1)/COUNT(*) to COUNT(first_column)
+                                ASTNode::SQLLiteralLong(1) => Ok(Expr::Column(0)),
+                                ASTNode::SQLWildcard => Ok(Expr::Column(0)),
+                                _ => self.sql_to_rex(a, schema),
+                            })
                             .collect::<Result<Vec<Expr>, String>>()?;
 
                         Ok(Expr::AggregateFunction {
@@ -337,37 +342,37 @@ impl SqlToRel {
 /// Convert SQL data type to relational representation of data type
 pub fn convert_data_type(sql: &SQLType) -> DataType {
     match sql {
-        &SQLType::Boolean => DataType::Boolean,
-        &SQLType::UInt8 => DataType::UInt8,
-        &SQLType::UInt16 => DataType::UInt16,
-        &SQLType::UInt32 => DataType::UInt32,
-        &SQLType::UInt64 => DataType::UInt64,
-        &SQLType::Int8 => DataType::Int8,
-        &SQLType::Int16 => DataType::Int16,
-        &SQLType::Int32 => DataType::Int32,
-        &SQLType::Int64 => DataType::Int64,
-        &SQLType::Float32 => DataType::Float64,
-        &SQLType::Double64 => DataType::Float64,
-        &SQLType::Utf8(_) => DataType::Utf8,
+        SQLType::Boolean => DataType::Boolean,
+        SQLType::UInt8 => DataType::UInt8,
+        SQLType::UInt16 => DataType::UInt16,
+        SQLType::UInt32 => DataType::UInt32,
+        SQLType::UInt64 => DataType::UInt64,
+        SQLType::Int8 => DataType::Int8,
+        SQLType::Int16 => DataType::Int16,
+        SQLType::Int32 => DataType::Int32,
+        SQLType::Int64 => DataType::Int64,
+        SQLType::Float32 => DataType::Float64,
+        SQLType::Double64 => DataType::Float64,
+        SQLType::Utf8(_) => DataType::Utf8,
     }
 }
 
 pub fn expr_to_field(e: &Expr, input_schema: &Schema) -> Field {
     match e {
-        &Expr::Column(i) => input_schema.columns()[i].clone(),
-        &Expr::Literal(ref lit) => Field::new("lit", lit.get_datatype(), true),
-        &Expr::ScalarFunction {
+        Expr::Column(i) => input_schema.columns()[*i].clone(),
+        Expr::Literal(ref lit) => Field::new("lit", lit.get_datatype(), true),
+        Expr::ScalarFunction {
             ref name,
             ref return_type,
             ..
         } => Field::new(name, return_type.clone(), true),
-        &Expr::AggregateFunction {
+        Expr::AggregateFunction {
             ref name,
             ref return_type,
             ..
         } => Field::new(name, return_type.clone(), true),
-        &Expr::Cast { ref data_type, .. } => Field::new("cast", data_type.clone(), true),
-        &Expr::BinaryExpr {
+        Expr::Cast { ref data_type, .. } => Field::new("cast", data_type.clone(), true),
+        Expr::BinaryExpr {
             ref left,
             ref right,
             ..
@@ -415,7 +420,7 @@ fn collect_expr(e: &Expr, accum: &mut HashSet<usize>) {
     }
 }
 
-pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) -> Rc<LogicalPlan> {
+pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: &HashSet<usize>) -> Rc<LogicalPlan> {
     //println!("push_down_projection() projection={:?}", projection);
     match plan.as_ref() {
         LogicalPlan::Aggregate {
@@ -429,7 +434,7 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
             group_expr.iter().for_each(|e| collect_expr(e, &mut accum));
             aggr_expr.iter().for_each(|e| collect_expr(e, &mut accum));
             Rc::new(LogicalPlan::Aggregate {
-                input: push_down_projection(&input, accum),
+                input: push_down_projection(&input, &accum),
                 group_expr: group_expr.clone(),
                 aggr_expr: aggr_expr.clone(),
                 schema: schema.clone(),
@@ -443,7 +448,7 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
             collect_expr(expr, &mut accum);
             Rc::new(LogicalPlan::Selection {
                 expr: expr.clone(),
-                input: push_down_projection(&input, accum),
+                input: push_down_projection(&input, &accum),
             })
         }
         LogicalPlan::TableScan {
@@ -455,7 +460,7 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
             schema_name: schema_name.to_string(),
             table_name: table_name.to_string(),
             schema: schema.clone(),
-            projection: Some(projection.iter().map(|i| *i).collect()),
+            projection: Some(projection.iter().cloned().collect()),
         }),
         LogicalPlan::CsvFile {
             ref filename,
@@ -466,7 +471,7 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
             filename: filename.to_string(),
             schema: schema.clone(),
             has_header: *has_header,
-            projection: Some(projection.iter().map(|i| *i).collect()),
+            projection: Some(projection.iter().cloned().collect()),
         }),
         LogicalPlan::ParquetFile {
             ref filename,
@@ -475,7 +480,7 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: HashSet<usize>) 
         } => Rc::new(LogicalPlan::ParquetFile {
             filename: filename.to_string(),
             schema: schema.clone(),
-            projection: Some(projection.iter().map(|i| *i).collect()),
+            projection: Some(projection.iter().cloned().collect()),
         }),
         LogicalPlan::Projection { .. } => plan.clone(),
         LogicalPlan::Limit { .. } => plan.clone(),
@@ -579,7 +584,7 @@ mod tests {
     #[test]
     fn select_count_one() {
         let sql = "SELECT COUNT(1) FROM person";
-        let expected = "Aggregate: groupBy=[[]], aggr=[[COUNT(Int64(1))]]\
+        let expected = "Aggregate: groupBy=[[]], aggr=[[COUNT(#0)]]\
                         \n  TableScan: person projection=None";
         quick_test(sql, expected);
     }

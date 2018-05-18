@@ -749,7 +749,7 @@ pub fn compile_scalar_expr(
                         .map(|expr| expr.get_func()(batch))
                         .collect();
 
-                    func.execute(arg_values?)
+                    func.execute(&arg_values?)
                 }),
                 t: return_type.clone(),
             })
@@ -960,7 +960,7 @@ impl ExecutionContext {
                 let plan = query_planner.sql_to_rel(&ast)?;
                 //println!("Logical plan: {:?}", plan);
 
-                let new_plan = push_down_projection(&plan, HashSet::new());
+                let new_plan = push_down_projection(&plan, &HashSet::new());
                 //println!("Optimized logical plan: {:?}", new_plan);
 
                 // return the DataFrame
@@ -1027,7 +1027,7 @@ impl ExecutionContext {
                             p.iter().for_each(|i| {
                                 h.insert(*i);
                             });
-                            self.create_execution_plan(&push_down_projection(df.plan(), h))
+                            self.create_execution_plan(&push_down_projection(df.plan(), &h))
                         }
                         None => self.create_execution_plan(df.plan()),
                     },
@@ -1161,7 +1161,7 @@ impl ExecutionContext {
                 ..
             } => {
                 let input_rel = self.create_execution_plan(input)?;
-                let rel = LimitRelation::new(schema.clone(),input_rel, limit);
+                let rel = LimitRelation::new(schema.clone(), input_rel, limit);
                 Ok(Box::new(rel))
             }
         }

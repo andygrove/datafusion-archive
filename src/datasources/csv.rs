@@ -108,13 +108,16 @@ impl DataSource for CsvFile {
                 Some(Ok(r)) => {
                     rows.push(r);
                 }
-                _ => break,
+                Some(Err(e)) => panic!("{:?}", e),
+                None => break,
             }
         }
 
         if rows.len() == 0 {
             return None;
         }
+
+        //println!("Loaded {} rows", rows.len());
 
         let column_with_index = self.schema.columns().iter().enumerate();
 
@@ -241,7 +244,8 @@ mod tests {
 
         let mut csv = CsvFile::open(file, Rc::new(schema), false, None).unwrap();
         let batch = csv.next().unwrap().unwrap();
-        println!("rows: {}; cols: {}", batch.num_rows(), batch.num_columns());
+        assert_eq!(37, batch.num_rows());
+        assert_eq!(3, batch.num_columns());
     }
 
     #[test]
@@ -282,9 +286,14 @@ mod tests {
         let mut csv = CsvFile::open(file, Rc::new(schema), false, None).unwrap();
         csv.set_batch_size(2);
         let it = DataSourceIterator::new(Rc::new(RefCell::new(csv)));
+        let mut row_count = 0;
         it.for_each(|record_batch| match record_batch {
-            Ok(b) => println!("new batch with {} rows", b.num_rows()),
+            Ok(b) => {
+                println!("new batch with {} rows", b.num_rows());
+                row_count += b.num_rows();
+            }
             _ => println!("error"),
         });
+        assert_eq!(37, row_count);
     }
 }

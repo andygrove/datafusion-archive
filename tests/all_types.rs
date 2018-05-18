@@ -89,6 +89,13 @@ fn csv_test_float32() {
 }
 
 #[test]
+fn csv_test_float32_uint32_comparison() {
+    csv_project_filter_test("c_float32", "c_float32 >= 0 ", "high_uint32");
+    csv_project_filter_test("c_float32", "c_float32 <= 1", "low_uint32");
+    csv_project_filter_test("c_float32", "c_float32 <= CAST(1 as float32)", "cast_uint32");
+}
+
+#[test]
 fn csv_test_float64() {
     csv_project_filter_test("c_float64", "c_float64 > 0.5", "high");
     csv_project_filter_test("c_float64", "c_float64 < 0.5", "low");
@@ -159,6 +166,7 @@ fn parquet_aggregate() {
 
     // define the SQL statement
     let sql = "SELECT \
+        COUNT(1), COUNT(*), \
         MIN(c_bool), MAX(c_bool), \
         MIN(c_uint8), MAX(c_uint8), \
         MIN(c_uint16), MAX(c_uint16), \
@@ -202,6 +210,7 @@ fn csv_aggregate() {
 
     // define the SQL statement
     let sql = "SELECT \
+        COUNT(1), COUNT(*), \
         MIN(c_bool), MAX(c_bool), \
         MIN(c_uint8), MAX(c_uint8), \
         MIN(c_uint16), MAX(c_uint16), \
