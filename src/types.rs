@@ -183,7 +183,7 @@ impl From<Vec<Rc<Array>>> for Array {
             len: v.len() as i32,
             null_count: 0,
             validity_bitmap: None,
-            data: ArrayData::Struct(v.iter().map(|a| a.clone()).collect()),
+            data: ArrayData::Struct(v.iter().cloned().collect()),
         }
     }
 }
@@ -270,20 +270,20 @@ impl ScalarValue {
 impl fmt::Display for ScalarValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &ScalarValue::Null => write!(f, "NULL"),
-            &ScalarValue::Boolean(v) => write!(f, "{}", v),
-            &ScalarValue::Int8(v) => write!(f, "{}", v),
-            &ScalarValue::Int16(v) => write!(f, "{}", v),
-            &ScalarValue::Int32(v) => write!(f, "{}", v),
-            &ScalarValue::Int64(v) => write!(f, "{}", v),
-            &ScalarValue::UInt8(v) => write!(f, "{}", v),
-            &ScalarValue::UInt16(v) => write!(f, "{}", v),
-            &ScalarValue::UInt32(v) => write!(f, "{}", v),
-            &ScalarValue::UInt64(v) => write!(f, "{}", v),
-            &ScalarValue::Float32(v) => write!(f, "{}", v),
-            &ScalarValue::Float64(v) => write!(f, "{}", v),
-            &ScalarValue::Utf8(ref v) => write!(f, "{}", v),
-            &ScalarValue::Struct(ref v) => {
+            ScalarValue::Null => write!(f, "NULL"),
+            ScalarValue::Boolean(v) => write!(f, "{}", v),
+            ScalarValue::Int8(v) => write!(f, "{}", v),
+            ScalarValue::Int16(v) => write!(f, "{}", v),
+            ScalarValue::Int32(v) => write!(f, "{}", v),
+            ScalarValue::Int64(v) => write!(f, "{}", v),
+            ScalarValue::UInt8(v) => write!(f, "{}", v),
+            ScalarValue::UInt16(v) => write!(f, "{}", v),
+            ScalarValue::UInt32(v) => write!(f, "{}", v),
+            ScalarValue::UInt64(v) => write!(f, "{}", v),
+            ScalarValue::Float32(v) => write!(f, "{}", v),
+            ScalarValue::Float64(v) => write!(f, "{}", v),
+            ScalarValue::Utf8(ref v) => write!(f, "{}", v),
+            ScalarValue::Struct(ref v) => {
                 for i in 0..v.len() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -428,7 +428,7 @@ pub trait ScalarFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&self, args: Vec<Value>) -> Result<Value>;
+    fn execute(&self, args: &[Value]) -> Result<Value>;
 }
 
 /// Aggregate function
@@ -436,7 +436,7 @@ pub trait AggregateFunction {
     fn name(&self) -> String;
     fn args(&self) -> Vec<Field>;
     fn return_type(&self) -> DataType;
-    fn execute(&mut self, args: &Vec<Value>) -> Result<()>;
+    fn execute(&mut self, args: &[Value]) -> Result<()>;
     fn finish(&self) -> Result<Value>;
 }
 

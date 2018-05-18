@@ -29,7 +29,7 @@ impl ScalarFunction for SqrtFunction {
         "sqrt".to_string()
     }
 
-    fn execute(&self, args: Vec<Value>) -> Result<Value> {
+    fn execute(&self, args: &[Value]) -> Result<Value> {
         assert_eq!(1, args.len());
         match args[0] {
             Value::Column(ref arr) => match arr.data() {

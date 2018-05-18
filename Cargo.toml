@@ -35,7 +35,7 @@ datafusion-arrow = "0.1.0-nightly-20180505"
 #arrow = { path = "../arrow/rust" }
 
 lazy_static = "1.0"
-parquet = "0.2.0"
+parquet = "0.3.0"
 #parquet = { path = "../parquet-rs" }
 #futures = "0.1.18"
 #futures-timer = "0.1"

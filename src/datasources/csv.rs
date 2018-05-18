@@ -108,9 +108,7 @@ impl DataSource for CsvFile {
                 Some(Ok(r)) => {
                     rows.push(r);
                 }
-                Some(Err(e)) => {
-                    panic!("{:?}", e)
-                }
+                Some(Err(e)) => panic!("{:?}", e),
                 None => break,
             }
         }
@@ -293,7 +291,7 @@ mod tests {
             Ok(b) => {
                 println!("new batch with {} rows", b.num_rows());
                 row_count += b.num_rows();
-            },
+            }
             _ => println!("error"),
         });
         assert_eq!(37, row_count);

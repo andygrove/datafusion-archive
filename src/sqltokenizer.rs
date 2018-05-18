@@ -157,7 +157,7 @@ impl Tokenizer {
         Ok(tokens
             .into_iter()
             .filter(|t| match t {
-                &Token::Whitespace => false,
+                Token::Whitespace => false,
                 _ => true,
             })
             .collect())
@@ -306,10 +306,10 @@ impl Tokenizer {
                         None => Ok(Some(Token::Gt)),
                     }
                 }
-                _ => Err(TokenizerError(String::from(format!(
+                _ => Err(TokenizerError(format!(
                     "unhandled char '{}' in tokenizer",
                     ch
-                )))),
+                ))),
             },
             None => Ok(None),
         }

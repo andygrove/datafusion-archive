@@ -28,7 +28,7 @@ impl ScalarFunction for STPointFunc {
         "ST_Point".to_string()
     }
 
-    fn execute(&self, args: Vec<Value>) -> Result<Value> {
+    fn execute(&self, args: &[Value]) -> Result<Value> {
         assert_eq!(2, args.len());
         match (&args[0], &args[1]) {
             (Value::Column(ref arr1), Value::Column(ref arr2)) => {

@@ -44,7 +44,7 @@ impl AggregateFunction for CountFunction {
         DataType::UInt64
     }
 
-    fn execute(&mut self, args: &Vec<Value>) -> Result<()> {
+    fn execute(&mut self, args: &[Value]) -> Result<()> {
         assert_eq!(1, args.len());
         match args[0] {
             Value::Column(ref array) => {
