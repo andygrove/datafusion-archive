@@ -26,7 +26,7 @@ use super::super::functions::max::MaxFunction;
 use super::super::functions::min::MinFunction;
 use super::super::types::*;
 
-//use arrow::array::*;
+use arrow::array::ListArray;
 use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::list_builder::*;
@@ -336,7 +336,7 @@ impl SimpleRelation for AggregateRelation {
                             for v in aggr_values {
                                 b.push(v.get_string().unwrap().as_bytes());
                             }
-                            Array::new(aggr_values.len(), ArrayData::Utf8(b.finish()))
+                            Array::new(aggr_values.len(), ArrayData::Utf8(ListArray::from(b.finish())))
                         }
                         _ => unimplemented!("No support for aggregate with return type {:?}", t),
                     };

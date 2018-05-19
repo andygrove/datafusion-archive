@@ -17,7 +17,7 @@
 use std::fs::File;
 use std::rc::Rc;
 
-//use arrow::array::*;
+use arrow::array::ListArray;
 use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::list_builder::*;
@@ -128,7 +128,7 @@ impl ParquetFile {
                                     for j in 0..row_count {
                                         builder.push(b[j].slice(0, b[j].len()).data());
                                     }
-                                    Array::new(count, ArrayData::Utf8(builder.finish()))
+                                    Array::new(count, ArrayData::Utf8(ListArray::from(builder.finish())))
                                 }
                                 _ => panic!("Error reading parquet batch (column {})", i),
                             }

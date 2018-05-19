@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use std::rc::Rc;
 use std::result;
 
+use arrow::array::{ListArray, PrimitiveArray};
 use arrow::bitmap::*;
 use arrow::buffer::*;
 use arrow::datatypes::{DataType, Field};
@@ -83,12 +84,12 @@ macro_rules! arraydata_from_primitive {
     ($DT:ty, $AT:ident) => {
         impl From<Vec<$DT>> for ArrayData {
             fn from(v: Vec<$DT>) -> Self {
-                ArrayData::$AT(Buffer::from(v))
+                ArrayData::$AT(PrimitiveArray::from(v))
             }
         }
         impl From<Buffer<$DT>> for ArrayData {
             fn from(v: Buffer<$DT>) -> Self {
-                ArrayData::$AT(v)
+                ArrayData::$AT(PrimitiveArray::from(v))
             }
         }
     };
@@ -107,18 +108,18 @@ arraydata_from_primitive!(u32, UInt32);
 arraydata_from_primitive!(u64, UInt64);
 
 pub enum ArrayData {
-    Boolean(Buffer<bool>),
-    Float32(Buffer<f32>),
-    Float64(Buffer<f64>),
-    Int8(Buffer<i8>),
-    Int16(Buffer<i16>),
-    Int32(Buffer<i32>),
-    Int64(Buffer<i64>),
-    UInt8(Buffer<u8>),
-    UInt16(Buffer<u16>),
-    UInt32(Buffer<u32>),
-    UInt64(Buffer<u64>),
-    Utf8(List<u8>),
+    Boolean(PrimitiveArray<bool>),
+    Float32(PrimitiveArray<f32>),
+    Float64(PrimitiveArray<f64>),
+    Int8(PrimitiveArray<i8>),
+    Int16(PrimitiveArray<i16>),
+    Int32(PrimitiveArray<i32>),
+    Int64(PrimitiveArray<i64>),
+    UInt8(PrimitiveArray<u8>),
+    UInt16(PrimitiveArray<u16>),
+    UInt32(PrimitiveArray<u32>),
+    UInt64(PrimitiveArray<u64>),
+    Utf8(ListArray<u8>),
     Struct(Vec<Rc<Array>>),
 }
 
@@ -172,7 +173,7 @@ impl From<Vec<String>> for Array {
             len: v.len() as i32,
             null_count: 0,
             validity_bitmap: None,
-            data: ArrayData::Utf8(List::from(v)),
+            data: ArrayData::Utf8(ListArray::from(List::from(v))),
         }
     }
 }

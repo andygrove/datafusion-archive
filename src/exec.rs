@@ -26,7 +26,7 @@ use std::rc::Rc;
 use std::str;
 use std::string::String;
 
-//use arrow::array::*;
+use arrow::array::ListArray;
 use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::list_builder::*;
@@ -411,7 +411,7 @@ macro_rules! cast_array_from_to {
                     b.push(s.as_bytes());
                 }
                 Ok(Value::Column(Rc::new(Array::new($LIST.len() as usize,
-                  ArrayData::Utf8(b.finish())))))
+                  ArrayData::Utf8(ListArray::from(b.finish()))))))
             },
             _ => unimplemented!("CAST from {:?} to {:?}", stringify!($FROM), stringify!($TO))
         }
