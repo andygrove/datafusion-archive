@@ -24,7 +24,7 @@ impl SumFunction {
             DataType::UInt64 => t = ScalarValue::UInt64(0),
             DataType::Float32 => t = ScalarValue::Float32(0.0),
             DataType::Float64 => t = ScalarValue::Float64(0.0),
-            d => panic!("Unsupported Datatype for SUM Aggregate: {:?}", stringify!(d))
+            _ => panic!("Unsupported Datatype for SUM Aggregate: {:?}", stringify!(dt))
         };
         SumFunction {
             value: t,
@@ -82,7 +82,7 @@ impl AggregateFunction for SumFunction {
         self.data_type.clone()
     }
 
-    fn execute(&mut self, args: &Vec<Value>) -> Result<()> {
+    fn execute(&mut self, args: &[Value]) -> Result<()> {
         assert_eq!(1, args.len());
         match args[0] {
             Value::Column(ref array) => match array.data() {

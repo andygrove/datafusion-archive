@@ -15,7 +15,7 @@
 extern crate clap;
 extern crate datafusion;
 
-#[cfg(target_os = "unix")]
+#[cfg(target_family = "unix")]
 extern crate liner;
 
 use std::fs::File;
@@ -37,7 +37,7 @@ mod linereader;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-#[cfg(target_os = "unix")]
+#[cfg(target_family = "unix")]
 fn setup_console(cmdline: clap::ArgMatches) {
         //parse args
         //let etcd_endpoints = cmdline.value_of("ETCD").unwrap();
@@ -82,7 +82,7 @@ fn setup_console(cmdline: clap::ArgMatches) {
         }
       }
 
-#[cfg(target_os = "windows")]
+#[cfg(target_family = "windows")]
 fn setup_console(cmdline: clap::ArgMatches) {
     panic!("Console is not supported on windows!")
 }
