@@ -16,5 +16,6 @@
 
 pub mod common;
 pub mod csv;
+pub mod ndjson;
 pub mod parquet;
 //pub mod quiver;
