@@ -18,6 +18,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum FileType {
     CSV,
+    NdJson,
     Parquet,
 }
 
