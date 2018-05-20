@@ -40,14 +40,14 @@ pub struct NdJsonFile {
 
 impl NdJsonFile {
 
-    pub fn open(f: File, schema: Rc<Schema>, projection: Option<Vec<usize>>) -> Self {
+    pub fn open(f: File, schema: Rc<Schema>, projection: Option<Vec<usize>>) -> Result<Self> {
         let reader = BufReader::new(f);
         let it = reader.lines();
-        NdJsonFile {
+        Ok(NdJsonFile {
             schema: schema.clone(),
             lines: Box::new(it), batch_size: 1024,
             projection
-        }
+        })
     }
 }
 
@@ -187,7 +187,7 @@ mod tests {
 
         let file = File::open("test/data/example1.ndjson").unwrap();
 
-        let mut file = NdJsonFile::open(file, Rc::new(schema), None);
+        let mut file = NdJsonFile::open(file, Rc::new(schema), None).unwrap();
         let batch = file.next().unwrap().unwrap();
         assert_eq!(3, batch.num_rows());
         assert_eq!(3, batch.num_columns());
