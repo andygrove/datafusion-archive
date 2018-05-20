@@ -102,6 +102,10 @@ pub enum Expr {
         op: Operator,
         right: Rc<Expr>,
     },
+    /// unary IS NOT NULL
+    IsNotNull(Rc<Expr>),
+    /// unary IS NULL
+    IsNull(Rc<Expr>),
     /// cast a value to a different type
     Cast { expr: Rc<Expr>, data_type: DataType },
     /// sort expression
@@ -128,6 +132,8 @@ impl Expr {
             Expr::Cast { data_type, .. } => data_type.clone(),
             Expr::ScalarFunction { return_type, .. } => return_type.clone(),
             Expr::AggregateFunction { return_type, .. } => return_type.clone(),
+            Expr::IsNotNull(ref expr) => expr.get_type(schema),
+            Expr::IsNull(ref expr) => expr.get_type(schema),
             Expr::BinaryExpr {
                 ref left,
                 ref right,
@@ -221,6 +227,8 @@ impl fmt::Debug for Expr {
             Expr::Column(i) => write!(f, "#{}", i),
             Expr::Literal(v) => write!(f, "{:?}", v),
             Expr::Cast { expr, data_type } => write!(f, "CAST({:?} AS {:?})", expr, data_type),
+            Expr::IsNull ( expr ) => write!(f, "{:?} IS NULL", expr),
+            Expr::IsNotNull ( expr ) => write!(f, "{:?} IS NOT NULL", expr),
             Expr::BinaryExpr { left, op, right } => write!(f, "{:?} {:?} {:?}", left, op, right),
             Expr::Sort { expr, asc } => if *asc {
                 write!(f, "{:?} ASC", expr)

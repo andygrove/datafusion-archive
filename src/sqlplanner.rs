@@ -402,6 +402,8 @@ fn collect_expr(e: &Expr, accum: &mut HashSet<usize>) {
         }
         Expr::Cast { ref expr, .. } => collect_expr(expr, accum),
         Expr::Literal(_) => {}
+        Expr::IsNotNull(ref expr) => collect_expr(expr, accum),
+        Expr::IsNull(ref expr) => collect_expr(expr, accum),
         Expr::BinaryExpr {
             ref left,
             ref right,

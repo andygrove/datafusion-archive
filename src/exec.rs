@@ -133,6 +133,15 @@ macro_rules! compare_array_with_scalar {
 }
 
 impl Value {
+
+    pub fn is_null(&self) -> Result<Value> {
+        unimplemented!()
+    }
+
+    pub fn is_not_null(&self) -> Result<Value> {
+        unimplemented!()
+    }
+
     pub fn eq(&self, other: &Value) -> Result<Value> {
         match (self, other) {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
@@ -597,6 +606,26 @@ pub fn compile_scalar_expr(
                 other
             ))),
         },
+        &Expr::IsNotNull(ref expr) => {
+            let compiled_expr = compile_scalar_expr(ctx, expr, input_schema)?;
+            Ok(RuntimeExpr::Compiled {
+                f: Rc::new(move |batch: &RecordBatch| {
+                    let left_values = compiled_expr.get_func()(batch)?;
+                    left_values.is_not_null()
+                }),
+                t: DataType::Boolean,
+            })
+        }
+        &Expr::IsNull(ref expr) => {
+            let compiled_expr = compile_scalar_expr(ctx, expr, input_schema)?;
+            Ok(RuntimeExpr::Compiled {
+                f: Rc::new(move |batch: &RecordBatch| {
+                    let left_values = compiled_expr.get_func()(batch)?;
+                    left_values.is_null()
+                }),
+                t: DataType::Boolean,
+            })
+        }
         &Expr::BinaryExpr {
             ref left,
             ref op,
