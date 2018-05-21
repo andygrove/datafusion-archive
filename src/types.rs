@@ -229,6 +229,58 @@ impl ScalarValue {
     }
 }
 
+/// Type corecion rules
+pub fn can_coerce_from(left: &DataType, right: &DataType) -> bool {
+    use self::DataType::*;
+    match left {
+        Int8 => match right {
+            Int8 => true,
+            _ => false,
+        },
+        Int16 => match right {
+            Int8 | Int16 => true,
+            _ => false,
+        },
+        Int32 => match right {
+            Int8 | Int16 | Int32 => true,
+            _ => false,
+        },
+        Int64 => match right {
+            Int8 | Int16 | Int32 | Int64 => true,
+            _ => false,
+        },
+        UInt8 => match right {
+            UInt8 => true,
+            _ => false,
+        },
+        UInt16 => match right {
+            UInt8 | UInt16 => true,
+            _ => false,
+        },
+        UInt32 => match right {
+            UInt8 | UInt16 | UInt32 => true,
+            _ => false,
+        },
+        UInt64 => match right {
+            UInt8 | UInt16 | UInt32 | UInt64 => true,
+            _ => false,
+        },
+        Float32 => match right {
+            Int8 | Int16 | Int32 | Int64 => true,
+            UInt8 | UInt16 | UInt32 | UInt64 => true,
+            Float32 => true,
+            _ => false,
+        },
+        Float64 => match right {
+            Int8 | Int16 | Int32 | Int64 => true,
+            UInt8 | UInt16 | UInt32 | UInt64 => true,
+            Float32 | Float64 => true,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 macro_rules! primitive_accessor {
     ($NAME:ident, $VARIANT:ident, $TY:ty) => {
         pub fn $NAME(&self) -> Result<$TY> {

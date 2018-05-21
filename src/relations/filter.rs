@@ -46,8 +46,12 @@ impl SimpleRelation for FilterRelation {
                     assert!(batch.num_rows() > 0);
                     // evaluate the filter expression for every row in the batch
                     let x = (*filter_expr)(batch.as_ref())?;
+
+
                     match x {
                         Value::Column(ref filter_eval) => {
+                            assert_eq!(batch.num_rows(), filter_eval.len());
+
                             let filtered_columns: Vec<Value> = (0..batch.num_columns())
                                 .map(move |column_index| {
                                     //println!("Filtering column {}", column_index);
@@ -94,13 +98,8 @@ impl SimpleRelation for FilterRelation {
 }
 
 pub fn filter(column: &Value, bools: &Array) -> Array {
-    //println!("filter()");
     match column {
         &Value::Scalar(ref v) => match v.as_ref() {
-            //            ScalarValue::Utf8(ref s) => {
-            //                bools.map(|b|)
-            //
-            //            },
             ScalarValue::Null => {
                 let b: Vec<i32> = vec![];
                 Array::from(b)

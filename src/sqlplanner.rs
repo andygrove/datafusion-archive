@@ -228,6 +228,14 @@ impl SqlToRel {
                 data_type: convert_data_type(data_type),
             }),
 
+            &ASTNode::SQLIsNull(ref expr) => {
+                Ok(Expr::IsNull(Rc::new(self.sql_to_rex(expr, schema)?)))
+            }
+
+            &ASTNode::SQLIsNotNull(ref expr) => {
+                Ok(Expr::IsNotNull(Rc::new(self.sql_to_rex(expr, schema)?)))
+            }
+
             &ASTNode::SQLBinaryExpr {
                 ref left,
                 ref op,

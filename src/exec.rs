@@ -135,11 +135,63 @@ macro_rules! compare_array_with_scalar {
 impl Value {
 
     pub fn is_null(&self) -> Result<Value> {
-        unimplemented!()
+        match self {
+            Value::Column(ref array) => {
+                let mut b: Builder<bool> = Builder::new();
+                match array.validity_bitmap() {
+                    Some(bitmap) => {
+                        //TODO should be able to just copy the bitmap and return it as a bitpacked array
+                        for i in 0..array.len() {
+                            if bitmap.is_set(i) {
+                                b.push(false);
+                            } else {
+                                b.push(true);
+                            }
+                        }
+                    }
+                    None => {
+                        for _ in 0..array.len() {
+                            b.push(false);
+                        }
+                    }
+                }
+                let bools = b.finish();
+
+                assert_eq!(bools.len(), array.len());
+                Ok(Value::Column(Rc::new(Array::new(array.len(), ArrayData::from(bools)))))
+            }
+            Value::Scalar(_) => unimplemented!()
+        }
     }
 
     pub fn is_not_null(&self) -> Result<Value> {
-        unimplemented!()
+        match self {
+            Value::Column(ref array) => {
+                let mut b: Builder<bool> = Builder::new();
+                match array.validity_bitmap() {
+                    Some(bitmap) => {
+                        //TODO should be able to just copy the bitmap and return it as a bitpacked array
+                        for i in 0..array.len() {
+                            if bitmap.is_set(i) {
+                                b.push(true);
+                            } else {
+                                b.push(false);
+                            }
+                        }
+                    }
+                    None => {
+                        for _ in 0..array.len() {
+                            b.push(true);
+                        }
+                    }
+                }
+                let bools = b.finish();
+
+                assert_eq!(bools.len(), array.len());
+                Ok(Value::Column(Rc::new(Array::new(array.len(), ArrayData::from(bools)))))
+            }
+            Value::Scalar(_) => unimplemented!()
+        }
     }
 
     pub fn eq(&self, other: &Value) -> Result<Value> {
@@ -268,13 +320,10 @@ impl Value {
                             .zip(r.iter())
                             .map(|(ll, rr)| ll && rr)
                             .collect::<Vec<bool>>();
-                        //                        println!("AND: left = {:?}", l.iter().collect::<Vec<bool>>());
-                        //                        println!("AND: right = {:?}", r.iter().collect::<Vec<bool>>());
-                        //                        println!("AND: bools = {:?}", bools);
                         let bools = Array::from(bools);
                         Ok(Value::Column(Rc::new(bools)))
                     }
-                    _ => panic!(),
+                    _ => panic!("AND expected two boolean inputs"),
                 }
             }
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
@@ -282,18 +331,36 @@ impl Value {
                     let bools = Array::from(l.iter().map(|ll| ll && *r).collect::<Vec<bool>>());
                     Ok(Value::Column(Rc::new(bools)))
                 }
-                _ => panic!(),
+                _ => panic!("AND expected two boolean inputs"),
             },
-            //            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
-            //                compare_array_with_scalar!(v2, v1, |(aa, bb)| aa && bb)
-            //            }
-            //            (&Value::Scalar(ref _v1), &Value::Scalar(ref _v2)) => unimplemented!(),
-            _ => panic!(),
+            _ => unimplemented!(),
         }
     }
 
-    pub fn or(&self, _other: &Value) -> Result<Value> {
-        unimplemented!()
+    pub fn or(&self, other: &Value) -> Result<Value> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                match (v1.data(), v2.data()) {
+                    (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
+                        let bools = l.iter()
+                            .zip(r.iter())
+                            .map(|(ll, rr)| ll || rr)
+                            .collect::<Vec<bool>>();
+                        let bools = Array::from(bools);
+                        Ok(Value::Column(Rc::new(bools)))
+                    }
+                    _ => panic!("OR expected two boolean inputs"),
+                }
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
+                (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
+                    let bools = Array::from(l.iter().map(|ll| ll || *r).collect::<Vec<bool>>());
+                    Ok(Value::Column(Rc::new(bools)))
+                }
+                _ => panic!("OR expected two boolean inputs"),
+            },
+            _ => unimplemented!(),
+        }
     }
 }
 
@@ -1807,6 +1874,64 @@ mod tests {
         let expected_result = read_file("test/data/expected/test_sql_min_max.csv");
 
         assert_eq!(expected_result, read_file("./target/test_sql_min_max.csv"));
+    }
+
+    #[test]
+    fn test_is_null_csv() {
+        // create execution context
+        let mut ctx = ExecutionContext::local();
+
+        let schema = Schema::new(vec![
+            Field::new("c_int", DataType::UInt32, false),
+            Field::new("c_float", DataType::Float64, false),
+            Field::new("c_string", DataType::Utf8, false),
+        ]);
+
+        let df = ctx.load_csv("./test/data/null_test.csv", &schema, true, None)
+            .unwrap();
+        ctx.register("null_test", df);
+
+        // define the SQL statement
+        let sql = "SELECT c_int FROM null_test WHERE c_float IS NULL"; // OR c_string IS NULL
+
+        // create a data frame
+        let df1 = ctx.sql(&sql).unwrap();
+
+        // write the results to a file
+        ctx.write_csv(df1, "./target/is_null_csv.csv").unwrap();
+
+        let expected_result = read_file("test/data/expected/is_null_csv.csv");
+
+        assert_eq!(expected_result, read_file("./target/is_null_csv.csv"));
+    }
+
+    #[test]
+    fn test_is_not_null_csv() {
+        // create execution context
+        let mut ctx = ExecutionContext::local();
+
+        let schema = Schema::new(vec![
+            Field::new("c_int", DataType::UInt32, false),
+            Field::new("c_float", DataType::Float64, false),
+            Field::new("c_string", DataType::Utf8, false),
+        ]);
+
+        let df = ctx.load_csv("./test/data/null_test.csv", &schema, true, None)
+            .unwrap();
+        ctx.register("null_test", df);
+
+        // define the SQL statement
+        let sql = "SELECT c_int FROM null_test WHERE c_float IS NOT NULL";
+
+        // create a data frame
+        let df1 = ctx.sql(&sql).unwrap();
+
+        // write the results to a file
+        ctx.write_csv(df1, "./target/is_not_null_csv.csv").unwrap();
+
+        let expected_result = read_file("test/data/expected/is_not_null_csv.csv");
+
+        assert_eq!(expected_result, read_file("./target/is_not_null_csv.csv"));
     }
 
     #[test]

@@ -132,8 +132,8 @@ impl Expr {
             Expr::Cast { data_type, .. } => data_type.clone(),
             Expr::ScalarFunction { return_type, .. } => return_type.clone(),
             Expr::AggregateFunction { return_type, .. } => return_type.clone(),
-            Expr::IsNotNull(ref expr) => expr.get_type(schema),
-            Expr::IsNull(ref expr) => expr.get_type(schema),
+            Expr::IsNull(_) => DataType::Boolean,
+            Expr::IsNotNull(_) => DataType::Boolean,
             Expr::BinaryExpr {
                 ref left,
                 ref right,
@@ -159,7 +159,7 @@ impl Expr {
         let this_type = self.get_type(schema);
         if this_type == *cast_to_type {
             Ok(self.clone())
-        } else if cast_to_type.can_coerce_from(&this_type) {
+        } else if can_coerce_from(cast_to_type, &this_type) {
             Ok(Expr::Cast {
                 expr: Rc::new(self.clone()),
                 data_type: cast_to_type.clone(),
