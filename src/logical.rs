@@ -153,7 +153,7 @@ impl Expr {
         let this_type = self.get_type(schema);
         if this_type == *cast_to_type {
             Ok(self.clone())
-        } else if cast_to_type.can_coerce_from(&this_type) {
+        } else if can_coerce_from(cast_to_type, &this_type) {
             Ok(Expr::Cast {
                 expr: Rc::new(self.clone()),
                 data_type: cast_to_type.clone(),
