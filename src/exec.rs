@@ -26,7 +26,7 @@ use std::rc::Rc;
 use std::str;
 use std::string::String;
 
-//use arrow::array::*;
+use arrow::array::ListArray;
 use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::list_builder::*;
@@ -34,6 +34,7 @@ use arrow::list_builder::*;
 use super::dataframe::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
+use super::datasources::ndjson::*;
 use super::datasources::parquet::*;
 use super::errors::*;
 use super::logical::*;
@@ -412,7 +413,7 @@ macro_rules! cast_array_from_to {
                     b.push(s.as_bytes());
                 }
                 Ok(Value::Column(Rc::new(Array::new($LIST.len() as usize,
-                  ArrayData::Utf8(b.finish())))))
+                  ArrayData::Utf8(ListArray::from(b.finish()))))))
             },
             _ => unimplemented!("CAST from {:?} to {:?}", stringify!($FROM), stringify!($TO))
         }
@@ -939,6 +940,7 @@ impl ExecutionContext {
 
                 let df = match file_type {
                     FileType::CSV => self.load_csv(&location, &schema, header_row, None)?,
+                    FileType::NdJson => self.load_ndjson(&location, &schema, None)?,
                     FileType::Parquet => self.load_parquet(&location, None)?,
                 };
 
@@ -982,6 +984,22 @@ impl ExecutionContext {
             filename: filename.to_string(),
             schema: Rc::new(schema.clone()),
             has_header,
+            projection,
+        };
+        Ok(Rc::new(DF::new(self.clone(), Rc::new(plan))))
+    }
+
+    /// Open a CSV file
+    ///TODO: this is building a relational plan not an execution plan so shouldn't really be here
+    pub fn load_ndjson(
+        &self,
+        filename: &str,
+        schema: &Schema,
+        projection: Option<Vec<usize>>,
+    ) -> Result<Rc<DataFrame>> {
+        let plan = LogicalPlan::NdJsonFile {
+            filename: filename.to_string(),
+            schema: Rc::new(schema.clone()),
             projection,
         };
         Ok(Rc::new(DF::new(self.clone(), Rc::new(plan))))
@@ -1049,6 +1067,23 @@ impl ExecutionContext {
                     file,
                     schema.clone(),
                     *has_header,
+                    projection.clone(),
+                )?)) as Rc<RefCell<DataSource>>;
+                Ok(Box::new(DataSourceRelation {
+                    schema: schema.as_ref().clone(),
+                    ds,
+                }))
+            }
+
+            LogicalPlan::NdJsonFile {
+                ref filename,
+                ref schema,
+                ref projection,
+            } => {
+                let file = File::open(filename)?;
+                let ds = Rc::new(RefCell::new(NdJsonFile::open(
+                    file,
+                    schema.clone(),
                     projection.clone(),
                 )?)) as Rc<RefCell<DataSource>>;
                 Ok(Box::new(DataSourceRelation {

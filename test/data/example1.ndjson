@@ -1,0 +1,3 @@
+{ "a": 1, "b": "this is a string", "c": 12.34 }
+{ "a": 2, "b": "this is also a string", "c": 43.21 }
+{ "a": 3, "b": "is this a string too?", "c": 0.0 }

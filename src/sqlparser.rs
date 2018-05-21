@@ -385,6 +385,8 @@ impl Parser {
                             headers = false;
                         }
                         FileType::CSV
+                    } else if self.parse_keywords(vec!["STORED", "AS", "NDJSON"]) {
+                        FileType::NdJson
                     } else if self.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
                         FileType::Parquet
                     } else {

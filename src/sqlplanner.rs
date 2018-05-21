@@ -473,6 +473,15 @@ pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: &HashSet<usize>)
             has_header: *has_header,
             projection: Some(projection.iter().cloned().collect()),
         }),
+        LogicalPlan::NdJsonFile {
+            ref filename,
+            ref schema,
+            ..
+        } => Rc::new(LogicalPlan::NdJsonFile {
+            filename: filename.to_string(),
+            schema: schema.clone(),
+            projection: Some(projection.iter().cloned().collect()),
+        }),
         LogicalPlan::ParquetFile {
             ref filename,
             ref schema,

@@ -24,19 +24,14 @@ extern crate bytes;
 extern crate clap;
 extern crate csv;
 extern crate fnv;
-#[cfg(target_os = "unix")]
+extern crate json;
+#[cfg(target_family = "unix")]
 extern crate liner;
 extern crate parquet;
 
 #[macro_use]
 extern crate lazy_static;
 
-//extern crate etcd;
-//extern crate futures;
-//extern crate hyper;
-//extern crate tokio_core;
-
-//pub mod cluster;
 pub mod dataframe;
 pub mod datasources;
 #[macro_use]
@@ -48,6 +43,5 @@ pub mod sqlast;
 pub mod sqlparser;
 pub mod sqlplanner;
 pub mod sqltokenizer;
-//pub mod persist;
 pub mod logical;
 pub mod types;

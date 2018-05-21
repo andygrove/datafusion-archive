@@ -18,7 +18,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::rc::Rc;
 
-//use arrow::array::*;
+use arrow::array::ListArray;
 use arrow::bitmap::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
@@ -155,7 +155,7 @@ impl DataSource for CsvFile {
                                 builder.push(s.as_bytes());
                             });
                             let buffer = builder.finish();
-                            Value::Column(Rc::new(Array::new(rows.len(), ArrayData::Utf8(buffer))))
+                            Value::Column(Rc::new(Array::new(rows.len(), ArrayData::Utf8(ListArray::from(buffer)))))
                         }
                         _ => unimplemented!("CSV does not support data type {:?}", c.data_type()),
                     }

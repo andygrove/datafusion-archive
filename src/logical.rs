@@ -153,7 +153,7 @@ impl Expr {
         let this_type = self.get_type(schema);
         if this_type == *cast_to_type {
             Ok(self.clone())
-        } else if cast_to_type.can_coerce_from(&this_type) {
+        } else if can_coerce_from(cast_to_type, &this_type) {
             Ok(Expr::Cast {
                 expr: Rc::new(self.clone()),
                 data_type: cast_to_type.clone(),
@@ -298,6 +298,12 @@ pub enum LogicalPlan {
         has_header: bool,
         projection: Option<Vec<usize>>,
     },
+    /// Represents an ndjson file with a provided schema
+    NdJsonFile {
+        filename: String,
+        schema: Rc<Schema>,
+        projection: Option<Vec<usize>>,
+    },
     /// Represents a Parquet file that contains schema information
     ParquetFile {
         filename: String,
@@ -315,6 +321,7 @@ impl LogicalPlan {
             LogicalPlan::EmptyRelation { schema } => &schema,
             LogicalPlan::TableScan { schema, .. } => &schema,
             LogicalPlan::CsvFile { schema, .. } => &schema,
+            LogicalPlan::NdJsonFile { schema, .. } => &schema,
             LogicalPlan::ParquetFile { schema, .. } => &schema,
             LogicalPlan::Projection { schema, .. } => &schema,
             LogicalPlan::Selection { input, .. } => input.schema(),
@@ -345,6 +352,11 @@ impl LogicalPlan {
                 ref schema,
                 ..
             } => write!(f, "CsvFile: file={}, schema={:?}", filename, schema),
+            LogicalPlan::NdJsonFile {
+                ref filename,
+                ref schema,
+                ..
+            } => write!(f, "NdJsonFile: file={}, schema={:?}", filename, schema),
             LogicalPlan::ParquetFile { .. } => write!(f, "ParquetFile:"),
             LogicalPlan::Projection {
                 ref expr,
