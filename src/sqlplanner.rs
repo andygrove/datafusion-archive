@@ -574,6 +574,14 @@ mod tests {
     }
 
     #[test]
+    fn test_sum_aggregate() {
+        quick_test("SELECT SUM(age) from person",
+                   "Aggregate: groupBy=[[]], aggr=[[SUM(#3)]]\
+                   \n  TableScan: person projection=None",
+        );
+    }
+
+    #[test]
     fn select_simple_aggregate_with_groupby() {
         quick_test(
             "SELECT state, MIN(age), MAX(age) FROM person GROUP BY state",

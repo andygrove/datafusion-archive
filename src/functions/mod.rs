@@ -19,3 +19,4 @@ pub mod geospatial;
 pub mod math;
 pub mod max;
 pub mod min;
+pub mod sum;

@@ -14,6 +14,8 @@
 
 extern crate clap;
 extern crate datafusion;
+
+#[cfg(target_family = "unix")]
 extern crate liner;
 
 use std::fs::File;
@@ -34,6 +36,56 @@ use datafusion::sqlparser::*;
 mod linereader;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
+#[cfg(target_family = "unix")]
+fn setup_console(cmdline: clap::ArgMatches) {
+        //parse args
+        //let etcd_endpoints = cmdline.value_of("ETCD").unwrap();
+        let mut console = Console::new(/*etcd_endpoints.to_string()*/);
+
+        match cmdline.value_of("SCRIPT") {
+            Some(filename) => match File::open(filename) {
+                Ok(f) => {
+                    let mut cmd_buffer = String::new();
+                    let mut reader = BufReader::new(&f);
+                    for line in reader.lines() {
+                        match line {
+                            Ok(cmd) => {
+                                cmd_buffer.push_str(&cmd);
+                                if cmd_buffer.as_str().ends_with(";") {
+                                    console.execute(&cmd_buffer[0..cmd_buffer.len() - 2]);
+                                    cmd_buffer = String::new();
+                                }
+                            }
+                            Err(e) => println!("Error: {}", e),
+                        }
+                    }
+                    if cmd_buffer.as_str().ends_with(";") {
+                        console.execute(&cmd_buffer[0..cmd_buffer.len() - 2]);
+                    }
+                }
+                Err(e) => println!("Could not open file {}: {}", filename, e),
+            },
+            _ => {
+                let mut reader = linereader::LineReader::new();
+                loop {
+                    let result = reader.read_lines();
+                    match result {
+                        Some(line) => match line {
+                            linereader::LineResult::Break => break,
+                            linereader::LineResult::Input(command) => console.execute(&command),
+                        },
+                        None => (),
+                    }
+                }
+            }
+        }
+      }
+
+#[cfg(target_family = "windows")]
+fn setup_console(cmdline: clap::ArgMatches) {
+    panic!("Console is not supported on windows!")
+}
 
 fn main() {
     println!("DataFusion Console");
@@ -61,48 +113,7 @@ fn main() {
                     .takes_value(true),
             )
             .get_matches();
-
-    //parse args
-    //let etcd_endpoints = cmdline.value_of("ETCD").unwrap();
-    let mut console = Console::new(/*etcd_endpoints.to_string()*/);
-
-    match cmdline.value_of("SCRIPT") {
-        Some(filename) => match File::open(filename) {
-            Ok(f) => {
-                let mut cmd_buffer = String::new();
-                let mut reader = BufReader::new(&f);
-                for line in reader.lines() {
-                    match line {
-                        Ok(cmd) => {
-                            cmd_buffer.push_str(&cmd);
-                            if cmd_buffer.as_str().ends_with(";") {
-                                console.execute(&cmd_buffer[0..cmd_buffer.len() - 2]);
-                                cmd_buffer = String::new();
-                            }
-                        }
-                        Err(e) => println!("Error: {}", e),
-                    }
-                }
-                if cmd_buffer.as_str().ends_with(";") {
-                    console.execute(&cmd_buffer[0..cmd_buffer.len() - 2]);
-                }
-            }
-            Err(e) => println!("Could not open file {}: {}", filename, e),
-        },
-        _ => {
-            let mut reader = linereader::LineReader::new();
-            loop {
-                let result = reader.read_lines();
-                match result {
-                    Some(line) => match line {
-                        linereader::LineResult::Break => break,
-                        linereader::LineResult::Input(command) => console.execute(&command),
-                    },
-                    None => (),
-                }
-            }
-        }
-    }
+            setup_console(cmdline);
 }
 
 /// Interactive SQL console
