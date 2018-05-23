@@ -134,6 +134,40 @@ fn csv_test_compare_columns() {
 //}
 
 #[test]
+fn test_basic_operators() {
+    let mut ctx = ExecutionContext::local();
+    let schema = Schema::new(vec![
+        Field::new("a", DataType::Int64, false),
+        Field::new("b", DataType::Int64, false),
+        Field::new("a_f", DataType::Float32, false),
+        Field::new("b_f", DataType::Float32, false),
+    ]);
+    let data = ctx.load_csv("test/data/numerics.csv", &schema, true, None)
+        .unwrap();
+    ctx.register("c", data);
+
+    let sql = "SELECT a + b, \
+    a - b, \
+    a * b, \
+    a / b, \
+    a % b, \
+    a_f + b_f, \
+    a_f - b_f, \
+    a_f * b_f, \
+    a_f / b_f, \
+    a_f % b_f \
+    FROM c";
+
+    let df = ctx.sql(&sql).unwrap();
+    ctx.write_csv(df, "target/numeric_results.csv").unwrap();
+
+    let expected = read_file("test/data/expected/numerics.csv");
+    let realized = read_file("./target/numeric_results.csv");
+    println!("{}", realized);
+    assert_eq!(expected, realized);
+}
+
+#[test]
 fn parquet_query_all_types() {
     let mut ctx = ExecutionContext::local();
     load_parquet(&mut ctx, "test/data/all_types_flat.parquet");

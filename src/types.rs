@@ -124,6 +124,27 @@ pub enum ArrayData {
     Struct(Vec<Rc<Array>>),
 }
 
+impl fmt::Display for ArrayData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let printable = match *self {
+            ArrayData::Boolean(_) => "boolean",
+            ArrayData::Float32(_) => "f32",
+            ArrayData::Float64(_) => "f64",
+            ArrayData::Int8(_) => "i8",
+            ArrayData::Int16(_) => "i16",
+            ArrayData::Int32(_) => "i32",
+            ArrayData::Int64(_) => "i64",
+            ArrayData::UInt8(_) => "u8",
+            ArrayData::UInt16(_) => "u16",
+            ArrayData::UInt32(_) => "u32",
+            ArrayData::UInt64(_) => "u64",
+            ArrayData::Utf8(_) => "String",
+            ArrayData::Struct(_) => "Struct",
+        };
+        write!(f, "{}", printable)
+    }
+}
+
 macro_rules! array_from_primitive {
     ($DT:ty) => {
         impl From<Vec<$DT>> for Array {
