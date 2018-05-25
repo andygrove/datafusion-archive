@@ -173,6 +173,31 @@ macro_rules! scalar_column_operations {
     };
 }
 
+macro_rules! scalar_scalar_operations {
+    ($X1:ident, $X2:ident, $F:expr) => {
+        match ($X1.as_ref(), $X2.as_ref()) {
+            (ScalarValue::UInt8(a), ScalarValue::UInt8(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt8($F(a, b))))),
+            (ScalarValue::UInt16(a), ScalarValue::UInt16(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt16($F(a, b))))),
+            (ScalarValue::UInt32(a), ScalarValue::UInt32(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt32($F(a, b))))),
+            (ScalarValue::UInt64(a), ScalarValue::UInt64(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt64($F(a, b))))),
+            (ScalarValue::Int8(a), ScalarValue::Int8(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int8($F(a, b))))),
+            (ScalarValue::Int16(a), ScalarValue::Int16(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int16($F(a, b))))),
+            (ScalarValue::Int32(a), ScalarValue::Int32(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int32($F(a, b))))),
+            (ScalarValue::Int64(a), ScalarValue::Int64(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int64($F(a, b))))),
+            (ScalarValue::Float32(a), ScalarValue::Float32(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Float32($F(a, b)))))
+            }
+            (ScalarValue::Float64(a), ScalarValue::Float64(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Float64($F(a, b)))))
+            }
+            ref t => panic!(
+                "Cannot combine results for Scalar Type: {} and Column: {}",
+                t.0, t.1
+            ),
+        };
+    };
+}
+
 macro_rules! column_operations {
     ($X:ident, $Y:ident, $F:expr) => {
         match ($X.data(), $Y.data()) {
@@ -206,7 +231,7 @@ macro_rules! column_operations {
             (ArrayData::Float64(ref a), ArrayData::Float64(ref b)) => {
                 inner_column_operations!(a, b, $F, f64)
             }
-            _ => panic!(":("),
+            ref t => panic!("Incompatible types for Column: {} and Column: {}", t.0, t.1),
         }
     };
 }
@@ -327,7 +352,9 @@ impl Value {
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
                 scalar_column_operations!(v2, v1, |(x, y)| x + y)
             }
-            (&Value::Scalar(ref _x1), &Value::Scalar(ref _x2)) => unimplemented!(),
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x + y)
+            }
         }
     }
 
@@ -342,7 +369,9 @@ impl Value {
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
                 scalar_column_operations!(v2, v1, |(x, y)| x - y)
             }
-            (&Value::Scalar(ref _x1), &Value::Scalar(ref _x2)) => unimplemented!(),
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x - y)
+            }
         }
     }
 
@@ -357,7 +386,9 @@ impl Value {
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
                 scalar_column_operations!(v2, v1, |(x, y)| x / y)
             }
-            (&Value::Scalar(ref _x1), &Value::Scalar(ref _x2)) => unimplemented!(),
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x / y)
+            }
         }
     }
 
@@ -372,7 +403,9 @@ impl Value {
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
                 scalar_column_operations!(v2, v1, |(x, y)| x * y)
             }
-            (&Value::Scalar(ref _x1), &Value::Scalar(ref _x2)) => unimplemented!(),
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x * y)
+            }
         }
     }
 
@@ -387,7 +420,9 @@ impl Value {
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
                 scalar_column_operations!(v2, v1, |(x, y)| x % y)
             }
-            (&Value::Scalar(ref _x1), &Value::Scalar(ref _x2)) => unimplemented!(),
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x % y)
+            }
         }
     }
 
@@ -976,6 +1011,7 @@ pub enum PhysicalPlan {
     Write {
         plan: Rc<LogicalPlan>,
         filename: String,
+        kind: String,
     },
     Show {
         plan: Rc<LogicalPlan>,
@@ -987,6 +1023,7 @@ pub enum PhysicalPlan {
 pub enum ExecutionResult {
     Unit,
     Count(usize),
+    Str(String),
 }
 
 struct ExecutionContextSchemaProvider {
@@ -1410,6 +1447,7 @@ impl ExecutionContext {
         let physical_plan = PhysicalPlan::Write {
             plan: df.plan().clone(),
             filename: filename.to_string(),
+            kind: "csv".to_string(),
         };
 
         match self.execute(&physical_plan)? {
@@ -1417,6 +1455,18 @@ impl ExecutionContext {
             _ => Err(ExecutionError::General(
                 "Unexpected result in write_csv".to_string(),
             )),
+        }
+    }
+
+    pub fn write_string(&self, df: Rc<DataFrame>) -> Result<String> {
+        let physical_plan = PhysicalPlan::Write {
+            plan: df.plan().clone(),
+            filename: String::new(),
+            kind: "string".to_string(),
+        };
+        match self.execute(&physical_plan)? {
+            ExecutionResult::Str(s) => Ok(s),
+            _ => Err(ExecutionError::General("Unexpected result in write_string".to_string())),
         }
     }
 
@@ -1468,66 +1518,93 @@ impl ExecutionContext {
             &PhysicalPlan::Write {
                 ref plan,
                 ref filename,
+                ref kind
             } => {
                 // create output file
                 // //println!("Writing csv to {}", filename);
-                let file = File::create(filename)?;
+                match kind.as_ref() {
+                    "csv" => {
+                        let file = File::create(filename)?;
+                        let mut w = CsvWriter {
+                            w: BufWriter::with_capacity(8 * 1024 * 1024, file),
+                        };
 
-                let mut w = CsvWriter {
-                    w: BufWriter::with_capacity(8 * 1024 * 1024, file),
-                };
+                        let mut execution_plan = self.create_execution_plan(plan)?;
 
-                let mut execution_plan = self.create_execution_plan(plan)?;
-
-                // implement execution here for now but should be a common method for processing a plan
-                let it = execution_plan.scan();
-                let mut count: usize = 0;
-                it.for_each(|t| {
-                    match t {
-                        Ok(ref batch) => {
-                            ////println!("Processing batch of {} rows", batch.row_count());
-                            for i in 0..batch.num_rows() {
-                                for j in 0..batch.num_columns() {
-                                    if j > 0 {
-                                        w.write_bytes(b",");
-                                    }
-                                    match *batch.column(j) {
-                                        Value::Scalar(ref v) => w.write_scalar(v),
-                                        Value::Column(ref v) => match v.data() {
-                                            ArrayData::Boolean(ref v) => w.write_bool(v.get(i)),
-                                            ArrayData::Float32(ref v) => w.write_f32(v.get(i)),
-                                            ArrayData::Float64(ref v) => w.write_f64(v.get(i)),
-                                            ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
-                                            ArrayData::Int16(ref v) => w.write_i16(v.get(i)),
-                                            ArrayData::Int32(ref v) => w.write_i32(v.get(i)),
-                                            ArrayData::Int64(ref v) => w.write_i64(v.get(i)),
-                                            ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
-                                            ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
-                                            ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
-                                            ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
-                                            ArrayData::Utf8(ref data) => w.write_bytes(data.get(i)),
-                                            ArrayData::Struct(ref v) => {
-                                                let fields = v.iter()
-                                                    .map(|arr| get_value(&arr, i))
-                                                    .collect();
-                                                w.write_bytes(
-                                                    format!("{}", ScalarValue::Struct(fields))
-                                                        .as_bytes(),
-                                                );
+                        // implement execution here for now but should be a common method for processing a plan
+                        let it = execution_plan.scan();
+                        let mut count: usize = 0;
+                        it.for_each(|t| {
+                            match t {
+                                Ok(ref batch) => {
+                                    ////println!("Processing batch of {} rows", batch.row_count());
+                                    for i in 0..batch.num_rows() {
+                                        for j in 0..batch.num_columns() {
+                                            if j > 0 {
+                                                w.write_bytes(b",");
                                             }
-                                        },
+                                            match *batch.column(j) {
+                                                Value::Scalar(ref v) => w.write_scalar(v),
+                                                Value::Column(ref v) => match v.data() {
+                                                    ArrayData::Boolean(ref v) => w.write_bool(v.get(i)),
+                                                    ArrayData::Float32(ref v) => w.write_f32(v.get(i)),
+                                                    ArrayData::Float64(ref v) => w.write_f64(v.get(i)),
+                                                    ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
+                                                    ArrayData::Int16(ref v) => w.write_i16(v.get(i)),
+                                                    ArrayData::Int32(ref v) => w.write_i32(v.get(i)),
+                                                    ArrayData::Int64(ref v) => w.write_i64(v.get(i)),
+                                                    ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
+                                                    ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
+                                                    ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
+                                                    ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
+                                                    ArrayData::Utf8(ref data) => w.write_bytes(data.get(i)),
+                                                    ArrayData::Struct(ref v) => {
+                                                        let fields = v.iter()
+                                                            .map(|arr| get_value(&arr, i))
+                                                            .collect();
+                                                        w.write_bytes(
+                                                            format!("{}", ScalarValue::Struct(fields))
+                                                                .as_bytes(),
+                                                        );
+                                                    }
+                                                },
+                                            }
+                                        }
+                                        w.write_bytes(b"\n");
+                                        count += 1;
                                     }
                                 }
-                                w.write_bytes(b"\n");
-                                count += 1;
+                                Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
                             }
-                        }
-                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
-                    }
-                });
+                        });
 
-                Ok(ExecutionResult::Count(count))
-            }
+                        Ok(ExecutionResult::Count(count))
+                    },
+                    "string" => {
+                        let mut execution_plan = self.create_execution_plan(plan)?;
+                        let it = execution_plan.scan();
+                        let mut result = String::new();
+                        it.for_each(|t| {
+                            match t {
+                                Ok(ref batch) => {
+                                    for i in 0..batch.num_rows() {
+                                        let results = batch.row_slice(i).into_iter()
+                                            .map(|v| v.to_string())
+                                            .collect::<Vec<String>>()
+                                            .join(",");
+                                        result.push_str(&results);
+                                        result.push_str("\n")
+                                    }
+
+                                }
+                                Err(e) => panic!(format!("Error processing row: {:?}", e)),
+                            }
+                        });
+                        Ok(ExecutionResult::Str(result))
+                    }
+                    ref _x => panic!("Unknown physical plan output type.")
+                }
+            },
             &PhysicalPlan::Show {
                 ref plan,
                 ref count,

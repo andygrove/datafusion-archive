@@ -169,6 +169,9 @@ impl Console {
                                             elapsed_seconds, n
                                         );
                                     }
+                                    ExecutionResult::Str(_) => {
+                                        println!("Query executed in {} seconds", elapsed_seconds);
+                                    }
                                 }
                             }
                             Err(e) => println!("Error: {:?}", e),
