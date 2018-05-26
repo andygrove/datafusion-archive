@@ -29,7 +29,8 @@ fn main() {
     ]);
 
     // open file as a dataframe
-    let ndjson = ctx.load_ndjson("test/data/example1.ndjson", &schema, None)
+    let ndjson = ctx
+        .load_ndjson("test/data/example1.ndjson", &schema, None)
         .unwrap();
 
     ctx.register("ndjson", ndjson);

@@ -25,6 +25,7 @@ extern crate clap;
 extern crate csv;
 extern crate fnv;
 extern crate json;
+#[cfg(target_family = "unix")]
 extern crate liner;
 extern crate parquet;
 
@@ -37,10 +38,10 @@ pub mod datasources;
 pub mod errors;
 pub mod exec;
 pub mod functions;
+pub mod logical;
 pub mod relations;
 pub mod sqlast;
 pub mod sqlparser;
 pub mod sqlplanner;
 pub mod sqltokenizer;
-pub mod logical;
 pub mod types;

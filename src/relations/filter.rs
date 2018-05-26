@@ -47,7 +47,6 @@ impl SimpleRelation for FilterRelation {
                     // evaluate the filter expression for every row in the batch
                     let x = (*filter_expr)(batch.as_ref())?;
 
-
                     match x {
                         Value::Column(ref filter_eval) => {
                             assert_eq!(batch.num_rows(), filter_eval.len());

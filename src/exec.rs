@@ -34,6 +34,7 @@ use arrow::list_builder::*;
 use super::dataframe::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
+use super::datasources::empty::*;
 use super::datasources::ndjson::*;
 use super::datasources::parquet::*;
 use super::errors::*;
@@ -132,8 +133,127 @@ macro_rules! compare_array_with_scalar {
     };
 }
 
-impl Value {
+macro_rules! inner_column_operations {
+    ($A:ident, $B:ident, $F:expr, $RT:ident) => {
+        Ok(Value::Column(Rc::new(Array::from(
+            $A.iter().zip($B.iter()).map($F).collect::<Vec<$RT>>(),
+        ))))
+    };
+}
 
+macro_rules! scalar_operations {
+    ($A:ident, $B:ident, $F:expr, $RT:ident) => {
+        Ok(Value::Column(Rc::new(Array::from(
+            $A.iter().map(|aa| (aa, $B)).map($F).collect::<Vec<$RT>>(),
+        ))))
+    };
+}
+
+macro_rules! scalar_column_operations {
+    ($X1:ident, $X2:ident, $F:expr) => {
+        match ($X1.as_ref(), $X2.data()) {
+            (ScalarValue::UInt8(a), ArrayData::UInt8(b)) => scalar_operations!(b, a, $F, u8),
+            (ScalarValue::UInt16(a), ArrayData::UInt16(b)) => scalar_operations!(b, a, $F, u16),
+            (ScalarValue::UInt32(a), ArrayData::UInt32(b)) => scalar_operations!(b, a, $F, u32),
+            (ScalarValue::UInt64(a), ArrayData::UInt64(b)) => scalar_operations!(b, a, $F, u64),
+            (ScalarValue::Int8(a), ArrayData::Int8(b)) => scalar_operations!(b, a, $F, i8),
+            (ScalarValue::Int16(a), ArrayData::Int16(b)) => scalar_operations!(b, a, $F, i16),
+            (ScalarValue::Int32(a), ArrayData::Int32(b)) => scalar_operations!(b, a, $F, i32),
+            (ScalarValue::Int64(a), ArrayData::Int64(b)) => scalar_operations!(b, a, $F, i64),
+            (ScalarValue::Float32(a), ArrayData::Float32(b)) => {
+                scalar_operations!(b, a, $F, f32)
+            }
+            (ScalarValue::Float64(a), ArrayData::Float64(b)) => {
+                scalar_operations!(b, a, $F, f64)
+            }
+            ref t => panic!(
+                "Cannot combine results for Scalar Type: {} and Column: {}",
+                t.0, t.1
+            ),
+        };
+    };
+}
+
+macro_rules! scalar_scalar_operations {
+    ($X1:ident, $X2:ident, $F:expr) => {
+        match ($X1.as_ref(), $X2.as_ref()) {
+            (ScalarValue::UInt8(a), ScalarValue::UInt8(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt8($F(a, b)))))
+            }
+            (ScalarValue::UInt16(a), ScalarValue::UInt16(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt16($F(a, b)))))
+            }
+            (ScalarValue::UInt32(a), ScalarValue::UInt32(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt32($F(a, b)))))
+            }
+            (ScalarValue::UInt64(a), ScalarValue::UInt64(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt64($F(a, b)))))
+            }
+            (ScalarValue::Int8(a), ScalarValue::Int8(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int8($F(a, b)))))
+            }
+            (ScalarValue::Int16(a), ScalarValue::Int16(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int16($F(a, b)))))
+            }
+            (ScalarValue::Int32(a), ScalarValue::Int32(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int32($F(a, b)))))
+            }
+            (ScalarValue::Int64(a), ScalarValue::Int64(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int64($F(a, b)))))
+            }
+            (ScalarValue::Float32(a), ScalarValue::Float32(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Float32($F(a, b)))))
+            }
+            (ScalarValue::Float64(a), ScalarValue::Float64(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Float64($F(a, b)))))
+            }
+            ref t => panic!(
+                "Cannot combine results for Scalar Type: {} and Column: {}",
+                t.0, t.1
+            ),
+        };
+    };
+}
+
+macro_rules! column_operations {
+    ($X:ident, $Y:ident, $F:expr) => {
+        match ($X.data(), $Y.data()) {
+            (ArrayData::UInt8(ref a), ArrayData::UInt8(ref b)) => {
+                inner_column_operations!(a, b, $F, u8)
+            }
+            (ArrayData::UInt16(ref a), ArrayData::UInt16(ref b)) => {
+                inner_column_operations!(a, b, $F, u16)
+            }
+            (ArrayData::UInt32(ref a), ArrayData::UInt32(ref b)) => {
+                inner_column_operations!(a, b, $F, u32)
+            }
+            (ArrayData::UInt64(ref a), ArrayData::UInt64(ref b)) => {
+                inner_column_operations!(a, b, $F, u64)
+            }
+            (ArrayData::Int8(ref a), ArrayData::Int8(ref b)) => {
+                inner_column_operations!(a, b, $F, i8)
+            }
+            (ArrayData::Int16(ref a), ArrayData::Int16(ref b)) => {
+                inner_column_operations!(a, b, $F, i16)
+            }
+            (ArrayData::Int32(ref a), ArrayData::Int32(ref b)) => {
+                inner_column_operations!(a, b, $F, i32)
+            }
+            (ArrayData::Int64(ref a), ArrayData::Int64(ref b)) => {
+                inner_column_operations!(a, b, $F, i64)
+            }
+            (ArrayData::Float32(ref a), ArrayData::Float32(ref b)) => {
+                inner_column_operations!(a, b, $F, f32)
+            }
+            (ArrayData::Float64(ref a), ArrayData::Float64(ref b)) => {
+                inner_column_operations!(a, b, $F, f64)
+            }
+            ref t => panic!("Incompatible types for Column: {} and Column: {}", t.0, t.1),
+        }
+    };
+}
+
+impl Value {
     pub fn is_null(&self) -> Result<Value> {
         match self {
             Value::Column(ref array) => {
@@ -158,9 +278,12 @@ impl Value {
                 let bools = b.finish();
 
                 assert_eq!(bools.len(), array.len());
-                Ok(Value::Column(Rc::new(Array::new(array.len(), ArrayData::from(bools)))))
+                Ok(Value::Column(Rc::new(Array::new(
+                    array.len(),
+                    ArrayData::from(bools),
+                ))))
             }
-            Value::Scalar(_) => unimplemented!()
+            Value::Scalar(_) => unimplemented!(),
         }
     }
 
@@ -188,9 +311,12 @@ impl Value {
                 let bools = b.finish();
 
                 assert_eq!(bools.len(), array.len());
-                Ok(Value::Column(Rc::new(Array::new(array.len(), ArrayData::from(bools)))))
+                Ok(Value::Column(Rc::new(Array::new(
+                    array.len(),
+                    ArrayData::from(bools),
+                ))))
             }
-            Value::Scalar(_) => unimplemented!()
+            Value::Scalar(_) => unimplemented!(),
         }
     }
 
@@ -298,34 +424,105 @@ impl Value {
         }
     }
 
-    pub fn add(&self, _other: &Value) -> Result<Value> {
-        unimplemented!()
+    pub fn add(&self, other: &Value) -> Result<Value> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                column_operations!(v1, v2, |(x, y)| x + y)
+            }
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                scalar_column_operations!(v1, v2, |(x, y)| x + y)
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                scalar_column_operations!(v2, v1, |(x, y)| x + y)
+            }
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x + y)
+            }
+        }
     }
-    pub fn subtract(&self, _other: &Value) -> Result<Value> {
-        unimplemented!()
+
+    pub fn subtract(&self, other: &Value) -> Result<Value> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                column_operations!(v1, v2, |(x, y)| x - y)
+            }
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                scalar_column_operations!(v1, v2, |(x, y)| x - y)
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                scalar_column_operations!(v2, v1, |(x, y)| x - y)
+            }
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x - y)
+            }
+        }
     }
-    pub fn divide(&self, _other: &Value) -> Result<Value> {
-        unimplemented!()
+
+    pub fn divide(&self, other: &Value) -> Result<Value> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                column_operations!(v1, v2, |(x, y)| x / y)
+            }
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                scalar_column_operations!(v1, v2, |(x, y)| x / y)
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                scalar_column_operations!(v2, v1, |(x, y)| x / y)
+            }
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x / y)
+            }
+        }
     }
-    pub fn multiply(&self, _other: &Value) -> Result<Value> {
-        unimplemented!()
+
+    pub fn multiply(&self, other: &Value) -> Result<Value> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                column_operations!(v1, v2, |(x, y)| x * y)
+            }
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                scalar_column_operations!(v1, v2, |(x, y)| x * y)
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                scalar_column_operations!(v2, v1, |(x, y)| x * y)
+            }
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x * y)
+            }
+        }
+    }
+
+    pub fn modulo(&self, other: &Value) -> Result<Value> {
+        match (self, other) {
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
+                column_operations!(v1, v2, |(x, y)| x % y)
+            }
+            (&Value::Scalar(ref v1), &Value::Column(ref v2)) => {
+                scalar_column_operations!(v1, v2, |(x, y)| x % y)
+            }
+            (&Value::Column(ref v1), &Value::Scalar(ref v2)) => {
+                scalar_column_operations!(v2, v1, |(x, y)| x % y)
+            }
+            (&Value::Scalar(ref x1), &Value::Scalar(ref x2)) => {
+                scalar_scalar_operations!(x1, x2, |x, y| x % y)
+            }
+        }
     }
 
     pub fn and(&self, other: &Value) -> Result<Value> {
         match (self, other) {
-            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
-                match (v1.data(), v2.data()) {
-                    (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
-                        let bools = l.iter()
-                            .zip(r.iter())
-                            .map(|(ll, rr)| ll && rr)
-                            .collect::<Vec<bool>>();
-                        let bools = Array::from(bools);
-                        Ok(Value::Column(Rc::new(bools)))
-                    }
-                    _ => panic!("AND expected two boolean inputs"),
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => match (v1.data(), v2.data()) {
+                (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
+                    let bools = l
+                        .iter()
+                        .zip(r.iter())
+                        .map(|(ll, rr)| ll && rr)
+                        .collect::<Vec<bool>>();
+                    let bools = Array::from(bools);
+                    Ok(Value::Column(Rc::new(bools)))
                 }
-            }
+                _ => panic!("AND expected two boolean inputs"),
+            },
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
                 (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
                     let bools = Array::from(l.iter().map(|ll| ll && *r).collect::<Vec<bool>>());
@@ -339,19 +536,18 @@ impl Value {
 
     pub fn or(&self, other: &Value) -> Result<Value> {
         match (self, other) {
-            (&Value::Column(ref v1), &Value::Column(ref v2)) => {
-                match (v1.data(), v2.data()) {
-                    (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
-                        let bools = l.iter()
-                            .zip(r.iter())
-                            .map(|(ll, rr)| ll || rr)
-                            .collect::<Vec<bool>>();
-                        let bools = Array::from(bools);
-                        Ok(Value::Column(Rc::new(bools)))
-                    }
-                    _ => panic!("OR expected two boolean inputs"),
+            (&Value::Column(ref v1), &Value::Column(ref v2)) => match (v1.data(), v2.data()) {
+                (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
+                    let bools = l
+                        .iter()
+                        .zip(r.iter())
+                        .map(|(ll, rr)| ll || rr)
+                        .collect::<Vec<bool>>();
+                    let bools = Array::from(bools);
+                    Ok(Value::Column(Rc::new(bools)))
                 }
-            }
+                _ => panic!("OR expected two boolean inputs"),
+            },
             (&Value::Column(ref v1), &Value::Scalar(ref v2)) => match (v1.data(), v2.as_ref()) {
                 (ArrayData::Boolean(ref l), ScalarValue::Boolean(r)) => {
                     let bools = Array::from(l.iter().map(|ll| ll || *r).collect::<Vec<bool>>());
@@ -420,7 +616,8 @@ pub fn compile_expr(
         } => {
             assert_eq!(1, args.len());
 
-            let compiled_args: Result<Vec<RuntimeExpr>> = args.iter()
+            let compiled_args: Result<Vec<RuntimeExpr>> = args
+                .iter()
                 .map(|e| compile_scalar_expr(ctx, e, input_schema))
                 .collect();
 
@@ -428,6 +625,7 @@ pub fn compile_expr(
                 "min" => AggregateType::Min,
                 "max" => AggregateType::Max,
                 "count" => AggregateType::Count,
+                "sum" => AggregateType::Sum,
                 _ => unimplemented!("Unsupported aggregate function '{}'", name),
             };
 
@@ -700,6 +898,7 @@ pub fn compile_scalar_expr(
         } => {
             let left_expr = compile_scalar_expr(ctx, left, input_schema)?;
             let right_expr = compile_scalar_expr(ctx, right, input_schema)?;
+            let op_type = left_expr.get_type().clone();
             match op {
                 &Operator::Eq => Ok(RuntimeExpr::Compiled {
                     f: Rc::new(move |batch: &RecordBatch| {
@@ -765,32 +964,46 @@ pub fn compile_scalar_expr(
                     }),
                     t: DataType::Boolean,
                 }),
-                //                &Operator::Plus => Ok(Rc::new(move |batch: &RecordBatch| {
-                //                    let left_values = left_expr.get_func()(batch)?;
-                //                    let right_values = right_expr.get_func()(batch)?;
-                //                    left_values.add(&right_values)
-                //                })),
-                //                &Operator::Minus => Ok(Rc::new(move |batch: &RecordBatch| {
-                //                    let left_values = left_expr.get_func()(batch)?;
-                //                    let right_values = right_expr.get_func()(batch)?;
-                //                    left_values.subtract(&right_values)
-                //                })),
-                //                &Operator::Divide => Ok(Rc::new(move |batch: &RecordBatch| {
-                //                    let left_values = left_expr.get_func()(batch)?;
-                //                    let right_values = right_expr.get_func()(batch)?;
-                //                    left_values.divide(&right_values)
-                //                })),
-                //                &Operator::Multiply => Ok(Rc::new(move |batch: &RecordBatch| {
-                //                    let left_values = left_expr.get_func()(batch)?;
-                //                    let right_values = right_expr.get_func()(batch)?;
-                //                    left_values.multiply(&right_values)
-                //                })),
-                _ => {
-                    return Err(ExecutionError::General(format!(
-                        "Unsupported binary operator '{:?}'",
-                        op
-                    )))
-                }
+                &Operator::Plus => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.add(&right_values)
+                    }),
+                    t: op_type,
+                }),
+                &Operator::Minus => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.subtract(&right_values)
+                    }),
+                    t: op_type,
+                }),
+                &Operator::Multiply => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.multiply(&right_values)
+                    }),
+                    t: op_type,
+                }),
+                &Operator::Divide => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.divide(&right_values)
+                    }),
+                    t: op_type,
+                }),
+                &Operator::Modulus => Ok(RuntimeExpr::Compiled {
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        let left_values = left_expr.get_func()(batch)?;
+                        let right_values = right_expr.get_func()(batch)?;
+                        left_values.modulo(&right_values)
+                    }),
+                    t: op_type,
+                }),
             }
         }
         &Expr::Sort { ref expr, .. } => {
@@ -818,7 +1031,8 @@ pub fn compile_scalar_expr(
             }
 
             // evaluate the arguments to the function
-            let compiled_args: Result<Vec<RuntimeExpr>> = args.iter()
+            let compiled_args: Result<Vec<RuntimeExpr>> = args
+                .iter()
                 .map(|e| compile_scalar_expr(ctx, e, input_schema))
                 .collect();
 
@@ -915,6 +1129,7 @@ pub enum PhysicalPlan {
     Write {
         plan: Rc<LogicalPlan>,
         filename: String,
+        kind: String,
     },
     Show {
         plan: Rc<LogicalPlan>,
@@ -926,6 +1141,7 @@ pub enum PhysicalPlan {
 pub enum ExecutionResult {
     Unit,
     Count(usize),
+    Str(String),
 }
 
 struct ExecutionContextSchemaProvider {
@@ -942,7 +1158,8 @@ impl SchemaProvider for ExecutionContextSchemaProvider {
     }
 
     fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
-        match self.function_meta
+        match self
+            .function_meta
             .borrow()
             .get(&name.to_string().to_lowercase())
         {
@@ -1121,9 +1338,10 @@ impl ExecutionContext {
         //println!("Logical plan: {:?}", plan);
 
         match *plan {
-            LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::General(String::from(
-                "empty relation is not implemented yet",
-            ))),
+            LogicalPlan::EmptyRelation { .. } => Ok(Box::new(DataSourceRelation {
+                schema: Schema::new(vec![]),
+                ds: Rc::new(RefCell::new(EmptyRelation::new())),
+            })),
 
             LogicalPlan::Sort { .. } => unimplemented!(),
 
@@ -1222,7 +1440,8 @@ impl ExecutionContext {
 
                 let project_schema = Rc::new(Schema::new(project_columns));
 
-                let compiled_expr: Result<Vec<RuntimeExpr>> = expr.iter()
+                let compiled_expr: Result<Vec<RuntimeExpr>> = expr
+                    .iter()
                     .map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
                     .collect();
 
@@ -1262,28 +1481,28 @@ impl ExecutionContext {
             }
             //LogicalPlan::Sort { .. /*ref expr, ref input, ref schema*/ } => {
 
-            //                let input_rel = self.create_execution_plan(data_dir, input)?;
-            //
-            //                let compiled_expr : Result<Vec<CompiledExpr>> = expr.iter()
-            //                    .map(|e| compile_expr(&self,e))
-            //                    .collect();
-            //
-            //                let sort_asc : Vec<bool> = expr.iter()
-            //                    .map(|e| match e {
-            //                        &Expr::Sort { asc, .. } => asc,
-            //                        _ => panic!()
-            //                    })
-            //                    .collect();
-            //
-            //                let rel = SortRelation {
-            //                    input: input_rel,
-            //                    sort_expr: compiled_expr?,
-            //                    sort_asc: sort_asc,
-            //                    schema: schema.clone()
-            //                };
-            //                Ok(Box::new(rel))
-            //            },
-            //}
+      //                let input_rel = self.create_execution_plan(data_dir, input)?;
+      //
+      //                let compiled_expr : Result<Vec<CompiledExpr>> = expr.iter()
+      //                    .map(|e| compile_expr(&self,e))
+      //                    .collect();
+      //
+      //                let sort_asc : Vec<bool> = expr.iter()
+      //                    .map(|e| match e {
+      //                        &Expr::Sort { asc, .. } => asc,
+      //                        _ => panic!()
+      //                    })
+      //                    .collect();
+      //
+      //                let rel = SortRelation {
+      //                    input: input_rel,
+      //                    sort_expr: compiled_expr?,
+      //                    sort_asc: sort_asc,
+      //                    schema: schema.clone()
+      //                };
+      //                Ok(Box::new(rel))
+      //            },
+      //}
             LogicalPlan::Limit {
                 limit,
                 ref input,
@@ -1349,12 +1568,27 @@ impl ExecutionContext {
         let physical_plan = PhysicalPlan::Write {
             plan: df.plan().clone(),
             filename: filename.to_string(),
+            kind: "csv".to_string(),
         };
 
         match self.execute(&physical_plan)? {
             ExecutionResult::Count(count) => Ok(count),
             _ => Err(ExecutionError::General(
                 "Unexpected result in write_csv".to_string(),
+            )),
+        }
+    }
+
+    pub fn write_string(&self, df: Rc<DataFrame>) -> Result<String> {
+        let physical_plan = PhysicalPlan::Write {
+            plan: df.plan().clone(),
+            filename: String::new(),
+            kind: "string".to_string(),
+        };
+        match self.execute(&physical_plan)? {
+            ExecutionResult::Str(s) => Ok(s),
+            _ => Err(ExecutionError::General(
+                "Unexpected result in write_string".to_string(),
             )),
         }
     }
@@ -1391,7 +1625,8 @@ impl ExecutionContext {
                             ////println!("Processing batch of {} rows", batch.row_count());
                             for i in 0..batch.num_rows() {
                                 let row = batch.row_slice(i);
-                                let csv = row.into_iter()
+                                let csv = row
+                                    .into_iter()
                                     .map(|v| v.to_string())
                                     .collect::<Vec<String>>()
                                     .join(",");
@@ -1407,65 +1642,112 @@ impl ExecutionContext {
             &PhysicalPlan::Write {
                 ref plan,
                 ref filename,
+                ref kind,
             } => {
                 // create output file
                 // //println!("Writing csv to {}", filename);
-                let file = File::create(filename)?;
+                match kind.as_ref() {
+                    "csv" => {
+                        let file = File::create(filename)?;
+                        let mut w = CsvWriter {
+                            w: BufWriter::with_capacity(8 * 1024 * 1024, file),
+                        };
 
-                let mut w = CsvWriter {
-                    w: BufWriter::with_capacity(8 * 1024 * 1024, file),
-                };
+                        let mut execution_plan = self.create_execution_plan(plan)?;
 
-                let mut execution_plan = self.create_execution_plan(plan)?;
-
-                // implement execution here for now but should be a common method for processing a plan
-                let it = execution_plan.scan();
-                let mut count: usize = 0;
-                it.for_each(|t| {
-                    match t {
-                        Ok(ref batch) => {
-                            ////println!("Processing batch of {} rows", batch.row_count());
-                            for i in 0..batch.num_rows() {
-                                for j in 0..batch.num_columns() {
-                                    if j > 0 {
-                                        w.write_bytes(b",");
-                                    }
-                                    match *batch.column(j) {
-                                        Value::Scalar(ref v) => w.write_scalar(v),
-                                        Value::Column(ref v) => match v.data() {
-                                            ArrayData::Boolean(ref v) => w.write_bool(v.get(i)),
-                                            ArrayData::Float32(ref v) => w.write_f32(v.get(i)),
-                                            ArrayData::Float64(ref v) => w.write_f64(v.get(i)),
-                                            ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
-                                            ArrayData::Int16(ref v) => w.write_i16(v.get(i)),
-                                            ArrayData::Int32(ref v) => w.write_i32(v.get(i)),
-                                            ArrayData::Int64(ref v) => w.write_i64(v.get(i)),
-                                            ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
-                                            ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
-                                            ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
-                                            ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
-                                            ArrayData::Utf8(ref data) => w.write_bytes(data.get(i)),
-                                            ArrayData::Struct(ref v) => {
-                                                let fields = v.iter()
-                                                    .map(|arr| get_value(&arr, i))
-                                                    .collect();
-                                                w.write_bytes(
-                                                    format!("{}", ScalarValue::Struct(fields))
-                                                        .as_bytes(),
-                                                );
+                        // implement execution here for now but should be a common method for processing a plan
+                        let it = execution_plan.scan();
+                        let mut count: usize = 0;
+                        it.for_each(|t| {
+                            match t {
+                                Ok(ref batch) => {
+                                    ////println!("Processing batch of {} rows", batch.row_count());
+                                    for i in 0..batch.num_rows() {
+                                        for j in 0..batch.num_columns() {
+                                            if j > 0 {
+                                                w.write_bytes(b",");
                                             }
-                                        },
+                                            match *batch.column(j) {
+                                                Value::Scalar(ref v) => w.write_scalar(v),
+                                                Value::Column(ref v) => match v.data() {
+                                                    ArrayData::Boolean(ref v) => {
+                                                        w.write_bool(v.get(i))
+                                                    }
+                                                    ArrayData::Float32(ref v) => {
+                                                        w.write_f32(v.get(i))
+                                                    }
+                                                    ArrayData::Float64(ref v) => {
+                                                        w.write_f64(v.get(i))
+                                                    }
+                                                    ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
+                                                    ArrayData::Int16(ref v) => {
+                                                        w.write_i16(v.get(i))
+                                                    }
+                                                    ArrayData::Int32(ref v) => {
+                                                        w.write_i32(v.get(i))
+                                                    }
+                                                    ArrayData::Int64(ref v) => {
+                                                        w.write_i64(v.get(i))
+                                                    }
+                                                    ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
+                                                    ArrayData::UInt16(ref v) => {
+                                                        w.write_u16(v.get(i))
+                                                    }
+                                                    ArrayData::UInt32(ref v) => {
+                                                        w.write_u32(v.get(i))
+                                                    }
+                                                    ArrayData::UInt64(ref v) => {
+                                                        w.write_u64(v.get(i))
+                                                    }
+                                                    ArrayData::Utf8(ref data) => {
+                                                        w.write_bytes(data.get(i))
+                                                    }
+                                                    ArrayData::Struct(ref v) => {
+                                                        let fields = v
+                                                            .iter()
+                                                            .map(|arr| get_value(&arr, i))
+                                                            .collect();
+                                                        w.write_bytes(
+                                                            format!("{}", ScalarValue::Struct(fields))
+                                                                .as_bytes(),
+                                                        );
+                                                    }
+                                                },
+                                            }
+                                        }
+                                        w.write_bytes(b"\n");
+                                        count += 1;
                                     }
                                 }
-                                w.write_bytes(b"\n");
-                                count += 1;
+                                Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
                             }
-                        }
-                        Err(e) => panic!(format!("Error processing row: {:?}", e)), //TODO: error handling
-                    }
-                });
+                        });
 
-                Ok(ExecutionResult::Count(count))
+                        Ok(ExecutionResult::Count(count))
+                    }
+                    "string" => {
+                        let mut execution_plan = self.create_execution_plan(plan)?;
+                        let it = execution_plan.scan();
+                        let mut result = String::new();
+                        it.for_each(|t| match t {
+                            Ok(ref batch) => {
+                                for i in 0..batch.num_rows() {
+                                    let results = batch
+                                        .row_slice(i)
+                                        .into_iter()
+                                        .map(|v| v.to_string())
+                                        .collect::<Vec<String>>()
+                                        .join(",");
+                                    result.push_str(&results);
+                                    result.push_str("\n")
+                                }
+                            }
+                            Err(e) => panic!(format!("Error processing row: {:?}", e)),
+                        });
+                        Ok(ExecutionResult::Str(result))
+                    }
+                    ref _x => panic!("Unknown physical plan output type."),
+                }
             }
             &PhysicalPlan::Show {
                 ref plan,
@@ -1482,7 +1764,8 @@ impl ExecutionContext {
                             for i in 0..*count {
                                 if i < batch.num_rows() {
                                     let row = batch.row_slice(i);
-                                    let csv = row.into_iter()
+                                    let csv = row
+                                        .into_iter()
                                         .map(|v| v.to_string())
                                         .collect::<Vec<String>>()
                                         .join(",");
@@ -1585,11 +1868,12 @@ mod tests {
     fn test_dataframe_filter() {
         let mut ctx = create_context();
         let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
-        let df2 = df.filter(Expr::BinaryExpr {
-            left: Rc::new(Expr::Column(1)),
-            op: Operator::Lt,
-            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.1))),
-        }).unwrap();
+        let df2 =
+            df.filter(Expr::BinaryExpr {
+                left: Rc::new(Expr::Column(1)),
+                op: Operator::Lt,
+                right: Rc::new(Expr::Literal(ScalarValue::Float64(52.1))),
+            }).unwrap();
         df2.show(10);
         //TODO assertions
     }
@@ -1641,7 +1925,8 @@ mod tests {
     fn test_create_logical_plan() {
         let mut ctx = create_context();
         ctx.register_scalar_function(Rc::new(SqrtFunction {}));
-        let plan = ctx.create_logical_plan(&"SELECT id, sqrt(id) FROM people")
+        let plan = ctx
+            .create_logical_plan(&"SELECT id, sqrt(id) FROM people")
             .unwrap();
         let expected_plan = "Projection: #0, sqrt(CAST(#0 AS Float64))\
                              \n  TableScan: people projection=None";
@@ -1669,7 +1954,8 @@ mod tests {
 
         ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
-        let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
+        let df = ctx
+            .sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
 
         ctx.write_csv(df, "./target/test_sql_udf_udt.csv").unwrap();
@@ -1706,7 +1992,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
 
         // invoke custom code as a scalar UDF
@@ -1740,15 +2027,17 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
 
         // filter by lat
-        let df2 = df.filter(Expr::BinaryExpr {
-            left: Rc::new(Expr::Column(1)), // lat
-            op: Operator::Gt,
-            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
-        }).unwrap();
+        let df2 =
+            df.filter(Expr::BinaryExpr {
+                left: Rc::new(Expr::Column(1)), // lat
+                op: Operator::Gt,
+                right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
+            }).unwrap();
 
         ctx.write_csv(df2, "./target/test_filter.csv").unwrap();
 
@@ -1758,31 +2047,31 @@ mod tests {
     }
 
     /*
-    #[test]
-    fn test_sort() {
+#[test]
+fn test_sort() {
 
-        let mut ctx = create_context();
+    let mut ctx = create_context();
 
-        ctx.define_function(&STPointFunc {});
+    ctx.define_function(&STPointFunc {});
 
-        let schema = Schema::new(vec![
-            Field::new("city", DataType::String, false),
-            Field::new("lat", DataType::Double, false),
-            Field::new("lng", DataType::Double, false)]);
+    let schema = Schema::new(vec![
+        Field::new("city", DataType::String, false),
+        Field::new("lat", DataType::Double, false),
+        Field::new("lng", DataType::Double, false)]);
 
-        let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
+    let df = ctx.load("test/data/uk_cities.csv", &schema).unwrap();
 
-        // sort by lat, lng ascending
-        let df2 = df.sort(vec![
-            Expr::Sort { expr: Box::new(Expr::Column(1)), asc: true },
-            Expr::Sort { expr: Box::new(Expr::Column(2)), asc: true }
-        ]).unwrap();
+    // sort by lat, lng ascending
+    let df2 = df.sort(vec![
+        Expr::Sort { expr: Box::new(Expr::Column(1)), asc: true },
+        Expr::Sort { expr: Box::new(Expr::Column(2)), asc: true }
+    ]).unwrap();
 
-        ctx.write(df2,"./target/uk_cities_sorted_by_lat_lng.csv").unwrap();
+    ctx.write(df2,"./target/uk_cities_sorted_by_lat_lng.csv").unwrap();
 
-        //TODO: check that generated file has expected contents
-    }
-    */
+    //TODO: check that generated file has expected contents
+}
+*/
 
     #[test]
     fn test_chaining_functions() {
@@ -1790,7 +2079,8 @@ mod tests {
         ctx.register_scalar_function(Rc::new(STPointFunc {}));
         ctx.register_scalar_function(Rc::new(STAsText {}));
 
-        let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
+        let df = ctx
+            .sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
 
         ctx.write_csv(df, "./target/test_chaining_functions.csv")
@@ -1825,7 +2115,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("./test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
         ctx.register("uk_cities", df);
 
@@ -1858,7 +2149,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("./test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
         ctx.register("uk_cities", df);
 
@@ -1887,7 +2179,8 @@ mod tests {
             Field::new("c_string", DataType::Utf8, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/null_test.csv", &schema, true, None)
+        let df = ctx
+            .load_csv("./test/data/null_test.csv", &schema, true, None)
             .unwrap();
         ctx.register("null_test", df);
 
@@ -1916,7 +2209,8 @@ mod tests {
             Field::new("c_string", DataType::Utf8, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/null_test.csv", &schema, true, None)
+        let df = ctx
+            .load_csv("./test/data/null_test.csv", &schema, true, None)
             .unwrap();
         ctx.register("null_test", df);
 
@@ -1945,7 +2239,8 @@ mod tests {
             Field::new("c_string", DataType::Utf8, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/all_types.csv", &schema, true, None)
+        let df = ctx
+            .load_csv("./test/data/all_types.csv", &schema, true, None)
             .unwrap();
         ctx.register("all_types", df);
 
@@ -1967,6 +2262,14 @@ mod tests {
         assert_eq!(expected_result, read_file("./target/test_cast.csv"));
     }
 
+    #[test]
+    fn test_select_no_relation() {
+        let mut ctx = ExecutionContext::local();
+        let df = ctx.sql("SELECT 1+1").unwrap();
+        let s = ctx.write_string(df).unwrap();
+        assert_eq!("2\n", &s);
+    }
+
     fn read_file(filename: &str) -> String {
         let mut file = File::open(filename).unwrap();
         let mut contents = String::new();
@@ -1978,32 +2281,33 @@ mod tests {
         // create execution context
         let mut ctx = ExecutionContext::local();
 
-        let people = ctx.load_csv(
-            "./test/data/people.csv",
-            &Schema::new(vec![
-                Field::new("id", DataType::Int32, false),
-                Field::new("name", DataType::Utf8, false),
-            ]),
-            true,
-            None,
-        ).unwrap();
+        let people =
+            ctx.load_csv(
+                "./test/data/people.csv",
+                &Schema::new(vec![
+                    Field::new("id", DataType::Int32, false),
+                    Field::new("name", DataType::Utf8, false),
+                ]),
+                true,
+                None,
+            ).unwrap();
 
         ctx.register("people", people);
 
-        let uk_cities = ctx.load_csv(
-            "./test/data/uk_cities.csv",
-            &Schema::new(vec![
-                Field::new("city", DataType::Utf8, false),
-                Field::new("lat", DataType::Float64, false),
-                Field::new("lng", DataType::Float64, false),
-            ]),
-            false,
-            None,
-        ).unwrap();
+        let uk_cities =
+            ctx.load_csv(
+                "./test/data/uk_cities.csv",
+                &Schema::new(vec![
+                    Field::new("city", DataType::Utf8, false),
+                    Field::new("lat", DataType::Float64, false),
+                    Field::new("lng", DataType::Float64, false),
+                ]),
+                false,
+                None,
+            ).unwrap();
 
         ctx.register("uk_cities", uk_cities);
 
         ctx
     }
-
 }

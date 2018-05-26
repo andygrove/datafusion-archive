@@ -172,8 +172,7 @@ impl Parser {
                 Token::Keyword(ref k) => if k == "IS" {
                     if self.parse_keywords(vec!["NULL"]) {
                         Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
-                    }
-                    else if self.parse_keywords(vec!["NOT", "NULL"]) {
+                    } else if self.parse_keywords(vec!["NOT", "NULL"]) {
                         Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
                     } else {
                         parser_err!("Invalid tokens after IS")
@@ -194,6 +193,7 @@ impl Parser {
                 | Token::Plus
                 | Token::Minus
                 | Token::Mult
+                | Token::Mod
                 | Token::Div => Ok(Some(ASTNode::SQLBinaryExpr {
                     left: Box::new(expr),
                     op: self.to_sql_operator(&tok)?,
@@ -218,6 +218,7 @@ impl Parser {
             &Token::Minus => Ok(SQLOperator::Minus),
             &Token::Mult => Ok(SQLOperator::Multiply),
             &Token::Div => Ok(SQLOperator::Divide),
+            &Token::Mod => Ok(SQLOperator::Modulus),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
@@ -245,7 +246,7 @@ impl Parser {
                 Ok(20)
             }
             &Token::Plus | &Token::Minus => Ok(30),
-            &Token::Mult | &Token::Div => Ok(40),
+            &Token::Mult | &Token::Div | &Token::Mod => Ok(40),
             _ => Ok(0),
         }
     }
@@ -734,10 +735,7 @@ mod tests {
         use self::ASTNode::*;
         let sql = String::from("a IS NULL");
         let ast = parse_sql(&sql);
-        assert_eq!(
-            SQLIsNull(Box::new(SQLIdentifier("a".to_string()))),
-            ast
-        );
+        assert_eq!(SQLIsNull(Box::new(SQLIdentifier("a".to_string()))), ast);
     }
 
     #[test]
@@ -745,10 +743,7 @@ mod tests {
         use self::ASTNode::*;
         let sql = String::from("a IS NOT NULL");
         let ast = parse_sql(&sql);
-        assert_eq!(
-            SQLIsNotNull(Box::new(SQLIdentifier("a".to_string()))),
-            ast
-        );
+        assert_eq!(SQLIsNotNull(Box::new(SQLIdentifier("a".to_string()))), ast);
     }
 
     #[test]
@@ -951,7 +946,21 @@ mod tests {
         //TODO: assertions
     }
 
-    fn parse_sql(sql: &String) -> ASTNode {
+    #[test]
+    fn parse_select_version() {
+        let sql = "SELECT @@version";
+        match parse_sql(&sql) {
+            ASTNode::SQLSelect { ref projection, .. } => {
+                assert_eq!(
+                    projection[0],
+                    ASTNode::SQLIdentifier("@@version".to_string())
+                );
+            }
+            _ => panic!(),
+        }
+    }
+
+    fn parse_sql(sql: &str) -> ASTNode {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);

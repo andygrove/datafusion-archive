@@ -14,6 +14,8 @@
 
 extern crate clap;
 extern crate datafusion;
+
+#[cfg(target_family = "unix")]
 extern crate liner;
 
 use std::fs::File;
@@ -35,33 +37,8 @@ mod linereader;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-fn main() {
-    println!("DataFusion Console");
-    //    println!("");
-    //    println!("Enter SQL statements terminated with semicolon, or 'quit' to leave.");
-    //    println!("");
-
-    let cmdline = App::new("DataFusion Console")
-            .version(VERSION)
-//            .arg(
-//                Arg::with_name("ETCD")
-//                    .help("etcd endpoints")
-//                    .short("e")
-//                    .long("etcd")
-//                    .value_name("URL")
-//                    .required(true)
-//                    .takes_value(true),
-//            )
-            .arg(
-                Arg::with_name("SCRIPT")
-                    .help("SQL script to run")
-                    .short("s")
-                    .long("script")
-                    .required(false)
-                    .takes_value(true),
-            )
-            .get_matches();
-
+#[cfg(target_family = "unix")]
+fn setup_console(cmdline: clap::ArgMatches) {
     //parse args
     //let etcd_endpoints = cmdline.value_of("ETCD").unwrap();
     let mut console = Console::new(/*etcd_endpoints.to_string()*/);
@@ -103,6 +80,40 @@ fn main() {
             }
         }
     }
+}
+
+#[cfg(target_family = "windows")]
+fn setup_console(cmdline: clap::ArgMatches) {
+    panic!("Console is not supported on windows!")
+}
+
+fn main() {
+    println!("DataFusion Console");
+    //    println!("");
+    //    println!("Enter SQL statements terminated with semicolon, or 'quit' to leave.");
+    //    println!("");
+
+    let cmdline = App::new("DataFusion Console")
+            .version(VERSION)
+//            .arg(
+//                Arg::with_name("ETCD")
+//                    .help("etcd endpoints")
+//                    .short("e")
+//                    .long("etcd")
+//                    .value_name("URL")
+//                    .required(true)
+//                    .takes_value(true),
+//            )
+            .arg(
+                Arg::with_name("SCRIPT")
+                    .help("SQL script to run")
+                    .short("s")
+                    .long("script")
+                    .required(false)
+                    .takes_value(true),
+            )
+            .get_matches();
+    setup_console(cmdline);
 }
 
 /// Interactive SQL console
@@ -157,6 +168,9 @@ impl Console {
                                             "Query executed in {} seconds and updated {} rows",
                                             elapsed_seconds, n
                                         );
+                                    }
+                                    ExecutionResult::Str(_) => {
+                                        println!("Query executed in {} seconds", elapsed_seconds);
                                     }
                                 }
                             }

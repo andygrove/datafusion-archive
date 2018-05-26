@@ -54,6 +54,8 @@ pub enum Token {
     Mult,
     /// Division operator `/`
     Div,
+    /// Modulo Operator `%`
+    Mod,
     /// Left parenthesis `(`
     LParen,
     /// Right parenthesis `)`
@@ -166,6 +168,7 @@ impl Tokenizer {
 
     /// Get the next token or return None
     fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token>, TokenizerError> {
+        //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some(&ch) => match ch {
                 // whitespace
@@ -178,7 +181,7 @@ impl Tokenizer {
                     let mut s = String::new();
                     while let Some(&ch) = chars.peek() {
                         match ch {
-                            'a'...'z' | 'A'...'Z' | '_' | '0'...'9' => {
+                            'a'...'z' | 'A'...'Z' | '_' | '0'...'9' | '@' => {
                                 chars.next(); // consume
                                 s.push(ch);
                             }
@@ -255,6 +258,10 @@ impl Tokenizer {
                 '/' => {
                     chars.next();
                     Ok(Some(Token::Div))
+                }
+                '%' => {
+                    chars.next();
+                    Ok(Some(Token::Mod))
                 }
                 '=' => {
                     chars.next();
@@ -403,7 +410,7 @@ mod tests {
         let expected = vec![
             Token::Identifier(String::from("a")),
             Token::Keyword("IS".to_string()),
-            Token::Keyword("NULL".to_string())
+            Token::Keyword("NULL".to_string()),
         ];
 
         compare(expected, tokens);

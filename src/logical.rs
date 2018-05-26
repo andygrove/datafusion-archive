@@ -227,8 +227,8 @@ impl fmt::Debug for Expr {
             Expr::Column(i) => write!(f, "#{}", i),
             Expr::Literal(v) => write!(f, "{:?}", v),
             Expr::Cast { expr, data_type } => write!(f, "CAST({:?} AS {:?})", expr, data_type),
-            Expr::IsNull ( expr ) => write!(f, "{:?} IS NULL", expr),
-            Expr::IsNotNull ( expr ) => write!(f, "{:?} IS NOT NULL", expr),
+            Expr::IsNull(expr) => write!(f, "{:?} IS NULL", expr),
+            Expr::IsNotNull(expr) => write!(f, "{:?} IS NOT NULL", expr),
             Expr::BinaryExpr { left, op, right } => write!(f, "{:?} {:?} {:?}", left, op, right),
             Expr::Sort { expr, asc } => if *asc {
                 write!(f, "{:?} ASC", expr)

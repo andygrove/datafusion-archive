@@ -123,7 +123,8 @@ impl DataSource for CsvFile {
 
         let projection = match self.projection {
             Some(ref v) => v.clone(),
-            None => self.schema
+            None => self
+                .schema
                 .columns()
                 .iter()
                 .enumerate()
@@ -166,9 +167,11 @@ impl DataSource for CsvFile {
                                 }
                             }
                             let buffer = builder.finish();
-                            Value::Column(Rc::new(Array::with_nulls(rows.len(),
+                            Value::Column(Rc::new(Array::with_nulls(
+                                rows.len(),
                                 ArrayData::Utf8(ListArray::from(buffer)),
-                                null_count, bitmap
+                                null_count,
+                                bitmap,
                             )))
                         }
                         _ => unimplemented!("CSV does not support data type {:?}", c.data_type()),
@@ -199,7 +202,19 @@ pub struct CsvWriter {
 
 impl CsvWriter {
     pub fn write_scalar(&mut self, v: &ScalarValue) {
-        self.write_bytes(format!("{:?}", v).as_bytes());
+        match *v {
+            ScalarValue::Int8(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::Int16(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::Int32(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::Int64(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::UInt8(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::UInt16(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::UInt32(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::UInt64(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::Float32(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            ScalarValue::Float64(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
+            _ => self.write_bytes(format!("{:?}", v).as_bytes()),
+        }
     }
     pub fn write_bool(&mut self, v: &bool) {
         self.w.write(format!("{}", *v).as_bytes()).unwrap();

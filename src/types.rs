@@ -16,6 +16,7 @@
 
 use std::fmt;
 use std::fmt::Formatter;
+use std::ops::Add;
 use std::rc::Rc;
 use std::result;
 
@@ -121,6 +122,27 @@ pub enum ArrayData {
     UInt64(PrimitiveArray<u64>),
     Utf8(ListArray<u8>),
     Struct(Vec<Rc<Array>>),
+}
+
+impl fmt::Display for ArrayData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let printable = match *self {
+            ArrayData::Boolean(_) => "boolean",
+            ArrayData::Float32(_) => "f32",
+            ArrayData::Float64(_) => "f64",
+            ArrayData::Int8(_) => "i8",
+            ArrayData::Int16(_) => "i16",
+            ArrayData::Int32(_) => "i32",
+            ArrayData::Int64(_) => "i64",
+            ArrayData::UInt8(_) => "u8",
+            ArrayData::UInt16(_) => "u16",
+            ArrayData::UInt32(_) => "u32",
+            ArrayData::UInt64(_) => "u64",
+            ArrayData::Utf8(_) => "String",
+            ArrayData::Struct(_) => "Struct",
+        };
+        write!(f, "{}", printable)
+    }
 }
 
 macro_rules! array_from_primitive {
@@ -229,49 +251,48 @@ impl ScalarValue {
     }
 }
 
-/// Type corecion rules
-pub fn can_coerce_from(left: &DataType, right: &DataType) -> bool {
+pub fn can_coerce_from(left: &DataType, other: &DataType) -> bool {
     use self::DataType::*;
     match left {
-        Int8 => match right {
+        Int8 => match other {
             Int8 => true,
             _ => false,
         },
-        Int16 => match right {
+        Int16 => match other {
             Int8 | Int16 => true,
             _ => false,
         },
-        Int32 => match right {
+        Int32 => match other {
             Int8 | Int16 | Int32 => true,
             _ => false,
         },
-        Int64 => match right {
+        Int64 => match other {
             Int8 | Int16 | Int32 | Int64 => true,
             _ => false,
         },
-        UInt8 => match right {
+        UInt8 => match other {
             UInt8 => true,
             _ => false,
         },
-        UInt16 => match right {
+        UInt16 => match other {
             UInt8 | UInt16 => true,
             _ => false,
         },
-        UInt32 => match right {
+        UInt32 => match other {
             UInt8 | UInt16 | UInt32 => true,
             _ => false,
         },
-        UInt64 => match right {
+        UInt64 => match other {
             UInt8 | UInt16 | UInt32 | UInt64 => true,
             _ => false,
         },
-        Float32 => match right {
+        Float32 => match other {
             Int8 | Int16 | Int32 | Int64 => true,
             UInt8 | UInt16 | UInt32 | UInt64 => true,
             Float32 => true,
             _ => false,
         },
-        Float64 => match right {
+        Float64 => match other {
             Int8 | Int16 | Int32 | Int64 => true,
             UInt8 | UInt16 | UInt32 | UInt64 => true,
             Float32 | Float64 => true,
@@ -316,6 +337,27 @@ impl ScalarValue {
         match *self {
             ScalarValue::Struct(ref v) => Ok(v),
             _ => Err(df_error!("TBD")),
+        }
+    }
+}
+
+impl Add for ScalarValue {
+    type Output = ScalarValue;
+
+    fn add(self, rhs: ScalarValue) -> ScalarValue {
+        assert_eq!(self.get_datatype(), rhs.get_datatype());
+        match self {
+            ScalarValue::UInt8(x) => ScalarValue::UInt8(x + rhs.get_u8().unwrap()),
+            ScalarValue::UInt16(x) => ScalarValue::UInt16(x + rhs.get_u16().unwrap()),
+            ScalarValue::UInt32(x) => ScalarValue::UInt32(x + rhs.get_u32().unwrap()),
+            ScalarValue::UInt64(x) => ScalarValue::UInt64(x + rhs.get_u64().unwrap()),
+            ScalarValue::Float32(x) => ScalarValue::Float32(x + rhs.get_f32().unwrap()),
+            ScalarValue::Float64(x) => ScalarValue::Float64(x + rhs.get_f64().unwrap()),
+            ScalarValue::Int8(x) => ScalarValue::Int8(x.saturating_add(rhs.get_i8().unwrap())),
+            ScalarValue::Int16(x) => ScalarValue::Int16(x.saturating_add(rhs.get_i16().unwrap())),
+            ScalarValue::Int32(x) => ScalarValue::Int32(x.saturating_add(rhs.get_i32().unwrap())),
+            ScalarValue::Int64(x) => ScalarValue::Int64(x.saturating_add(rhs.get_i64().unwrap())),
+            _ => panic!("Unsupported type for addition"),
         }
     }
 }

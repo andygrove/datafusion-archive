@@ -78,7 +78,8 @@ impl SqlToRel {
                     .collect::<Result<Vec<Expr>, String>>()?;
 
                 // collect aggregate expressions
-                let aggr_expr: Vec<Expr> = expr.iter()
+                let aggr_expr: Vec<Expr> = expr
+                    .iter()
                     .filter(|e| match e {
                         Expr::AggregateFunction { .. } => true,
                         _ => false,
@@ -93,7 +94,8 @@ impl SqlToRel {
                     };
 
                     let group_expr: Vec<Expr> = match group_by {
-                        Some(gbe) => gbe.iter()
+                        Some(gbe) => gbe
+                            .iter()
                             .map(|e| self.sql_to_rex(&e, &input_schema))
                             .collect::<Result<Vec<Expr>, String>>()?,
                         None => vec![],
@@ -287,7 +289,8 @@ impl SqlToRel {
                 //TODO: fix this hack
                 match id.to_lowercase().as_ref() {
                     "min" | "max" | "sum" | "avg" => {
-                        let rex_args = args.iter()
+                        let rex_args = args
+                            .iter()
                             .map(|a| self.sql_to_rex(a, schema))
                             .collect::<Result<Vec<Expr>, String>>()?;
 
@@ -301,7 +304,8 @@ impl SqlToRel {
                         })
                     }
                     "count" => {
-                        let rex_args = args.iter()
+                        let rex_args = args
+                            .iter()
                             .map(|a| match a {
                                 // this feels hacky but translate COUNT(1)/COUNT(*) to COUNT(first_column)
                                 ASTNode::SQLLiteralLong(1) => Ok(Expr::Column(0)),
@@ -318,7 +322,8 @@ impl SqlToRel {
                     }
                     _ => match self.schema_provider.get_function_meta(id) {
                         Some(fm) => {
-                            let rex_args = args.iter()
+                            let rex_args = args
+                                .iter()
                                 .map(|a| self.sql_to_rex(a, schema))
                                 .collect::<Result<Vec<Expr>, String>>()?;
 
@@ -430,7 +435,10 @@ fn collect_expr(e: &Expr, accum: &mut HashSet<usize>) {
     }
 }
 
-pub fn push_down_projection(plan: &Rc<LogicalPlan>, projection: &HashSet<usize>) -> Rc<LogicalPlan> {
+pub fn push_down_projection(
+    plan: &Rc<LogicalPlan>,
+    projection: &HashSet<usize>,
+) -> Rc<LogicalPlan> {
     //println!("push_down_projection() projection={:?}", projection);
     match plan.as_ref() {
         LogicalPlan::Aggregate {
@@ -579,6 +587,15 @@ mod tests {
         quick_test(
             "SELECT MIN(age) FROM person",
             "Aggregate: groupBy=[[]], aggr=[[MIN(#3)]]\
+             \n  TableScan: person projection=None",
+        );
+    }
+
+    #[test]
+    fn test_sum_aggregate() {
+        quick_test(
+            "SELECT SUM(age) from person",
+            "Aggregate: groupBy=[[]], aggr=[[SUM(#3)]]\
              \n  TableScan: person projection=None",
         );
     }
