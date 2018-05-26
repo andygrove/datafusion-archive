@@ -34,6 +34,7 @@ use arrow::list_builder::*;
 use super::dataframe::*;
 use super::datasources::common::*;
 use super::datasources::csv::*;
+use super::datasources::empty::*;
 use super::datasources::ndjson::*;
 use super::datasources::parquet::*;
 use super::errors::*;
@@ -1239,9 +1240,10 @@ impl ExecutionContext {
         //println!("Logical plan: {:?}", plan);
 
         match *plan {
-            LogicalPlan::EmptyRelation { .. } => Err(ExecutionError::General(String::from(
-                "empty relation is not implemented yet",
-            ))),
+            LogicalPlan::EmptyRelation { .. } => Ok(Box::new(DataSourceRelation {
+                schema: Schema::new(vec![]),
+                ds: Rc::new(RefCell::new(EmptyRelation::new())),
+            })),
 
             LogicalPlan::Sort { .. } => unimplemented!(),
 
@@ -2100,6 +2102,14 @@ fn test_sort() {
         let expected_result = read_file("test/data/expected/test_cast.csv");
 
         assert_eq!(expected_result, read_file("./target/test_cast.csv"));
+    }
+
+    #[test]
+    fn test_select_no_relation() {
+        let mut ctx = ExecutionContext::local();
+        let df = ctx.sql("SELECT 1+1").unwrap();
+        let s = ctx.write_string(df).unwrap();
+        assert_eq!("2\n", &s);
     }
 
     fn read_file(filename: &str) -> String {
