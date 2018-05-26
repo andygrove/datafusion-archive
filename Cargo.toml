@@ -53,9 +53,9 @@ criterion = "0.2.0"
 #name = "sql_bench"
 #harness = false
 
-[[bench]]
-name = "read_csv"
-harness = false
+#[[bench]]
+#name = "read_csv"
+#harness = false
 
 #[[bench]]
 #name = "filter_primitive"

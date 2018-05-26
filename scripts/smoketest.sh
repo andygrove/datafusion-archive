@@ -23,7 +23,7 @@ cargo run --example parquet_sql
 cargo run --example parquet_dataframe
 
 # run benchmarks
-cargo bench
+#cargo bench
 
 ## NOTE that distributed queries are broken since moving to Arrow ... will be be fixed later
 
