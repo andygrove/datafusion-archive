@@ -4,11 +4,9 @@ FROM datafusionrs/base:latest
 RUN mkdir -p /tmp/datafusion_source
 RUN mkdir -p /tmp/datafusion_source/src
 RUN mkdir -p /tmp/datafusion_source/examples
-RUN mkdir -p /tmp/datafusion_source/benches
 
 ADD src /tmp/datafusion_source/src/
 ADD examples /tmp/datafusion_source/examples/
-ADD benches /tmp/datafusion_source/benches/
 ADD Cargo.toml /tmp/datafusion_source/
 
 # Build the release
