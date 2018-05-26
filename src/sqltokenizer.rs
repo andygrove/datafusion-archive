@@ -86,6 +86,7 @@ lazy_static! {
         m.insert("UPDATE");
         m.insert("DELETE");
         m.insert("IN");
+        m.insert("IS");
         m.insert("NULL");
         m.insert("SET");
         m.insert("CREATE");
@@ -395,6 +396,21 @@ mod tests {
             Token::Identifier(String::from("salary")),
             Token::Neq,
             Token::String(String::from("Not Provided")),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_is_null() {
+        let sql = String::from("a IS NULL");
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::Identifier(String::from("a")),
+            Token::Keyword("IS".to_string()),
+            Token::Keyword("NULL".to_string()),
         ];
 
         compare(expected, tokens);

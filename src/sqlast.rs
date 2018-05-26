@@ -28,6 +28,8 @@ pub enum ASTNode {
     SQLIdentifier(String),
     SQLWildcard,
     SQLCompoundIdentifier(Vec<String>),
+    SQLIsNull(Box<ASTNode>),
+    SQLIsNotNull(Box<ASTNode>),
     SQLBinaryExpr {
         left: Box<ASTNode>,
         op: SQLOperator,

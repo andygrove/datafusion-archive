@@ -30,7 +30,7 @@ bytes = "0.4"
 byteorder = "1"
 fnv = "1.0.3"
 csv = "1.0.0"
-datafusion-arrow = "0.1.0-nightly-20180519-2"
+datafusion-arrow = "0.1.0-nightly-20180520"
 #datafusion-arrow = { path = "../datafusion-arrow" }
 
 lazy_static = "1.0"

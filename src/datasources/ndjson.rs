@@ -95,7 +95,7 @@ impl DataSource for NdJsonFile {
             return None;
         }
 
-        println!("Loaded {} rows", rows.len());
+        //println!("Loaded {} rows", rows.len());
 
         // now convert to Arrow arrays based on provided schema
 

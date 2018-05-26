@@ -151,14 +151,27 @@ impl DataSource for CsvFile {
                         DataType::Utf8 => {
                             let mut builder: ListBuilder<u8> =
                                 ListBuilder::with_capacity(rows.len());
-                            rows.iter().for_each(|row| {
-                                let s = row.get(i).unwrap_or("").to_string();
-                                builder.push(s.as_bytes());
-                            });
+                            let mut bitmap = Bitmap::new(rows.len());
+                            let mut null_count = 0;
+                            for j in 0..rows.len() {
+                                let row = &rows[j];
+                                match row.get(i) {
+                                    Some(s) => {
+                                        builder.push(s.as_bytes());
+                                    }
+                                    _ => {
+                                        //NOTE this never happens because the csv crate treats missing strings as empty strings
+                                        bitmap.clear(j);
+                                        null_count += 1;
+                                    }
+                                }
+                            }
                             let buffer = builder.finish();
-                            Value::Column(Rc::new(Array::new(
+                            Value::Column(Rc::new(Array::with_nulls(
                                 rows.len(),
                                 ArrayData::Utf8(ListArray::from(buffer)),
+                                null_count,
+                                bitmap,
                             )))
                         }
                         _ => unimplemented!("CSV does not support data type {:?}", c.data_type()),
