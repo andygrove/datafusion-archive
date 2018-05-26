@@ -134,6 +134,55 @@ fn csv_test_compare_columns() {
 //}
 
 #[test]
+fn test_scalar_operators() {
+    let mut ctx = ExecutionContext::local();
+    let schema = numerics_schema(DataType::Int32, DataType::Float32);
+    let data = ctx.load_csv("test/data/numerics.csv", &schema, true, None).unwrap();
+    ctx.register("c", data);
+
+    let sql = "SELECT 2 + 3 FROM c";
+    let df = ctx.sql(&sql).unwrap();
+    let results = ctx.write_string(df).unwrap();
+    assert_eq!("5\n5\n5\n", results);
+}
+
+#[test]
+fn test_basic_operators_f32() {
+    let mut ctx = ExecutionContext::local();
+    let schema = numerics_schema(DataType::Int32, DataType::Float32);
+
+    let plus_expr = operation_expr("+", "2", "2.5");
+    let minus_expr = operation_expr("-", "2", "2.5");
+    let multiply_expr = operation_expr("*", "2", "2.5");
+    let divide_expr = operation_expr("/", "2", "2.5");
+    let modulo_expr = operation_expr("%", "2", "2.5");
+
+    basic_operation_test(&mut ctx, &schema, &plus_expr, "test/data/numerics.csv", "numeric_results_plus.csv", "numerics_plus.csv");
+    basic_operation_test(&mut ctx, &schema, &minus_expr, "test/data/numerics.csv", "numeric_results_minus.csv", "numerics_minus.csv");
+    basic_operation_test(&mut ctx, &schema, &multiply_expr, "test/data/numerics.csv", "numeric_results_multiply.csv", "numerics_multiply.csv");
+    basic_operation_test(&mut ctx, &schema, &divide_expr, "test/data/numerics.csv", "numeric_results_divide.csv", "numerics_divide.csv");
+    basic_operation_test(&mut ctx, &schema, &modulo_expr, "test/data/numerics.csv", "numeric_results_modulo.csv", "numerics_modulo.csv");
+}
+
+#[test]
+fn test_basic_operators_f64() {
+    let mut ctx = ExecutionContext::local();
+    let schema = numerics_schema(DataType::Int64, DataType::Float64);
+
+    let plus_expr = operation_expr("+", "2", "2.5");
+    let minus_expr = operation_expr("-", "2", "2.5");
+    let multiply_expr = operation_expr("*", "2", "2.5");
+    let divide_expr = operation_expr("/", "2", "2.5");
+    let modulo_expr = operation_expr("%", "2", "2.5");
+
+    basic_operation_test(&mut ctx, &schema, &plus_expr, "test/data/numerics.csv", "numeric_results_plus_f64.csv", "numerics_plus_f64.csv");
+    basic_operation_test(&mut ctx, &schema, &minus_expr, "test/data/numerics.csv", "numeric_results_minus_f64.csv", "numerics_minus_f64.csv");
+    basic_operation_test(&mut ctx, &schema, &multiply_expr, "test/data/numerics.csv", "numeric_results_multiply_f64.csv", "numerics_multiply_f64.csv");
+    basic_operation_test(&mut ctx, &schema, &divide_expr, "test/data/numerics.csv", "numeric_results_divide_f64.csv", "numerics_divide_f64.csv");
+    basic_operation_test(&mut ctx, &schema, &modulo_expr, "test/data/numerics.csv", "numeric_results_modulo_f64.csv", "numerics_modulo_f64.csv");
+}
+
+#[test]
 fn parquet_query_all_types() {
     let mut ctx = ExecutionContext::local();
     load_parquet(&mut ctx, "test/data/all_types_flat.parquet");
@@ -282,6 +331,27 @@ fn csv_project_filter_test(col: &str, expr: &str, filename: &str) {
     assert_eq!(expected_result, read_file(&output_filename));
 }
 
+fn operation_expr(op: &str, scalar: &str, scalar_f: &str) -> String {
+    format!("a {} b, {} {} a, {} {} a, a_f {} b_f, {} {} a_f, {} {} a_f", op, scalar, op, scalar_f, op, op, scalar, op, scalar_f, op)
+}
+
+fn basic_operation_test(ctx: &mut ExecutionContext, schema: &Schema, expr: &str, filename: &str, output: &str, exp: &str) {
+    let data = ctx.load_csv(filename, schema, true, None).unwrap();
+    ctx.register("c", data);
+
+    let sql = format!("SELECT {} FROM c", expr);
+    let output_filename = format!("target/{}", output);
+    let expected_filename = format!("test/data/expected/{}", exp);
+
+    let df = ctx.sql(&sql).unwrap();
+    ctx.write_csv(df, &output_filename).unwrap();
+
+    let expected = read_file(&expected_filename);
+    let realized = read_file(&output_filename);
+
+    assert_eq!(expected, realized);
+}
+
 fn read_file(filename: &str) -> String {
     let mut file = File::open(filename).unwrap();
     let mut contents = String::new();
@@ -298,6 +368,15 @@ fn load_csv(ctx: &mut ExecutionContext, filename: &str) {
 fn load_parquet(ctx: &mut ExecutionContext, filename: &str) {
     let csv = ctx.load_parquet(filename, None).unwrap();
     ctx.register("all_types", csv);
+}
+
+fn numerics_schema(dt1: DataType, dt2: DataType) -> Schema {
+    Schema::new(vec![
+        Field::new("a", dt1.clone(), false),
+        Field::new("b", dt1.clone(), false),
+        Field::new("a_f", dt2.clone(), false),
+        Field::new("b_f", dt2.clone(), false),
+    ])
 }
 
 fn create_schema() -> Schema {

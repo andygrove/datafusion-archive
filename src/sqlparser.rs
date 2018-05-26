@@ -183,6 +183,7 @@ impl Parser {
                 | Token::Plus
                 | Token::Minus
                 | Token::Mult
+                | Token::Mod
                 | Token::Div => Ok(Some(ASTNode::SQLBinaryExpr {
                     left: Box::new(expr),
                     op: self.to_sql_operator(&tok)?,
@@ -207,6 +208,7 @@ impl Parser {
             &Token::Minus => Ok(SQLOperator::Minus),
             &Token::Mult => Ok(SQLOperator::Multiply),
             &Token::Div => Ok(SQLOperator::Divide),
+            &Token::Mod => Ok(SQLOperator::Modulus),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
@@ -233,7 +235,7 @@ impl Parser {
                 Ok(20)
             }
             &Token::Plus | &Token::Minus => Ok(30),
-            &Token::Mult | &Token::Div => Ok(40),
+            &Token::Mult | &Token::Div | &Token::Mod => Ok(40),
             _ => Ok(0),
         }
     }

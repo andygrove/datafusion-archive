@@ -54,6 +54,8 @@ pub enum Token {
     Mult,
     /// Division operator `/`
     Div,
+    /// Modulo Operator `%`
+    Mod,
     /// Left parenthesis `(`
     LParen,
     /// Right parenthesis `)`
@@ -254,6 +256,10 @@ impl Tokenizer {
                 '/' => {
                     chars.next();
                     Ok(Some(Token::Div))
+                }
+                '%' => {
+                    chars.next();
+                    Ok(Some(Token::Mod))
                 }
                 '=' => {
                     chars.next();
