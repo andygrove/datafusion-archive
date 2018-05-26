@@ -353,10 +353,10 @@ impl Add for ScalarValue {
             ScalarValue::UInt64(x) => ScalarValue::UInt64(x + rhs.get_u64().unwrap()),
             ScalarValue::Float32(x) => ScalarValue::Float32(x + rhs.get_f32().unwrap()),
             ScalarValue::Float64(x) => ScalarValue::Float64(x + rhs.get_f64().unwrap()),
-            ScalarValue::Int8(x)    => ScalarValue::Int8(x.saturating_add(rhs.get_i8().unwrap())),
-            ScalarValue::Int16(x)   => ScalarValue::Int16(x.saturating_add(rhs.get_i16().unwrap())),
-            ScalarValue::Int32(x)   => ScalarValue::Int32(x.saturating_add(rhs.get_i32().unwrap())),
-            ScalarValue::Int64(x)   => ScalarValue::Int64(x.saturating_add(rhs.get_i64().unwrap())),
+            ScalarValue::Int8(x) => ScalarValue::Int8(x.saturating_add(rhs.get_i8().unwrap())),
+            ScalarValue::Int16(x) => ScalarValue::Int16(x.saturating_add(rhs.get_i16().unwrap())),
+            ScalarValue::Int32(x) => ScalarValue::Int32(x.saturating_add(rhs.get_i32().unwrap())),
+            ScalarValue::Int64(x) => ScalarValue::Int64(x.saturating_add(rhs.get_i64().unwrap())),
             _ => panic!("Unsupported type for addition"),
         }
     }

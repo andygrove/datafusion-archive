@@ -128,7 +128,10 @@ impl ParquetFile {
                                     for j in 0..row_count {
                                         builder.push(b[j].slice(0, b[j].len()).data());
                                     }
-                                    Array::new(count, ArrayData::Utf8(ListArray::from(builder.finish())))
+                                    Array::new(
+                                        count,
+                                        ArrayData::Utf8(ListArray::from(builder.finish())),
+                                    )
                                 }
                                 _ => panic!("Error reading parquet batch (column {})", i),
                             }

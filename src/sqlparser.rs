@@ -919,7 +919,21 @@ mod tests {
         //TODO: assertions
     }
 
-    fn parse_sql(sql: &String) -> ASTNode {
+    #[test]
+    fn parse_select_version() {
+        let sql = "SELECT @@version";
+        match parse_sql(&sql) {
+            ASTNode::SQLSelect { ref projection, .. } => {
+                assert_eq!(
+                    projection[0],
+                    ASTNode::SQLIdentifier("@@version".to_string())
+                );
+            }
+            _ => panic!(),
+        }
+    }
+
+    fn parse_sql(sql: &str) -> ASTNode {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);

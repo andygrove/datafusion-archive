@@ -92,7 +92,11 @@ fn csv_test_float32() {
 fn csv_test_float32_uint32_comparison() {
     csv_project_filter_test("c_float32", "c_float32 >= 0 ", "high_uint32");
     csv_project_filter_test("c_float32", "c_float32 <= 1", "low_uint32");
-    csv_project_filter_test("c_float32", "c_float32 <= CAST(1 as float32)", "cast_uint32");
+    csv_project_filter_test(
+        "c_float32",
+        "c_float32 <= CAST(1 as float32)",
+        "cast_uint32",
+    );
 }
 
 #[test]
@@ -137,7 +141,9 @@ fn csv_test_compare_columns() {
 fn test_scalar_operators() {
     let mut ctx = ExecutionContext::local();
     let schema = numerics_schema(DataType::Int32, DataType::Float32);
-    let data = ctx.load_csv("test/data/numerics.csv", &schema, true, None).unwrap();
+    let data = ctx
+        .load_csv("test/data/numerics.csv", &schema, true, None)
+        .unwrap();
     ctx.register("c", data);
 
     let sql = "SELECT 2 + 3 FROM c";
@@ -157,11 +163,46 @@ fn test_basic_operators_f32() {
     let divide_expr = operation_expr("/", "2", "2.5");
     let modulo_expr = operation_expr("%", "2", "2.5");
 
-    basic_operation_test(&mut ctx, &schema, &plus_expr, "test/data/numerics.csv", "numeric_results_plus.csv", "numerics_plus.csv");
-    basic_operation_test(&mut ctx, &schema, &minus_expr, "test/data/numerics.csv", "numeric_results_minus.csv", "numerics_minus.csv");
-    basic_operation_test(&mut ctx, &schema, &multiply_expr, "test/data/numerics.csv", "numeric_results_multiply.csv", "numerics_multiply.csv");
-    basic_operation_test(&mut ctx, &schema, &divide_expr, "test/data/numerics.csv", "numeric_results_divide.csv", "numerics_divide.csv");
-    basic_operation_test(&mut ctx, &schema, &modulo_expr, "test/data/numerics.csv", "numeric_results_modulo.csv", "numerics_modulo.csv");
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &plus_expr,
+        "test/data/numerics.csv",
+        "numeric_results_plus.csv",
+        "numerics_plus.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &minus_expr,
+        "test/data/numerics.csv",
+        "numeric_results_minus.csv",
+        "numerics_minus.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &multiply_expr,
+        "test/data/numerics.csv",
+        "numeric_results_multiply.csv",
+        "numerics_multiply.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &divide_expr,
+        "test/data/numerics.csv",
+        "numeric_results_divide.csv",
+        "numerics_divide.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &modulo_expr,
+        "test/data/numerics.csv",
+        "numeric_results_modulo.csv",
+        "numerics_modulo.csv",
+    );
 }
 
 #[test]
@@ -175,11 +216,46 @@ fn test_basic_operators_f64() {
     let divide_expr = operation_expr("/", "2", "2.5");
     let modulo_expr = operation_expr("%", "2", "2.5");
 
-    basic_operation_test(&mut ctx, &schema, &plus_expr, "test/data/numerics.csv", "numeric_results_plus_f64.csv", "numerics_plus_f64.csv");
-    basic_operation_test(&mut ctx, &schema, &minus_expr, "test/data/numerics.csv", "numeric_results_minus_f64.csv", "numerics_minus_f64.csv");
-    basic_operation_test(&mut ctx, &schema, &multiply_expr, "test/data/numerics.csv", "numeric_results_multiply_f64.csv", "numerics_multiply_f64.csv");
-    basic_operation_test(&mut ctx, &schema, &divide_expr, "test/data/numerics.csv", "numeric_results_divide_f64.csv", "numerics_divide_f64.csv");
-    basic_operation_test(&mut ctx, &schema, &modulo_expr, "test/data/numerics.csv", "numeric_results_modulo_f64.csv", "numerics_modulo_f64.csv");
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &plus_expr,
+        "test/data/numerics.csv",
+        "numeric_results_plus_f64.csv",
+        "numerics_plus_f64.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &minus_expr,
+        "test/data/numerics.csv",
+        "numeric_results_minus_f64.csv",
+        "numerics_minus_f64.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &multiply_expr,
+        "test/data/numerics.csv",
+        "numeric_results_multiply_f64.csv",
+        "numerics_multiply_f64.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &divide_expr,
+        "test/data/numerics.csv",
+        "numeric_results_divide_f64.csv",
+        "numerics_divide_f64.csv",
+    );
+    basic_operation_test(
+        &mut ctx,
+        &schema,
+        &modulo_expr,
+        "test/data/numerics.csv",
+        "numeric_results_modulo_f64.csv",
+        "numerics_modulo_f64.csv",
+    );
 }
 
 #[test]
@@ -215,30 +291,30 @@ fn parquet_aggregate() {
 
     // define the SQL statement
     let sql = "SELECT \
-        COUNT(1), COUNT(*), \
-        MIN(c_bool), MAX(c_bool), \
-        MIN(c_uint8), MAX(c_uint8), \
-        MIN(c_uint16), MAX(c_uint16), \
-        MIN(c_uint32), MAX(c_uint32), \
-        MIN(c_uint64), MAX(c_uint64), \
-        MIN(c_int8), MAX(c_int8), \
-        MIN(c_int16), MAX(c_int16), \
-        MIN(c_int32), MAX(c_int32), \
-        MIN(c_int64), MAX(c_int64), \
-        MIN(c_float32), MAX(c_float32), \
-        MIN(c_float64), MAX(c_float64), \
-        MIN(c_utf8), MAX(c_utf8), \
-        SUM(c_int8), \
-        SUM(c_int16), \
-        SUM(c_int32), \
-        SUM(c_int64), \
-        SUM(c_uint8), \
-        SUM(c_uint16), \
-        SUM(c_uint32), \
-        SUM(c_uint64), \
-        SUM(c_float32), \
-        SUM(c_float64) \
-    FROM all_types";
+               COUNT(1), COUNT(*), \
+               MIN(c_bool), MAX(c_bool), \
+               MIN(c_uint8), MAX(c_uint8), \
+               MIN(c_uint16), MAX(c_uint16), \
+               MIN(c_uint32), MAX(c_uint32), \
+               MIN(c_uint64), MAX(c_uint64), \
+               MIN(c_int8), MAX(c_int8), \
+               MIN(c_int16), MAX(c_int16), \
+               MIN(c_int32), MAX(c_int32), \
+               MIN(c_int64), MAX(c_int64), \
+               MIN(c_float32), MAX(c_float32), \
+               MIN(c_float64), MAX(c_float64), \
+               MIN(c_utf8), MAX(c_utf8), \
+               SUM(c_int8), \
+               SUM(c_int16), \
+               SUM(c_int32), \
+               SUM(c_int64), \
+               SUM(c_uint8), \
+               SUM(c_uint16), \
+               SUM(c_uint32), \
+               SUM(c_uint64), \
+               SUM(c_float32), \
+               SUM(c_float64) \
+               FROM all_types";
 
     // create a data frame
     let df = ctx.sql(&sql).unwrap();
@@ -332,10 +408,20 @@ fn csv_project_filter_test(col: &str, expr: &str, filename: &str) {
 }
 
 fn operation_expr(op: &str, scalar: &str, scalar_f: &str) -> String {
-    format!("a {} b, {} {} a, {} {} a, a_f {} b_f, {} {} a_f, {} {} a_f", op, scalar, op, scalar_f, op, op, scalar, op, scalar_f, op)
+    format!(
+        "a {} b, {} {} a, {} {} a, a_f {} b_f, {} {} a_f, {} {} a_f",
+        op, scalar, op, scalar_f, op, op, scalar, op, scalar_f, op
+    )
 }
 
-fn basic_operation_test(ctx: &mut ExecutionContext, schema: &Schema, expr: &str, filename: &str, output: &str, exp: &str) {
+fn basic_operation_test(
+    ctx: &mut ExecutionContext,
+    schema: &Schema,
+    expr: &str,
+    filename: &str,
+    output: &str,
+    exp: &str,
+) {
     let data = ctx.load_csv(filename, schema, true, None).unwrap();
     ctx.register("c", data);
 

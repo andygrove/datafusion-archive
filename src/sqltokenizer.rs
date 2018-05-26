@@ -167,6 +167,7 @@ impl Tokenizer {
 
     /// Get the next token or return None
     fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<Token>, TokenizerError> {
+        //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some(&ch) => match ch {
                 // whitespace
@@ -179,7 +180,7 @@ impl Tokenizer {
                     let mut s = String::new();
                     while let Some(&ch) = chars.peek() {
                         match ch {
-                            'a'...'z' | 'A'...'Z' | '_' | '0'...'9' => {
+                            'a'...'z' | 'A'...'Z' | '_' | '0'...'9' | '@' => {
                                 chars.next(); // consume
                                 s.push(ch);
                             }

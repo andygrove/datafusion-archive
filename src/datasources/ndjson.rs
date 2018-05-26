@@ -22,7 +22,7 @@ use std::rc::Rc;
 use arrow::array::ListArray;
 use arrow::bitmap::*;
 use arrow::builder::*;
-use arrow::datatypes::{Schema, DataType};
+use arrow::datatypes::{DataType, Schema};
 use arrow::list_builder::ListBuilder;
 
 use json;
@@ -34,19 +34,19 @@ use super::common::*;
 pub struct NdJsonFile {
     schema: Rc<Schema>,
     projection: Option<Vec<usize>>,
-    lines: Box<Iterator<Item=io::Result<String>>>,
-    batch_size: usize
+    lines: Box<Iterator<Item = io::Result<String>>>,
+    batch_size: usize,
 }
 
 impl NdJsonFile {
-
     pub fn open(f: File, schema: Rc<Schema>, projection: Option<Vec<usize>>) -> Result<Self> {
         let reader = BufReader::new(f);
         let it = reader.lines();
         Ok(NdJsonFile {
             schema: schema.clone(),
-            lines: Box::new(it), batch_size: 1024,
-            projection
+            lines: Box::new(it),
+            batch_size: 1024,
+            projection,
         })
     }
 }
@@ -73,15 +73,12 @@ macro_rules! collect_column {
     }};
 }
 
-
 impl DataSource for NdJsonFile {
-
     fn schema(&self) -> &Rc<Schema> {
         unimplemented!()
     }
 
     fn next(&mut self) -> Option<Result<Rc<RecordBatch>>> {
-
         // load a batch of JSON records into memory
         let mut rows: Vec<json::JsonValue> = Vec::with_capacity(self.batch_size);
         for _ in 0..self.batch_size {
@@ -106,7 +103,8 @@ impl DataSource for NdJsonFile {
 
         let projection = match self.projection {
             Some(ref v) => v.clone(),
-            None => self.schema
+            None => self
+                .schema
                 .columns()
                 .iter()
                 .enumerate()
@@ -118,21 +116,42 @@ impl DataSource for NdJsonFile {
             .map(|(i, c)| {
                 if projection.contains(&i) {
                     match c.data_type() {
-                        DataType::Boolean => collect_column!(rows, c.name(), bool, as_bool, rows.len(), false),
+                        DataType::Boolean => {
+                            collect_column!(rows, c.name(), bool, as_bool, rows.len(), false)
+                        }
                         DataType::Int8 => collect_column!(rows, c.name(), i8, as_i8, rows.len(), 0),
-                        DataType::Int16 => collect_column!(rows, c.name(), i16, as_i16, rows.len(), 0),
-                        DataType::Int32 => collect_column!(rows, c.name(), i32, as_i32, rows.len(), 0),
-                        DataType::Int64 => collect_column!(rows, c.name(), i64, as_i64, rows.len(), 0),
-                        DataType::UInt8 => collect_column!(rows, c.name(), u8, as_u8, rows.len(), 0),
-                        DataType::UInt16 => collect_column!(rows, c.name(), u16, as_u16, rows.len(), 0),
-                        DataType::UInt32 => collect_column!(rows, c.name(), u32, as_u32, rows.len(), 0),
-                        DataType::UInt64 => collect_column!(rows, c.name(), u64, as_u64, rows.len(), 0),
-                        DataType::Float16 => collect_column!(rows, c.name(), f32, as_f32, rows.len(), 0_f32),
-                        DataType::Float32 => collect_column!(rows, c.name(), f32, as_f32, rows.len(), 0_f32),
-                        DataType::Float64 => collect_column!(rows, c.name(), f64, as_f64, rows.len(), 0_f64),
+                        DataType::Int16 => {
+                            collect_column!(rows, c.name(), i16, as_i16, rows.len(), 0)
+                        }
+                        DataType::Int32 => {
+                            collect_column!(rows, c.name(), i32, as_i32, rows.len(), 0)
+                        }
+                        DataType::Int64 => {
+                            collect_column!(rows, c.name(), i64, as_i64, rows.len(), 0)
+                        }
+                        DataType::UInt8 => {
+                            collect_column!(rows, c.name(), u8, as_u8, rows.len(), 0)
+                        }
+                        DataType::UInt16 => {
+                            collect_column!(rows, c.name(), u16, as_u16, rows.len(), 0)
+                        }
+                        DataType::UInt32 => {
+                            collect_column!(rows, c.name(), u32, as_u32, rows.len(), 0)
+                        }
+                        DataType::UInt64 => {
+                            collect_column!(rows, c.name(), u64, as_u64, rows.len(), 0)
+                        }
+                        DataType::Float16 => {
+                            collect_column!(rows, c.name(), f32, as_f32, rows.len(), 0_f32)
+                        }
+                        DataType::Float32 => {
+                            collect_column!(rows, c.name(), f32, as_f32, rows.len(), 0_f32)
+                        }
+                        DataType::Float64 => {
+                            collect_column!(rows, c.name(), f64, as_f64, rows.len(), 0_f64)
+                        }
                         DataType::Utf8 => {
-                            let mut b: ListBuilder<u8> =
-                                ListBuilder::with_capacity(rows.len());
+                            let mut b: ListBuilder<u8> = ListBuilder::with_capacity(rows.len());
                             let mut bitmap = Bitmap::new(rows.len());
                             let mut null_count = 0;
                             for row_index in 0..rows.len() {
@@ -149,11 +168,15 @@ impl DataSource for NdJsonFile {
                             let buffer = b.finish();
                             Value::Column(Rc::new(Array::with_nulls(
                                 rows.len(),
-                            ArrayData::Utf8(ListArray::from(buffer)),
+                                ArrayData::Utf8(ListArray::from(buffer)),
                                 null_count,
-                                bitmap)))
+                                bitmap,
+                            )))
                         }
-                        _ => unimplemented!("ndjson reader does not support data type {:?}", c.data_type()),
+                        _ => unimplemented!(
+                            "ndjson reader does not support data type {:?}",
+                            c.data_type()
+                        ),
                     }
                 } else {
                     // not in the projection
@@ -170,7 +193,6 @@ impl DataSource for NdJsonFile {
         })))
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -193,4 +215,3 @@ mod tests {
         assert_eq!(3, batch.num_columns());
     }
 }
-

@@ -176,14 +176,30 @@ macro_rules! scalar_column_operations {
 macro_rules! scalar_scalar_operations {
     ($X1:ident, $X2:ident, $F:expr) => {
         match ($X1.as_ref(), $X2.as_ref()) {
-            (ScalarValue::UInt8(a), ScalarValue::UInt8(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt8($F(a, b))))),
-            (ScalarValue::UInt16(a), ScalarValue::UInt16(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt16($F(a, b))))),
-            (ScalarValue::UInt32(a), ScalarValue::UInt32(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt32($F(a, b))))),
-            (ScalarValue::UInt64(a), ScalarValue::UInt64(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::UInt64($F(a, b))))),
-            (ScalarValue::Int8(a), ScalarValue::Int8(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int8($F(a, b))))),
-            (ScalarValue::Int16(a), ScalarValue::Int16(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int16($F(a, b))))),
-            (ScalarValue::Int32(a), ScalarValue::Int32(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int32($F(a, b))))),
-            (ScalarValue::Int64(a), ScalarValue::Int64(b)) => Ok(Value::Scalar(Rc::new(ScalarValue::Int64($F(a, b))))),
+            (ScalarValue::UInt8(a), ScalarValue::UInt8(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt8($F(a, b)))))
+            }
+            (ScalarValue::UInt16(a), ScalarValue::UInt16(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt16($F(a, b)))))
+            }
+            (ScalarValue::UInt32(a), ScalarValue::UInt32(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt32($F(a, b)))))
+            }
+            (ScalarValue::UInt64(a), ScalarValue::UInt64(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::UInt64($F(a, b)))))
+            }
+            (ScalarValue::Int8(a), ScalarValue::Int8(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int8($F(a, b)))))
+            }
+            (ScalarValue::Int16(a), ScalarValue::Int16(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int16($F(a, b)))))
+            }
+            (ScalarValue::Int32(a), ScalarValue::Int32(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int32($F(a, b)))))
+            }
+            (ScalarValue::Int64(a), ScalarValue::Int64(b)) => {
+                Ok(Value::Scalar(Rc::new(ScalarValue::Int64($F(a, b)))))
+            }
             (ScalarValue::Float32(a), ScalarValue::Float32(b)) => {
                 Ok(Value::Scalar(Rc::new(ScalarValue::Float32($F(a, b)))))
             }
@@ -431,7 +447,8 @@ impl Value {
             (&Value::Column(ref v1), &Value::Column(ref v2)) => {
                 match (v1.data(), v2.data()) {
                     (ArrayData::Boolean(ref l), ArrayData::Boolean(ref r)) => {
-                        let bools = l.iter()
+                        let bools = l
+                            .iter()
                             .zip(r.iter())
                             .map(|(ll, rr)| ll && rr)
                             .collect::<Vec<bool>>();
@@ -520,7 +537,8 @@ pub fn compile_expr(
         } => {
             assert_eq!(1, args.len());
 
-            let compiled_args: Result<Vec<RuntimeExpr>> = args.iter()
+            let compiled_args: Result<Vec<RuntimeExpr>> = args
+                .iter()
                 .map(|e| compile_scalar_expr(ctx, e, input_schema))
                 .collect();
 
@@ -886,7 +904,7 @@ pub fn compile_scalar_expr(
                         left_values.modulo(&right_values)
                     }),
                     t: op_type,
-                })
+                }),
             }
         }
         &Expr::Sort { ref expr, .. } => {
@@ -914,7 +932,8 @@ pub fn compile_scalar_expr(
             }
 
             // evaluate the arguments to the function
-            let compiled_args: Result<Vec<RuntimeExpr>> = args.iter()
+            let compiled_args: Result<Vec<RuntimeExpr>> = args
+                .iter()
                 .map(|e| compile_scalar_expr(ctx, e, input_schema))
                 .collect();
 
@@ -1040,7 +1059,8 @@ impl SchemaProvider for ExecutionContextSchemaProvider {
     }
 
     fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
-        match self.function_meta
+        match self
+            .function_meta
             .borrow()
             .get(&name.to_string().to_lowercase())
         {
@@ -1320,7 +1340,8 @@ impl ExecutionContext {
 
                 let project_schema = Rc::new(Schema::new(project_columns));
 
-                let compiled_expr: Result<Vec<RuntimeExpr>> = expr.iter()
+                let compiled_expr: Result<Vec<RuntimeExpr>> = expr
+                    .iter()
                     .map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
                     .collect();
 
@@ -1466,7 +1487,9 @@ impl ExecutionContext {
         };
         match self.execute(&physical_plan)? {
             ExecutionResult::Str(s) => Ok(s),
-            _ => Err(ExecutionError::General("Unexpected result in write_string".to_string())),
+            _ => Err(ExecutionError::General(
+                "Unexpected result in write_string".to_string(),
+            )),
         }
     }
 
@@ -1502,7 +1525,8 @@ impl ExecutionContext {
                             ////println!("Processing batch of {} rows", batch.row_count());
                             for i in 0..batch.num_rows() {
                                 let row = batch.row_slice(i);
-                                let csv = row.into_iter()
+                                let csv = row
+                                    .into_iter()
                                     .map(|v| v.to_string())
                                     .collect::<Vec<String>>()
                                     .join(",");
@@ -1518,7 +1542,7 @@ impl ExecutionContext {
             &PhysicalPlan::Write {
                 ref plan,
                 ref filename,
-                ref kind
+                ref kind,
             } => {
                 // create output file
                 // //println!("Writing csv to {}", filename);
@@ -1546,20 +1570,41 @@ impl ExecutionContext {
                                             match *batch.column(j) {
                                                 Value::Scalar(ref v) => w.write_scalar(v),
                                                 Value::Column(ref v) => match v.data() {
-                                                    ArrayData::Boolean(ref v) => w.write_bool(v.get(i)),
-                                                    ArrayData::Float32(ref v) => w.write_f32(v.get(i)),
-                                                    ArrayData::Float64(ref v) => w.write_f64(v.get(i)),
+                                                    ArrayData::Boolean(ref v) => {
+                                                        w.write_bool(v.get(i))
+                                                    }
+                                                    ArrayData::Float32(ref v) => {
+                                                        w.write_f32(v.get(i))
+                                                    }
+                                                    ArrayData::Float64(ref v) => {
+                                                        w.write_f64(v.get(i))
+                                                    }
                                                     ArrayData::Int8(ref v) => w.write_i8(v.get(i)),
-                                                    ArrayData::Int16(ref v) => w.write_i16(v.get(i)),
-                                                    ArrayData::Int32(ref v) => w.write_i32(v.get(i)),
-                                                    ArrayData::Int64(ref v) => w.write_i64(v.get(i)),
+                                                    ArrayData::Int16(ref v) => {
+                                                        w.write_i16(v.get(i))
+                                                    }
+                                                    ArrayData::Int32(ref v) => {
+                                                        w.write_i32(v.get(i))
+                                                    }
+                                                    ArrayData::Int64(ref v) => {
+                                                        w.write_i64(v.get(i))
+                                                    }
                                                     ArrayData::UInt8(ref v) => w.write_u8(v.get(i)),
-                                                    ArrayData::UInt16(ref v) => w.write_u16(v.get(i)),
-                                                    ArrayData::UInt32(ref v) => w.write_u32(v.get(i)),
-                                                    ArrayData::UInt64(ref v) => w.write_u64(v.get(i)),
-                                                    ArrayData::Utf8(ref data) => w.write_bytes(data.get(i)),
+                                                    ArrayData::UInt16(ref v) => {
+                                                        w.write_u16(v.get(i))
+                                                    }
+                                                    ArrayData::UInt32(ref v) => {
+                                                        w.write_u32(v.get(i))
+                                                    }
+                                                    ArrayData::UInt64(ref v) => {
+                                                        w.write_u64(v.get(i))
+                                                    }
+                                                    ArrayData::Utf8(ref data) => {
+                                                        w.write_bytes(data.get(i))
+                                                    }
                                                     ArrayData::Struct(ref v) => {
-                                                        let fields = v.iter()
+                                                        let fields = v
+                                                            .iter()
                                                             .map(|arr| get_value(&arr, i))
                                                             .collect();
                                                         w.write_bytes(
@@ -1579,32 +1624,31 @@ impl ExecutionContext {
                         });
 
                         Ok(ExecutionResult::Count(count))
-                    },
+                    }
                     "string" => {
                         let mut execution_plan = self.create_execution_plan(plan)?;
                         let it = execution_plan.scan();
                         let mut result = String::new();
-                        it.for_each(|t| {
-                            match t {
-                                Ok(ref batch) => {
-                                    for i in 0..batch.num_rows() {
-                                        let results = batch.row_slice(i).into_iter()
-                                            .map(|v| v.to_string())
-                                            .collect::<Vec<String>>()
-                                            .join(",");
-                                        result.push_str(&results);
-                                        result.push_str("\n")
-                                    }
-
+                        it.for_each(|t| match t {
+                            Ok(ref batch) => {
+                                for i in 0..batch.num_rows() {
+                                    let results = batch
+                                        .row_slice(i)
+                                        .into_iter()
+                                        .map(|v| v.to_string())
+                                        .collect::<Vec<String>>()
+                                        .join(",");
+                                    result.push_str(&results);
+                                    result.push_str("\n")
                                 }
-                                Err(e) => panic!(format!("Error processing row: {:?}", e)),
                             }
+                            Err(e) => panic!(format!("Error processing row: {:?}", e)),
                         });
                         Ok(ExecutionResult::Str(result))
                     }
-                    ref _x => panic!("Unknown physical plan output type.")
+                    ref _x => panic!("Unknown physical plan output type."),
                 }
-            },
+            }
             &PhysicalPlan::Show {
                 ref plan,
                 ref count,
@@ -1620,7 +1664,8 @@ impl ExecutionContext {
                             for i in 0..*count {
                                 if i < batch.num_rows() {
                                     let row = batch.row_slice(i);
-                                    let csv = row.into_iter()
+                                    let csv = row
+                                        .into_iter()
                                         .map(|v| v.to_string())
                                         .collect::<Vec<String>>()
                                         .join(",");
@@ -1723,11 +1768,12 @@ mod tests {
     fn test_dataframe_filter() {
         let mut ctx = create_context();
         let df = ctx.sql(&"SELECT city, lat, lng FROM uk_cities").unwrap();
-        let df2 = df.filter(Expr::BinaryExpr {
-            left: Rc::new(Expr::Column(1)),
-            op: Operator::Lt,
-            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.1))),
-        }).unwrap();
+        let df2 =
+            df.filter(Expr::BinaryExpr {
+                left: Rc::new(Expr::Column(1)),
+                op: Operator::Lt,
+                right: Rc::new(Expr::Literal(ScalarValue::Float64(52.1))),
+            }).unwrap();
         df2.show(10);
         //TODO assertions
     }
@@ -1779,7 +1825,8 @@ mod tests {
     fn test_create_logical_plan() {
         let mut ctx = create_context();
         ctx.register_scalar_function(Rc::new(SqrtFunction {}));
-        let plan = ctx.create_logical_plan(&"SELECT id, sqrt(id) FROM people")
+        let plan = ctx
+            .create_logical_plan(&"SELECT id, sqrt(id) FROM people")
             .unwrap();
         let expected_plan = "Projection: #0, sqrt(CAST(#0 AS Float64))\
                              \n  TableScan: people projection=None";
@@ -1807,7 +1854,8 @@ mod tests {
 
         ctx.register_scalar_function(Rc::new(STPointFunc {}));
 
-        let df = ctx.sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
+        let df = ctx
+            .sql(&"SELECT ST_Point(lat, lng) FROM uk_cities")
             .unwrap();
 
         ctx.write_csv(df, "./target/test_sql_udf_udt.csv").unwrap();
@@ -1844,7 +1892,8 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
 
         // invoke custom code as a scalar UDF
@@ -1878,15 +1927,17 @@ mod tests {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
 
         // filter by lat
-        let df2 = df.filter(Expr::BinaryExpr {
-            left: Rc::new(Expr::Column(1)), // lat
-            op: Operator::Gt,
-            right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
-        }).unwrap();
+        let df2 =
+            df.filter(Expr::BinaryExpr {
+                left: Rc::new(Expr::Column(1)), // lat
+                op: Operator::Gt,
+                right: Rc::new(Expr::Literal(ScalarValue::Float64(52.0))),
+            }).unwrap();
 
         ctx.write_csv(df2, "./target/test_filter.csv").unwrap();
 
@@ -1928,7 +1979,8 @@ fn test_sort() {
         ctx.register_scalar_function(Rc::new(STPointFunc {}));
         ctx.register_scalar_function(Rc::new(STAsText {}));
 
-        let df = ctx.sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
+        let df = ctx
+            .sql(&"SELECT ST_AsText(ST_Point(lat, lng)) FROM uk_cities")
             .unwrap();
 
         ctx.write_csv(df, "./target/test_chaining_functions.csv")
@@ -1963,7 +2015,8 @@ fn test_sort() {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("./test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
         ctx.register("uk_cities", df);
 
@@ -1996,7 +2049,8 @@ fn test_sort() {
             Field::new("lng", DataType::Float64, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/uk_cities.csv", &schema, false, None)
+        let df = ctx
+            .load_csv("./test/data/uk_cities.csv", &schema, false, None)
             .unwrap();
         ctx.register("uk_cities", df);
 
@@ -2025,7 +2079,8 @@ fn test_sort() {
             Field::new("c_string", DataType::Utf8, false),
         ]);
 
-        let df = ctx.load_csv("./test/data/all_types.csv", &schema, true, None)
+        let df = ctx
+            .load_csv("./test/data/all_types.csv", &schema, true, None)
             .unwrap();
         ctx.register("all_types", df);
 
@@ -2058,28 +2113,30 @@ fn test_sort() {
         // create execution context
         let mut ctx = ExecutionContext::local();
 
-        let people = ctx.load_csv(
-            "./test/data/people.csv",
-            &Schema::new(vec![
-                Field::new("id", DataType::Int32, false),
-                Field::new("name", DataType::Utf8, false),
-            ]),
-            true,
-            None,
-        ).unwrap();
+        let people =
+            ctx.load_csv(
+                "./test/data/people.csv",
+                &Schema::new(vec![
+                    Field::new("id", DataType::Int32, false),
+                    Field::new("name", DataType::Utf8, false),
+                ]),
+                true,
+                None,
+            ).unwrap();
 
         ctx.register("people", people);
 
-        let uk_cities = ctx.load_csv(
-            "./test/data/uk_cities.csv",
-            &Schema::new(vec![
-                Field::new("city", DataType::Utf8, false),
-                Field::new("lat", DataType::Float64, false),
-                Field::new("lng", DataType::Float64, false),
-            ]),
-            false,
-            None,
-        ).unwrap();
+        let uk_cities =
+            ctx.load_csv(
+                "./test/data/uk_cities.csv",
+                &Schema::new(vec![
+                    Field::new("city", DataType::Utf8, false),
+                    Field::new("lat", DataType::Float64, false),
+                    Field::new("lng", DataType::Float64, false),
+                ]),
+                false,
+                None,
+            ).unwrap();
 
         ctx.register("uk_cities", uk_cities);
 

@@ -35,7 +35,8 @@ impl ScalarFunction for STAsText {
                 &ArrayData::Struct(ref fields) => {
                     match (fields[0].as_ref().data(), fields[1].as_ref().data()) {
                         (&ArrayData::Float64(ref lat), &ArrayData::Float64(ref lon)) => {
-                            let wkt: Vec<String> = lat.iter()
+                            let wkt: Vec<String> = lat
+                                .iter()
                                 .zip(lon.iter())
                                 .map(|(lat2, lon2)| format!("POINT ({} {})", lat2, lon2))
                                 .collect();

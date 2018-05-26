@@ -197,7 +197,8 @@ impl SimpleRelation for AggregateRelation {
                         // aggregate columns directly
                         let key: Vec<GroupScalar> = Vec::with_capacity(0);
 
-                        let entry = map.entry(key)
+                        let entry = map
+                            .entry(key)
                             .or_insert_with(|| create_aggregate_entry(aggr_expr));
                         let mut entry_mut = entry.borrow_mut();
 
@@ -280,7 +281,8 @@ impl SimpleRelation for AggregateRelation {
                 result_columns[col_index].push(k[col_index].as_scalar());
             }
 
-            let g: Vec<Value> = v.borrow()
+            let g: Vec<Value> = v
+                .borrow()
                 .aggr_values
                 .iter()
                 .map(|v| v.finish().unwrap())
@@ -338,7 +340,10 @@ impl SimpleRelation for AggregateRelation {
                             for v in aggr_values {
                                 b.push(v.get_string().unwrap().as_bytes());
                             }
-                            Array::new(aggr_values.len(), ArrayData::Utf8(ListArray::from(b.finish())))
+                            Array::new(
+                                aggr_values.len(),
+                                ArrayData::Utf8(ListArray::from(b.finish())),
+                            )
                         }
                         _ => unimplemented!("No support for aggregate with return type {:?}", t),
                     };

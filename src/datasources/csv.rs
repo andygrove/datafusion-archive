@@ -123,7 +123,8 @@ impl DataSource for CsvFile {
 
         let projection = match self.projection {
             Some(ref v) => v.clone(),
-            None => self.schema
+            None => self
+                .schema
                 .columns()
                 .iter()
                 .enumerate()
@@ -155,7 +156,10 @@ impl DataSource for CsvFile {
                                 builder.push(s.as_bytes());
                             });
                             let buffer = builder.finish();
-                            Value::Column(Rc::new(Array::new(rows.len(), ArrayData::Utf8(ListArray::from(buffer)))))
+                            Value::Column(Rc::new(Array::new(
+                                rows.len(),
+                                ArrayData::Utf8(ListArray::from(buffer)),
+                            )))
                         }
                         _ => unimplemented!("CSV does not support data type {:?}", c.data_type()),
                     }
@@ -196,7 +200,7 @@ impl CsvWriter {
             ScalarValue::UInt64(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
             ScalarValue::Float32(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
             ScalarValue::Float64(vv) => self.write_bytes(format!("{}", vv).as_bytes()),
-            _ => self.write_bytes(format!("{:?}", v).as_bytes())
+            _ => self.write_bytes(format!("{:?}", v).as_bytes()),
         }
     }
     pub fn write_bool(&mut self, v: &bool) {

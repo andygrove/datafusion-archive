@@ -20,7 +20,8 @@ fn main() {
     // create execution context
     let mut ctx = ExecutionContext::local();
 
-    let df = ctx.load_parquet("./test/data/uk_cities.parquet", None)
+    let df = ctx
+        .load_parquet("./test/data/uk_cities.parquet", None)
         .unwrap();
 
     ctx.register("uk_cities", df);
