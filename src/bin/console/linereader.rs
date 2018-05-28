@@ -51,9 +51,10 @@ impl<'a> LineReader<'a> {
 
             match line {
                 Ok(i) => {
-                    result.push_str(i.as_str());
+                    let j = i.as_str().trim_right();
+                    result.push_str(j);
 
-                    match i.as_str() {
+                    match j {
                         "quit" | "exit" => {
                             return Some(LineResult::Break);
                         }
@@ -62,7 +63,7 @@ impl<'a> LineReader<'a> {
                             // CONTINUE: are statements that don't end with a semicolon
                             // DEFAULT: are statements that end with a semicolon
                             // and can be returned to being executed.
-                            if i.as_str().ends_with(';') {
+                            if j.ends_with(';') {
                                 self.set_prompt(DEFAULT_PROMPT);
                                 break;
                             } else {
