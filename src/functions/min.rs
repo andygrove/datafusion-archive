@@ -38,19 +38,26 @@ impl MinFunction {
 }
 
 macro_rules! min_in_column {
-    ($SELF:ident, $BUF:ident, $VARIANT:ident) => {{
+    ($SELF:ident, $BUF:ident, $BITMAP:ident, $VARIANT:ident) => {{
         for i in 0..$BUF.len() as usize {
             let value = *$BUF.get(i);
-            match $SELF.value {
-                ScalarValue::Null => $SELF.value = ScalarValue::$VARIANT(value),
-                ScalarValue::$VARIANT(x) => if value < x {
-                    $SELF.value = ScalarValue::$VARIANT(value)
-                },
-                ref other => panic!(
-                    "Type mismatch in MIN() for datatype {} - {:?}",
-                    stringify!($VARIANT),
-                    other
-                ),
+            let is_set = match $BITMAP {
+              None => true,
+              Some(bitmap) => bitmap.is_set(i)
+            };
+
+            if is_set {
+                match $SELF.value {
+                    ScalarValue::Null => $SELF.value = ScalarValue::$VARIANT(value),
+                    ScalarValue::$VARIANT(x) => if value < x {
+                        $SELF.value = ScalarValue::$VARIANT(value)
+                    },
+                    ref other => panic!(
+                        "Type mismatch in MIN() for datatype {} - {:?}",
+                        stringify!($VARIANT),
+                        other
+                    ),
+                }
             }
         }
     }};
@@ -85,18 +92,19 @@ impl AggregateFunction for MinFunction {
         assert_eq!(1, args.len());
         match args[0] {
             Value::Column(ref array) => {
+                let bitmap = array.validity_bitmap();
                 match array.data() {
-                    ArrayData::Boolean(ref buf) => min_in_column!(self, buf, Boolean),
-                    ArrayData::UInt8(ref buf) => min_in_column!(self, buf, UInt8),
-                    ArrayData::UInt16(ref buf) => min_in_column!(self, buf, UInt16),
-                    ArrayData::UInt32(ref buf) => min_in_column!(self, buf, UInt32),
-                    ArrayData::UInt64(ref buf) => min_in_column!(self, buf, UInt64),
-                    ArrayData::Int8(ref buf) => min_in_column!(self, buf, Int8),
-                    ArrayData::Int16(ref buf) => min_in_column!(self, buf, Int16),
-                    ArrayData::Int32(ref buf) => min_in_column!(self, buf, Int32),
-                    ArrayData::Int64(ref buf) => min_in_column!(self, buf, Int64),
-                    ArrayData::Float32(ref buf) => min_in_column!(self, buf, Float32),
-                    ArrayData::Float64(ref buf) => min_in_column!(self, buf, Float64),
+                    ArrayData::Boolean(ref buf) => min_in_column!(self, buf, bitmap, Boolean),
+                    ArrayData::UInt8(ref buf) => min_in_column!(self, buf, bitmap, UInt8),
+                    ArrayData::UInt16(ref buf) => min_in_column!(self, buf, bitmap, UInt16),
+                    ArrayData::UInt32(ref buf) => min_in_column!(self, buf, bitmap, UInt32),
+                    ArrayData::UInt64(ref buf) => min_in_column!(self, buf, bitmap, UInt64),
+                    ArrayData::Int8(ref buf) => min_in_column!(self, buf, bitmap, Int8),
+                    ArrayData::Int16(ref buf) => min_in_column!(self, buf, bitmap, Int16),
+                    ArrayData::Int32(ref buf) => min_in_column!(self, buf, bitmap, Int32),
+                    ArrayData::Int64(ref buf) => min_in_column!(self, buf, bitmap, Int64),
+                    ArrayData::Float32(ref buf) => min_in_column!(self, buf, bitmap, Float32),
+                    ArrayData::Float64(ref buf) => min_in_column!(self, buf, bitmap, Float64),
                     ArrayData::Utf8(ref list) => {
                         if list.len() > 0 {
                             let mut s = str::from_utf8(list.get(0)).unwrap().to_string();
@@ -158,6 +166,7 @@ impl AggregateFunction for MinFunction {
 mod tests {
 
     use super::*;
+    use arrow::bitmap::Bitmap;
 
     #[test]
     fn test_min() {
@@ -171,6 +180,26 @@ mod tests {
 
         match result {
             Value::Scalar(ref v) => assert_eq!(v.get_f64().unwrap(), 6.0),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn test_min_with_nulls() {
+        let mut min = MinFunction::new(&DataType::Int8);
+        assert_eq!(DataType::Int8, min.return_type());
+
+        let values: Vec<i8> = vec![12, 0, 32, 6];
+        let mut bitmap = Bitmap::new(4);
+        bitmap.clear(1);
+        let arr = Array::with_nulls(4, ArrayData::from(values), 1, bitmap);
+
+        min.execute(&vec![Value::Column(Rc::new(arr))])
+            .unwrap();
+        let result = min.finish().unwrap();
+
+        match result {
+            Value::Scalar(ref v) => assert_eq!(v.get_i8().unwrap(), 6),
             _ => panic!(),
         }
     }
