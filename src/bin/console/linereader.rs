@@ -47,9 +47,9 @@ impl<'a> LineReader<'a> {
     pub fn read_lines(&mut self) -> Option<LineResult> {
         let mut result = String::new();
 
-//        if rl.load_history("history.txt").is_err() {
-//            println!("No previous history.");
-//        }
+        //        if rl.load_history("history.txt").is_err() {
+        //            println!("No previous history.");
+        //        }
         loop {
             let line = self.reader.readline(self.prompt);
 
@@ -79,15 +79,15 @@ impl<'a> LineReader<'a> {
                 }
                 Err(ReadlineError::Interrupted) => {
                     println!("CTRL-C");
-                    break
-                },
+                    break;
+                }
                 Err(ReadlineError::Eof) => {
                     println!("CTRL-D");
                     return Some(LineResult::Break);
-                },
+                }
                 Err(err) => {
                     println!("Error: {:?}", err);
-                    break
+                    break;
                 }
             };
         }

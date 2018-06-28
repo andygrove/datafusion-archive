@@ -64,7 +64,6 @@ fn setup_console(cmdline: clap::ArgMatches) {
             Err(e) => println!("Could not open file {}: {}", filename, e),
         },
         _ => {
-
             let mut reader = linereader::LineReader::new();
             loop {
                 let result = reader.read_lines();

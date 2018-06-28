@@ -25,8 +25,8 @@ extern crate clap;
 extern crate csv;
 extern crate fnv;
 extern crate json;
-extern crate rustyline;
 extern crate parquet;
+extern crate rustyline;
 
 #[macro_use]
 extern crate lazy_static;
