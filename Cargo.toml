@@ -1,7 +1,7 @@
 [package]
 name = "datafusion"
 description = "DataFusion is a SQL parser, planner, and execution framework for Rust with support for CSV and Apache Parquet file formats"
-version = "0.2.16"
+version = "0.2.17-alpha.0"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://datafusion.rs"
 documentation = "https://datafusion.rs/docs/"
