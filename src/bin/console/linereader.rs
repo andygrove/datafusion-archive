@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(target_family = "unix")]
-use liner::Context;
-use std::io;
+extern crate rustyline;
+use self::rustyline::error::ReadlineError;
+use self::rustyline::Editor;
 
 const DEFAULT_PROMPT: &'static str = "datafusion> ";
 const CONTINUE_PROMPT: &'static str = "> ";
@@ -27,7 +27,7 @@ pub enum LineResult {
 
 #[cfg(target_family = "unix")]
 pub struct LineReader<'a> {
-    reader: Context,
+    reader: Editor<()>,
     prompt: &'a str,
 }
 
@@ -35,7 +35,7 @@ pub struct LineReader<'a> {
 impl<'a> LineReader<'a> {
     pub fn new() -> Self {
         LineReader {
-            reader: Context::new(),
+            reader: Editor::<()>::new(),
             prompt: DEFAULT_PROMPT,
         }
     }
@@ -46,8 +46,12 @@ impl<'a> LineReader<'a> {
 
     pub fn read_lines(&mut self) -> Option<LineResult> {
         let mut result = String::new();
+
+        //        if rl.load_history("history.txt").is_err() {
+        //            println!("No previous history.");
+        //        }
         loop {
-            let line = self.reader.read_line(self.prompt, &mut |_| {});
+            let line = self.reader.readline(self.prompt);
 
             match line {
                 Ok(i) => {
@@ -74,27 +78,24 @@ impl<'a> LineReader<'a> {
                         }
                     }
                 }
-                Err(e) => {
-                    match e.kind() {
-                        // ctrl-c pressed
-                        io::ErrorKind::Interrupted => {}
-                        // ctrl-d pressed
-                        io::ErrorKind::UnexpectedEof => {
-                            return Some(LineResult::Break);
-                        }
-                        _ => {
-                            // Ensure that all writes to the history file
-                            // are written before exiting.
-                            self.reader.history.commit_history();
-                            panic!("error: {:?}", e)
-                        }
-                    }
+                Err(ReadlineError::Interrupted) => {
+                    println!("CTRL-C");
+                    break;
+                }
+                Err(ReadlineError::Eof) => {
+                    println!("CTRL-D");
+                    return Some(LineResult::Break);
+                }
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                    break;
                 }
             };
         }
+        //self.reader.save_history("history.txt").unwrap();
 
         if !result.trim().is_empty() {
-            self.reader.history.push(result.clone().into()).unwrap();
+            self.reader.add_history_entry(&result);
         }
 
         // Return the command without semicolon

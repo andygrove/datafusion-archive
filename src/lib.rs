@@ -25,9 +25,8 @@ extern crate clap;
 extern crate csv;
 extern crate fnv;
 extern crate json;
-#[cfg(target_family = "unix")]
-extern crate liner;
 extern crate parquet;
+extern crate rustyline;
 
 #[macro_use]
 extern crate lazy_static;
