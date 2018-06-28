@@ -39,8 +39,7 @@ parquet = "0.3.0"
 json = "0.11.13"
 clap = "2.31.2"
 
-[target.'cfg(unix)'.dependencies]
-liner = "0.4.3"
+rustyline = "1.0.0"
 
 [dev-dependencies]
 criterion = "0.2.0"

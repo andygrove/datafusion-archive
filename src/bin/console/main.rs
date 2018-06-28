@@ -15,9 +15,6 @@
 extern crate clap;
 extern crate datafusion;
 
-#[cfg(target_family = "unix")]
-extern crate liner;
-
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -67,6 +64,7 @@ fn setup_console(cmdline: clap::ArgMatches) {
             Err(e) => println!("Could not open file {}: {}", filename, e),
         },
         _ => {
+
             let mut reader = linereader::LineReader::new();
             loop {
                 let result = reader.read_lines();
