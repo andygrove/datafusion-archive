@@ -23,10 +23,10 @@ extern crate byteorder;
 extern crate bytes;
 extern crate clap;
 extern crate csv;
+extern crate datafusion_rustyline;
 extern crate fnv;
 extern crate json;
 extern crate parquet;
-extern crate rustyline;
 
 #[macro_use]
 extern crate lazy_static;

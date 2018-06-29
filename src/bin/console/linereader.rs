@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate rustyline;
-use self::rustyline::error::ReadlineError;
-use self::rustyline::Editor;
+extern crate datafusion_rustyline;
+use self::datafusion_rustyline::error::ReadlineError;
+use self::datafusion_rustyline::Editor;
 
 const DEFAULT_PROMPT: &'static str = "datafusion> ";
 const CONTINUE_PROMPT: &'static str = "> ";
@@ -95,7 +95,7 @@ impl<'a> LineReader<'a> {
         //self.reader.save_history("history.txt").unwrap();
 
         if !result.trim().is_empty() {
-            self.reader.add_history_entry(&result);
+            //self.reader.add_history_entry(&result);
         }
 
         // Return the command without semicolon

@@ -39,7 +39,7 @@ parquet = "0.3.0"
 json = "0.11.13"
 clap = "2.31.2"
 
-rustyline = "1.0.0"
+datafusion-rustyline = "2.0.0-alpha-20180628"
 
 [dev-dependencies]
 criterion = "0.2.0"
