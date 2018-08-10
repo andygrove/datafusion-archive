@@ -13,6 +13,10 @@ include = [
     "Cargo.toml",
 ]
 
+[features]
+default = ["parquet_support"]
+parquet_support = ["parquet"]
+
 [lib]
 name = "datafusion"
 path = "src/lib.rs"
@@ -33,7 +37,7 @@ csv = "1.0.0"
 arrow = "0.10.0"
 
 lazy_static = "1.0"
-parquet = "0.3.0"
+parquet = { version = "0.3.0", optional = true }
 #parquet = { path = "../parquet-rs" }
 json = "0.11.13"
 clap = "2.31.2"

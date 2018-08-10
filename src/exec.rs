@@ -36,6 +36,7 @@ use super::datasources::common::*;
 use super::datasources::csv::*;
 use super::datasources::empty::*;
 use super::datasources::ndjson::*;
+#[cfg(feature = "parquet_support")]
 use super::datasources::parquet::*;
 use super::errors::*;
 use super::logical::*;
@@ -1317,6 +1318,7 @@ impl ExecutionContext {
         Ok(Rc::new(DF::new(self.clone(), Rc::new(plan))))
     }
 
+    #[cfg(feature = "parquet_support")]
     pub fn load_parquet(
         &self,
         filename: &str,
@@ -1332,6 +1334,17 @@ impl ExecutionContext {
             projection,
         };
         Ok(Rc::new(DF::new(self.clone(), Rc::new(plan))))
+    }
+
+    #[cfg(not(feature = "parquet_support"))]
+    pub fn load_parquet(
+        &self,
+        _filename: &str,
+        _projection: Option<Vec<usize>>,
+    ) -> Result<Rc<DataFrame>> {
+        return Err(ExecutionError::General(
+            "Datafusion was compiled with Parquet support disabled".to_string(),
+        ));
     }
 
     pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Box<SimpleRelation>> {
@@ -1405,6 +1418,7 @@ impl ExecutionContext {
                 }))
             }
 
+            #[cfg(feature = "parquet_support")]
             LogicalPlan::ParquetFile {
                 ref filename,
                 ref schema,
@@ -1417,6 +1431,13 @@ impl ExecutionContext {
                     schema: schema.as_ref().clone(),
                     ds,
                 }))
+            }
+
+            #[cfg(not(feature = "parquet_support"))]
+            LogicalPlan::ParquetFile { .. } => {
+                return Err(ExecutionError::General(
+                    "Datafusion was compiled with Parquet support disabled".to_string(),
+                ));
             }
 
             LogicalPlan::Selection {

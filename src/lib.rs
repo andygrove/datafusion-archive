@@ -26,6 +26,7 @@ extern crate csv;
 extern crate datafusion_rustyline;
 extern crate fnv;
 extern crate json;
+#[cfg(feature = "parquet_support")]
 extern crate parquet;
 
 #[macro_use]

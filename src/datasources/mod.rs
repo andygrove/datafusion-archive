@@ -18,5 +18,6 @@ pub mod common;
 pub mod csv;
 pub mod empty;
 pub mod ndjson;
+#[cfg(feature = "parquet_support")]
 pub mod parquet;
 //pub mod quiver;
