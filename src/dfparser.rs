@@ -28,6 +28,12 @@ use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
 use sqlparser::sqltokenizer::*;
 
+macro_rules! parser_err {
+    ($MSG:expr) => {
+        Err(ParserError::ParserError($MSG.to_string()))
+    };
+}
+
 #[derive(Debug, Clone)]
 pub enum FileType {
     NdJson,
@@ -101,7 +107,98 @@ impl DFParser {
     /// Parse an expression prefix
     fn parse_prefix(&mut self) -> Result<DFASTNode, ParserError> {
         if self.parser.parse_keywords(vec!["CREATE", "EXTERNAL", "TABLE"]) {
-            unimplemented!()
+
+            match self.parser.next_token() {
+                Some(Token::Identifier(id)) => {
+                    // parse optional column list (schema)
+                    let mut columns = vec![];
+                    if self.parser.consume_token(&Token::LParen)? {
+                        loop {
+                            if let Some(Token::Identifier(column_name)) = self.parser.next_token() {
+                                if let Ok(data_type) = self.parser.parse_data_type() {
+                                    let allow_null = if self.parser.parse_keywords(vec!["NOT", "NULL"]) {
+                                        false
+                                    } else if self.parser.parse_keyword("NULL") {
+                                        true
+                                    } else {
+                                        true
+                                    };
+
+                                    match self.parser.peek_token() {
+                                        Some(Token::Comma) => {
+                                            self.parser.next_token();
+                                            columns.push(SQLColumnDef {
+                                                name: column_name,
+                                                data_type: data_type,
+                                                allow_null,
+                                            });
+                                        }
+                                        Some(Token::RParen) => {
+                                            self.parser.next_token();
+                                            columns.push(SQLColumnDef {
+                                                name: column_name,
+                                                data_type: data_type,
+                                                allow_null,
+                                            });
+                                            break;
+                                        }
+                                        _ => {
+                                            return parser_err!(
+                                                "Expected ',' or ')' after column definition"
+                                            );
+                                        }
+                                    }
+                                } else {
+                                    return parser_err!(
+                                        "Error parsing data type in column definition"
+                                    );
+                                }
+                            } else {
+                                return parser_err!("Error parsing column name");
+                            }
+                        }
+                    }
+
+                    //println!("Parsed {} column defs", columns.len());
+
+                    let mut headers = true;
+                    let file_type: FileType = if self.parser.parse_keywords(vec!["STORED", "AS", "CSV"]) {
+                        if self.parser.parse_keywords(vec!["WITH", "HEADER", "ROW"]) {
+                            headers = true;
+                        } else if self.parser.parse_keywords(vec!["WITHOUT", "HEADER", "ROW"]) {
+                            headers = false;
+                        }
+                        FileType::CSV
+                    } else if self.parser.parse_keywords(vec!["STORED", "AS", "NDJSON"]) {
+                        FileType::NdJson
+                    } else if self.parser.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
+                        FileType::Parquet
+                    } else {
+                        return parser_err!(format!(
+                            "Expected 'STORED AS' clause, found {:?}",
+                            self.parser.peek_token()
+                        ));
+                    };
+
+                    let location: String = if self.parser.parse_keywords(vec!["LOCATION"]) {
+                        self.parser.parse_literal_string()?
+                    } else {
+                        return parser_err!("Missing 'LOCATION' clause");
+                    };
+
+                    Ok(DFASTNode::CreateExternalTable {
+                        name: id,
+                        columns,
+                        file_type,
+                        header_row: headers,
+                        location,
+                    })
+                }
+                _ => parser_err!(format!(
+                    "Unexpected token after CREATE EXTERNAL TABLE: {:?}",
+                    self.parser.peek_token()
+                ))
+            }
         } else {
             Ok(DFASTNode::ANSI(self.parser.parse_prefix()?))
         }
