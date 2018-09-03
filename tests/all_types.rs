@@ -33,59 +33,59 @@ fn csv_query_all_types() {
     );
 }
 
-#[test]
-fn csv_test_uint8() {
-    csv_project_filter_test("c_uint8", "c_uint8 > CAST(0 AS uint8)", "cast");
-}
-
-#[test]
-fn csv_test_uint16() {
-    csv_project_filter_test("c_uint16", "c_uint16 > CAST(0 AS uint16)", "cast");
-}
-
-#[test]
-fn csv_test_uint32() {
-    csv_project_filter_test("c_uint32", "c_uint32 > CAST(0 AS uint32)", "cast");
-}
-
-#[test]
-fn csv_test_uint64() {
-    csv_project_filter_test("c_uint64", "c_uint64 > CAST(0 AS uint64)", "cast");
-}
+//#[test]
+//fn csv_test_uint8() {
+//    csv_project_filter_test("c_uint8", "c_uint8 > CAST(0 AS smallint)", "cast");
+//}
+//
+//#[test]
+//fn csv_test_uint16() {
+//    csv_project_filter_test("c_uint16", "c_uint16 > CAST(0 AS smallint)", "cast");
+//}
+//
+//#[test]
+//fn csv_test_uint32() {
+//    csv_project_filter_test("c_uint32", "c_uint32 > CAST(0 AS int)", "cast");
+//}
+//
+//#[test]
+//fn csv_test_uint64() {
+//    csv_project_filter_test("c_uint64", "c_uint64 > CAST(0 AS bigint)", "cast");
+//}
 
 #[test]
 fn csv_test_int8() {
     csv_project_filter_test("c_int8", "c_int8 > 0", "positive");
     csv_project_filter_test("c_int8", "c_int8 < 0", "negative");
-    csv_project_filter_test("c_int8", "c_int8 < CAST(0 AS int8)", "cast");
+    csv_project_filter_test("c_int8", "c_int8 < CAST(0 AS smallint)", "cast");
 }
 
 #[test]
 fn csv_test_int16() {
     csv_project_filter_test("c_int16", "c_int16 > 0", "positive");
     csv_project_filter_test("c_int16", "c_int16 < 0", "negative");
-    csv_project_filter_test("c_int16", "c_int16 < CAST(0 as int16)", "cast");
+    csv_project_filter_test("c_int16", "c_int16 < CAST(0 as smallint)", "cast");
 }
 
 #[test]
 fn csv_test_int32() {
     csv_project_filter_test("c_int32", "c_int32 > 0", "positive");
     csv_project_filter_test("c_int32", "c_int32 < 0", "negative");
-    csv_project_filter_test("c_int32", "c_int32 < CAST(0 as int32)", "cast");
+    csv_project_filter_test("c_int32", "c_int32 < CAST(0 as int)", "cast");
 }
 
 #[test]
 fn csv_test_int64() {
     csv_project_filter_test("c_int64", "c_int64 > 0", "positive");
     csv_project_filter_test("c_int64", "c_int64 < 0", "negative");
-    csv_project_filter_test("c_int64", "c_int64 < CAST(0 as int64)", "cast");
+    csv_project_filter_test("c_int64", "c_int64 < CAST(0 as bigint)", "cast");
 }
 
 #[test]
 fn csv_test_float32() {
     csv_project_filter_test("c_float32", "c_float32 > 0.5", "high");
     csv_project_filter_test("c_float32", "c_float32 < 0.5", "low");
-    csv_project_filter_test("c_float32", "c_float32 < CAST(0.5 as float32)", "cast");
+    csv_project_filter_test("c_float32", "c_float32 < CAST(0.5 AS float)", "cast");
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn csv_test_float32_uint32_comparison() {
     csv_project_filter_test("c_float32", "c_float32 <= 1", "low_uint32");
     csv_project_filter_test(
         "c_float32",
-        "c_float32 <= CAST(1 as float32)",
+        "c_float32 <= CAST(1 AS float)",
         "cast_uint32",
     );
 }
@@ -103,7 +103,7 @@ fn csv_test_float32_uint32_comparison() {
 fn csv_test_float64() {
     csv_project_filter_test("c_float64", "c_float64 > 0.5", "high");
     csv_project_filter_test("c_float64", "c_float64 < 0.5", "low");
-    csv_project_filter_test("c_float64", "c_float64 < CAST(0.5 as float64)", "cast");
+    csv_project_filter_test("c_float64", "c_float64 < CAST(0.5 as double)", "cast");
 }
 
 #[test]

@@ -17,13 +17,6 @@
 //! Note that most SQL parsing is now delegated to the sqlparser crate, which handles ANSI SQL but
 //! this module contains DataFusion-specific SQL extensions.
 
-use std::fmt;
-use std::fmt::{Error, Formatter};
-use std::rc::Rc;
-
-use super::types::*;
-
-use arrow::datatypes::*;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
 use sqlparser::sqltokenizer::*;
@@ -206,9 +199,10 @@ impl DFParser {
 
     pub fn parse_infix(
         &mut self,
-        expr: DFASTNode,
-        precedence: u8,
+        _expr: DFASTNode,
+        _precedence: u8,
     ) -> Result<Option<DFASTNode>, ParserError> {
+
 
 //        match expr {
 //            DFASTNode::ANSI(ansi) => {

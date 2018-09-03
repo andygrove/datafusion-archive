@@ -48,8 +48,6 @@ use super::types::*;
 use super::dfparser::*;
 //use super::cluster::*;
 
-use sqlparser::sqlast::ASTNode;
-use sqlparser::sqlast::ASTNode::*;
 use sqlparser::sqlparser::*;
 
 #[derive(Debug, Clone)]
@@ -2248,9 +2246,9 @@ fn test_sort() {
 
         // define the SQL statement
         let sql = "SELECT \
-                   CAST(c_int AS INT),    CAST(c_int AS FLOAT),    CAST(c_int AS STRING), \
-                   CAST(c_float AS INT),  CAST(c_float AS FLOAT),  CAST(c_float AS STRING), \
-                   CAST(c_string AS FLOAT), CAST(c_string AS STRING) \
+                   CAST(c_int AS INT),    CAST(c_int AS FLOAT),    CAST(c_int AS VARCHAR(40)), \
+                   CAST(c_float AS INT),  CAST(c_float AS FLOAT),  CAST(c_float AS VARCHAR(40)), \
+                   CAST(c_string AS FLOAT), CAST(c_string AS VARCHAR(40)) \
                    FROM all_types";
 
         // create a data frame

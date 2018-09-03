@@ -24,7 +24,6 @@ use super::types::*;
 use arrow::datatypes::*;
 
 use sqlparser::sqlast::*;
-use sqlparser::sqlparser::*;
 
 pub trait SchemaProvider {
     fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>>;
@@ -517,7 +516,7 @@ pub fn push_down_projection(
 #[cfg(test)]
 mod tests {
 
-    use sqlparser::*;
+    use sqlparser::sqlparser::*;
     use super::*;
 
     #[test]

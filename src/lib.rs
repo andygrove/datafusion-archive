@@ -29,9 +29,6 @@ extern crate json;
 extern crate parquet;
 extern crate sqlparser;
 
-#[macro_use]
-extern crate lazy_static;
-
 pub mod dataframe;
 pub mod datasources;
 pub mod dfparser;
