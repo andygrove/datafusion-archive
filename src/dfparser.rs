@@ -100,8 +100,11 @@ impl DFParser {
 
     /// Parse an expression prefix
     fn parse_prefix(&mut self) -> Result<DFASTNode, ParserError> {
-        //self.parser.parse_prefix()
-        unimplemented!()
+        if self.parser.parse_keywords(vec!["CREATE", "EXTERNAL", "TABLE"]) {
+            unimplemented!()
+        } else {
+            Ok(DFASTNode::ANSI(self.parser.parse_prefix()?))
+        }
     }
 
     pub fn parse_infix(
@@ -109,6 +112,12 @@ impl DFParser {
         expr: DFASTNode,
         precedence: u8,
     ) -> Result<Option<DFASTNode>, ParserError> {
+
+//        match expr {
+//            DFASTNode::ANSI(ansi) => {
+//                //DFASTNode::ANSI(self.parser.parse_infix(ansi, precedence)?)
+//            })
+
         unimplemented!()
     }
 }
