@@ -45,9 +45,10 @@ use super::relations::limit::*;
 use super::relations::projection::*;
 use super::sqlplanner::*;
 use super::types::*;
+use super::dfparser::*;
 //use super::cluster::*;
 
-use sqlparser::sqlast::*;
+use sqlparser::sqlast::ASTNode;
 use sqlparser::sqlast::ASTNode::*;
 use sqlparser::sqlparser::*;
 
@@ -1234,11 +1235,11 @@ impl ExecutionContext {
         //println!("sql() {}", sql);
 
         // parse SQL into AST
-        let ast = Parser::parse_sql(String::from(sql))?;
+        let ast = DFParser::parse_sql(String::from(sql))?;
         //println!("AST: {:?}", ast);
 
         match ast {
-            SQLCreateTable {
+            DFASTNode::CreateExternalTable {
                 name,
                 columns,
                 file_type,
@@ -1267,12 +1268,12 @@ impl ExecutionContext {
                     }),
                 )))
             }
-            _ => {
+            DFASTNode::ANSI(ansi) => {
                 // create a query planner
                 let query_planner = SqlToRel::new(self.create_schema_provider());
 
                 // plan the query (create a logical relational plan)
-                let plan = query_planner.sql_to_rel(&ast)?;
+                let plan = query_planner.sql_to_rel(&ansi)?;
                 //println!("Logical plan: {:?}", plan);
 
                 let new_plan = push_down_projection(&plan, &HashSet::new());

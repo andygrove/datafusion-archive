@@ -34,6 +34,7 @@ extern crate lazy_static;
 
 pub mod dataframe;
 pub mod datasources;
+pub mod dfparser;
 #[macro_use]
 pub mod errors;
 pub mod exec;
