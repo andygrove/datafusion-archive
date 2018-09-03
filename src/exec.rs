@@ -43,12 +43,13 @@ use super::relations::aggregate::*;
 use super::relations::filter::*;
 use super::relations::limit::*;
 use super::relations::projection::*;
-use super::sqlast::ASTNode::*;
-use super::sqlast::FileType;
-use super::sqlparser::*;
 use super::sqlplanner::*;
 use super::types::*;
 //use super::cluster::*;
+
+use sqlparser::sqlast::*;
+use sqlparser::sqlast::ASTNode::*;
+use sqlparser::sqlparser::*;
 
 #[derive(Debug, Clone)]
 pub enum DFConfig {

@@ -14,9 +14,10 @@
 
 //! Error types
 
-use super::sqlparser::ParserError;
 use std::io::Error;
 use std::result;
+
+use sqlparser::sqlparser::ParserError;
 
 macro_rules! df_error {
     ($MSG:expr) => {

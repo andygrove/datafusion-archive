@@ -27,6 +27,7 @@ extern crate datafusion_rustyline;
 extern crate fnv;
 extern crate json;
 extern crate parquet;
+extern crate sqlparser;
 
 #[macro_use]
 extern crate lazy_static;
@@ -39,8 +40,5 @@ pub mod exec;
 pub mod functions;
 pub mod logical;
 pub mod relations;
-pub mod sqlast;
-pub mod sqlparser;
 pub mod sqlplanner;
-pub mod sqltokenizer;
 pub mod types;
