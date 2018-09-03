@@ -27,9 +27,8 @@ use datafusion::exec::*;
 use datafusion::functions::geospatial::st_astext::*;
 use datafusion::functions::geospatial::st_point::*;
 use datafusion::functions::math::*;
-use datafusion::sqlast::ASTNode::SQLCreateTable;
-use datafusion::sqlparser::*;
-
+use datafusion::dfparser::DFParser;
+use datafusion::dfparser::DFASTNode::CreateExternalTable;
 mod linereader;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -135,9 +134,9 @@ impl Console {
         let timer = Instant::now();
 
         // parse the SQL
-        match Parser::parse_sql(String::from(sql)) {
+        match DFParser::parse_sql(String::from(sql)) {
             Ok(ast) => match ast {
-                SQLCreateTable { .. } => {
+                CreateExternalTable { .. } => {
                     self.ctx.sql(&sql).unwrap();
                     //println!("Registered schema with execution context");
                     ()

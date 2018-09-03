@@ -19,10 +19,11 @@ use std::rc::Rc;
 use std::string::String;
 
 use super::logical::*;
-use super::sqlast::*;
 use super::types::*;
 
 use arrow::datatypes::*;
+
+use sqlparser::sqlast::*;
 
 pub trait SchemaProvider {
     fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>>;
@@ -356,17 +357,13 @@ impl SqlToRel {
 pub fn convert_data_type(sql: &SQLType) -> DataType {
     match sql {
         SQLType::Boolean => DataType::Boolean,
-        SQLType::UInt8 => DataType::UInt8,
-        SQLType::UInt16 => DataType::UInt16,
-        SQLType::UInt32 => DataType::UInt32,
-        SQLType::UInt64 => DataType::UInt64,
-        SQLType::Int8 => DataType::Int8,
-        SQLType::Int16 => DataType::Int16,
-        SQLType::Int32 => DataType::Int32,
-        SQLType::Int64 => DataType::Int64,
-        SQLType::Float32 => DataType::Float64,
-        SQLType::Double64 => DataType::Float64,
-        SQLType::Utf8(_) => DataType::Utf8,
+        SQLType::SmallInt => DataType::Int16,
+        SQLType::Int => DataType::Int32,
+        SQLType::BigInt => DataType::Int64,
+        SQLType::Float(_) | SQLType::Real => DataType::Float64,
+        SQLType::Double => DataType::Float64,
+        SQLType::Char(_) | SQLType::Varchar(_) => DataType::Utf8,
+        _ => unimplemented!()
     }
 }
 
@@ -519,7 +516,7 @@ pub fn push_down_projection(
 #[cfg(test)]
 mod tests {
 
-    use super::super::sqlparser::*;
+    use sqlparser::sqlparser::*;
     use super::*;
 
     #[test]

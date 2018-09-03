@@ -43,12 +43,12 @@ use super::relations::aggregate::*;
 use super::relations::filter::*;
 use super::relations::limit::*;
 use super::relations::projection::*;
-use super::sqlast::ASTNode::*;
-use super::sqlast::FileType;
-use super::sqlparser::*;
 use super::sqlplanner::*;
 use super::types::*;
+use super::dfparser::*;
 //use super::cluster::*;
+
+use sqlparser::sqlparser::*;
 
 #[derive(Debug, Clone)]
 pub enum DFConfig {
@@ -1233,11 +1233,11 @@ impl ExecutionContext {
         //println!("sql() {}", sql);
 
         // parse SQL into AST
-        let ast = Parser::parse_sql(String::from(sql))?;
+        let ast = DFParser::parse_sql(String::from(sql))?;
         //println!("AST: {:?}", ast);
 
         match ast {
-            SQLCreateTable {
+            DFASTNode::CreateExternalTable {
                 name,
                 columns,
                 file_type,
@@ -1266,12 +1266,12 @@ impl ExecutionContext {
                     }),
                 )))
             }
-            _ => {
+            DFASTNode::ANSI(ansi) => {
                 // create a query planner
                 let query_planner = SqlToRel::new(self.create_schema_provider());
 
                 // plan the query (create a logical relational plan)
-                let plan = query_planner.sql_to_rel(&ast)?;
+                let plan = query_planner.sql_to_rel(&ansi)?;
                 //println!("Logical plan: {:?}", plan);
 
                 let new_plan = push_down_projection(&plan, &HashSet::new());
@@ -2246,9 +2246,9 @@ fn test_sort() {
 
         // define the SQL statement
         let sql = "SELECT \
-                   CAST(c_int AS INT),    CAST(c_int AS FLOAT),    CAST(c_int AS STRING), \
-                   CAST(c_float AS INT),  CAST(c_float AS FLOAT),  CAST(c_float AS STRING), \
-                   CAST(c_string AS FLOAT), CAST(c_string AS STRING) \
+                   CAST(c_int AS INT),    CAST(c_int AS FLOAT),    CAST(c_int AS VARCHAR(40)), \
+                   CAST(c_float AS INT),  CAST(c_float AS FLOAT),  CAST(c_float AS VARCHAR(40)), \
+                   CAST(c_string AS FLOAT), CAST(c_string AS VARCHAR(40)) \
                    FROM all_types";
 
         // create a data frame
