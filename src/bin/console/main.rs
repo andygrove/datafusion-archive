@@ -49,9 +49,10 @@ fn setup_console(cmdline: clap::ArgMatches) {
                         Ok(cmd) => {
                             cmd_buffer.push_str(&cmd);
                             if cmd_buffer.as_str().ends_with(";") {
-                                console.execute(&cmd_buffer[0..cmd_buffer.len() - 2]);
+                                console.execute(&cmd_buffer[0..cmd_buffer.len() - 1]);
                                 cmd_buffer = String::new();
                             }
+                            cmd_buffer.push_str("\n");
                         }
                         Err(e) => println!("Error: {}", e),
                     }
