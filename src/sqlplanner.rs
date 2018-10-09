@@ -73,10 +73,7 @@ impl SqlToRel {
                     _ => None,
                 };
 
-                let expr: Vec<Expr> = projection
-                    .iter()
-                    .map(|e| self.sql_to_rex(&e, &input_schema))
-                    .collect::<Result<Vec<Expr>, String>>()?;
+                let expr = self.project(projection, input_schema)?;
 
                 // collect aggregate expressions
                 let aggr_expr: Vec<Expr> = expr
@@ -350,6 +347,27 @@ impl SqlToRel {
                 sql
             ))),
         }
+    }
+
+    /// Calculates the projection expressions given
+    fn project(&self, projection: &Vec<ASTNode>, input_schema: &Rc<Schema>) -> Result<Vec<Expr>, String> {
+        let expr: Vec<Expr> = projection
+            .iter()
+            .flat_map(|e| {
+                match *e {
+                    ASTNode::SQLWildcard => {
+                        input_schema.columns()
+                            .iter()
+                            .enumerate()
+                            .map(|(i, _)| Expr::Column(i))
+                            .collect()
+                    },
+                    _ => vec![self.sql_to_rex(&e, &input_schema).unwrap()],
+                }
+            })
+            .collect::<Vec<Expr>>();
+
+        Ok(expr)
     }
 }
 
@@ -679,6 +697,14 @@ mod tests {
         println!("accum: {:?}", accum);
         assert_eq!(1, accum.len());
         assert!(accum.contains(&3));
+    }
+
+    #[test]
+    fn test_wildcard_projections() {
+        let sql = "SELECT * FROM person";
+        let expected = "Projection: #0, #1, #2, #3, #4, #5\
+                    \n  TableScan: person projection=None";
+        quick_test(sql, expected);
     }
 
     //TODO fix
