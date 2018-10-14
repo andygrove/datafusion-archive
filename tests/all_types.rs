@@ -429,6 +429,7 @@ fn basic_operation_test(
     let output_filename = format!("target/{}", output);
     let expected_filename = format!("test/data/expected/{}", exp);
 
+    println!("sql = {}", sql);
     let df = ctx.sql(&sql).unwrap();
     ctx.write_csv(df, &output_filename).unwrap();
 

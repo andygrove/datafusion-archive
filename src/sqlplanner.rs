@@ -132,12 +132,6 @@ impl SqlToRel {
                         schema: projection_schema.clone(),
                     };
 
-                    // aggregate queries
-                    //                    match group_by {
-                    //                        Some(g) => Err(String::from("GROUP BY is not implemented yet")),
-                    //                        None => {}
-                    //                    }
-
                     if let &Some(_) = having {
                         return Err(String::from("HAVING is not implemented yet"));
                     }
@@ -147,7 +141,13 @@ impl SqlToRel {
                             let input_schema = projection.schema();
                             let order_by_rex: Result<Vec<Expr>, String> = order_by_expr
                                 .iter()
-                                .map(|e| self.sql_to_rex(&e.expr, &input_schema))
+                                .map(|e| {
+                                    Ok(Expr::Sort {
+                                        expr: Rc::new(self.sql_to_rex(&e.expr, &input_schema).unwrap()),
+                                        asc: e.asc
+                                    })
+
+                                })
                                 .collect();
 
                             LogicalPlan::Sort {
@@ -202,7 +202,7 @@ impl SqlToRel {
         match sql {
             &ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => Ok(Expr::Literal(ScalarValue::Int64(n))),
             &ASTNode::SQLValue(sqlparser::sqlast::Value::Double(n)) => Ok(Expr::Literal(ScalarValue::Float64(n))),
-            &ASTNode::SQLValue(sqlparser::sqlast::Value::String(ref s)) => {
+            &ASTNode::SQLValue(sqlparser::sqlast::Value::SingleQuotedString(ref s)) => {
                 Ok(Expr::Literal(ScalarValue::Utf8(Rc::new(s.clone()))))
             }
 
