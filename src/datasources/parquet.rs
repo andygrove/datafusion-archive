@@ -33,7 +33,7 @@ use super::super::types::*;
 use super::common::*;
 
 pub struct ParquetFile {
-    reader: SerializedFileReader,
+    reader: SerializedFileReader<File>,
     row_group_index: usize,
     schema: Rc<Schema>,
     projection: Option<Vec<usize>>,

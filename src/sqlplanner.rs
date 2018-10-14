@@ -132,12 +132,6 @@ impl SqlToRel {
                         schema: projection_schema.clone(),
                     };
 
-                    // aggregate queries
-                    //                    match group_by {
-                    //                        Some(g) => Err(String::from("GROUP BY is not implemented yet")),
-                    //                        None => {}
-                    //                    }
-
                     if let &Some(_) = having {
                         return Err(String::from("HAVING is not implemented yet"));
                     }
@@ -147,7 +141,13 @@ impl SqlToRel {
                             let input_schema = projection.schema();
                             let order_by_rex: Result<Vec<Expr>, String> = order_by_expr
                                 .iter()
-                                .map(|e| self.sql_to_rex(e, &input_schema))
+                                .map(|e| {
+                                    Ok(Expr::Sort {
+                                        expr: Rc::new(self.sql_to_rex(&e.expr, &input_schema).unwrap()),
+                                        asc: e.asc
+                                    })
+
+                                })
                                 .collect();
 
                             LogicalPlan::Sort {
@@ -162,7 +162,7 @@ impl SqlToRel {
                     let limit_plan = match limit {
                         &Some(ref limit_ast_node) => {
                             let limit_count = match **limit_ast_node {
-                                ASTNode::SQLLiteralLong(n) => n,
+                                ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => n,
                                 _ => return Err(String::from("LIMIT parameter is not a number")),
                             };
                             LogicalPlan::Limit {
@@ -200,9 +200,9 @@ impl SqlToRel {
     /// Generate a relational expression from a SQL expression
     pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
-            &ASTNode::SQLLiteralLong(n) => Ok(Expr::Literal(ScalarValue::Int64(n))),
-            &ASTNode::SQLLiteralDouble(n) => Ok(Expr::Literal(ScalarValue::Float64(n))),
-            &ASTNode::SQLLiteralString(ref s) => {
+            &ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => Ok(Expr::Literal(ScalarValue::Int64(n))),
+            &ASTNode::SQLValue(sqlparser::sqlast::Value::Double(n)) => Ok(Expr::Literal(ScalarValue::Float64(n))),
+            &ASTNode::SQLValue(sqlparser::sqlast::Value::SingleQuotedString(ref s)) => {
                 Ok(Expr::Literal(ScalarValue::Utf8(Rc::new(s.clone()))))
             }
 
@@ -281,10 +281,10 @@ impl SqlToRel {
                 }
             }
 
-            &ASTNode::SQLOrderBy { ref expr, asc } => Ok(Expr::Sort {
-                expr: Rc::new(self.sql_to_rex(&expr, &schema)?),
-                asc,
-            }),
+//            &ASTNode::SQLOrderBy { ref expr, asc } => Ok(Expr::Sort {
+//                expr: Rc::new(self.sql_to_rex(&expr, &schema)?),
+//                asc,
+//            }),
 
             &ASTNode::SQLFunction { ref id, ref args } => {
                 //TODO: fix this hack
@@ -309,7 +309,7 @@ impl SqlToRel {
                             .iter()
                             .map(|a| match a {
                                 // this feels hacky but translate COUNT(1)/COUNT(*) to COUNT(first_column)
-                                ASTNode::SQLLiteralLong(1) => Ok(Expr::Column(0)),
+                                ASTNode::SQLValue(sqlparser::sqlast::Value::Long(1)) => Ok(Expr::Column(0)),
                                 ASTNode::SQLWildcard => Ok(Expr::Column(0)),
                                 _ => self.sql_to_rex(a, schema),
                             })
@@ -725,8 +725,10 @@ mod tests {
 
     /// Create logical plan, write with formatter, compare to expected output
     fn quick_test(sql: &str, expected: &str) {
+        use sqlparser::dialect::*;
+        let dialect = GenericSqlDialect{};
         let planner = SqlToRel::new(Rc::new(MockSchemaProvider {}));
-        let ast = Parser::parse_sql(sql.to_string()).unwrap();
+        let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
         let plan = planner.sql_to_rel(&ast).unwrap();
         assert_eq!(expected, format!("{:?}", plan));
     }

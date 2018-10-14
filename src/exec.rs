@@ -48,6 +48,7 @@ use super::types::*;
 use super::dfparser::*;
 //use super::cluster::*;
 
+use sqlparser::dialect::GenericSqlDialect;
 use sqlparser::sqlparser::*;
 
 #[derive(Debug, Clone)]
@@ -1213,7 +1214,8 @@ impl ExecutionContext {
 
     pub fn create_logical_plan(&self, sql: &str) -> Result<Rc<LogicalPlan>> {
         // parse SQL into AST
-        let ast = Parser::parse_sql(String::from(sql))?;
+        let dialect = GenericSqlDialect{};
+        let ast = Parser::parse_sql(&dialect, String::from(sql))?;
 
         // create a query planner
         let query_planner = SqlToRel::new(self.create_schema_provider());
