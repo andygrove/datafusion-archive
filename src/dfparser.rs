@@ -17,6 +17,7 @@
 //! Note that most SQL parsing is now delegated to the sqlparser crate, which handles ANSI SQL but
 //! this module contains DataFusion-specific SQL extensions.
 
+use sqlparser::dialect::*;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
 use sqlparser::sqltokenizer::*;
@@ -63,7 +64,8 @@ impl DFParser {
 
     /// Parse the specified tokens
     pub fn new(sql: String) -> Result<Self, ParserError> {
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize()?;
         Ok(DFParser {
             parser: Parser::new(tokens)
@@ -124,6 +126,9 @@ impl DFParser {
                                                 name: column_name,
                                                 data_type: data_type,
                                                 allow_null,
+                                                default: None,
+                                                is_primary: false,
+                                                is_unique: false,
                                             });
                                         }
                                         Some(Token::RParen) => {
@@ -132,6 +137,9 @@ impl DFParser {
                                                 name: column_name,
                                                 data_type: data_type,
                                                 allow_null,
+                                                default: None,
+                                                is_primary: false,
+                                                is_unique: false,
                                             });
                                             break;
                                         }
