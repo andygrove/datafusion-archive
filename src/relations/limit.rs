@@ -40,17 +40,48 @@ impl LimitRelation {
 
 impl SimpleRelation for LimitRelation {
     fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-        let mut count: usize = 0;
-        let limit = self.limit;
+        Box::new(
+            LimitIterator {
+                count: 0,
+                limit: self.limit,
+                inner: self.input.scan(),
+            }
+        )
+    }
 
-        Box::new(self.input.scan().map(move |batch| match batch {
+    fn schema<'a>(&'a self) -> &'a Schema {
+        self.schema.as_ref()
+    }
+}
+
+/// `LimitIterator` returns batches while the limit has not been reached yet
+struct LimitIterator<'a> {
+    /// Current count of rows
+    count: usize,
+
+    /// Max number of rows to return
+    limit: usize,
+
+    /// Inner iterator where the record batches will be pulled from
+    inner: Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a>,
+}
+
+impl<'a> Iterator for LimitIterator<'a> {
+    type Item = Result<Rc<RecordBatch>>;
+
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        if self.count >= self.limit {
+            return None;
+        }
+
+        Some(match self.inner.next()? {
             Ok(ref b) => {
-                if count + b.num_rows() < limit {
-                    count += b.num_rows();
+                if self.count + b.num_rows() < self.limit {
+                    self.count += b.num_rows();
                     Ok(b.clone())
                 } else {
-                    let n = b.num_rows().min(limit - count);
-                    count += n;
+                    let n = b.num_rows().min(self.limit - self.count);
+                    self.count += n;
                     let new_batch: Rc<RecordBatch> = Rc::new(DefaultRecordBatch {
                         schema: b.schema().clone(),
                         data: b.columns().clone(),
@@ -60,10 +91,6 @@ impl SimpleRelation for LimitRelation {
                 }
             }
             Err(e) => Err(e),
-        }))
-    }
-
-    fn schema<'a>(&'a self) -> &'a Schema {
-        self.schema.as_ref()
+        })
     }
 }
