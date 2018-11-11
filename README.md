@@ -6,7 +6,9 @@
 [![Coverage Status](https://coveralls.io/repos/github/datafusion-rs/datafusion/badge.svg?branch=master)](https://coveralls.io/github/datafusion-rs/datafusion?branch=master)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
-DataFusion is a SQL parser, planner, and query execution library for Rust. A DataFrame API is also provided.
+DataFusion is an attempt at building a modern distributed compute platform in Rust, using [Apache Arrow](https://arrow.apache.org/) as the memory model.
+
+See my article [How To Build a Modern Distributed Compute Platform](https://andygrove.io/how_to_build_a_modern_distributed_compute_platform/) to learn about the design and my motivation for building this. The TL;DR is that this project is a great way to learn about building distributed systems but there are plenty of better choices if you need something mature and supported.
 
 The following features are currently supported:
 
@@ -25,8 +27,6 @@ The following features are currently supported:
 DataFusion can be used as a crate dependency in your project to add SQL support for custom data sources.
 
 A [Docker image](https://datafusion.rs/guides/getting-started-docker/) is also available if you just want to run SQL queries against your CSV and Parquet files.
-
-I have plans to make DataFusion a fully distributed compute platform with features similar to Apache Spark, but I need help from contributors to get there.
 
 # Project Home Page
 
