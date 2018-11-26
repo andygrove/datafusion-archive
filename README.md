@@ -12,14 +12,14 @@ See my article [How To Build a Modern Distributed Compute Platform](https://andy
 
 # Status
 
-The original POC no longer works due to changes in Rust nightly since 11/3/18 and since then I have been contributing more code to the Apache Arrow project and decided to start implementing DataFusion from scratch based on that latest Arrow code. The original code is tagged with `0.3.4` and supports single threaded SQL execution against Parquet and CSV files using Apache Arrow as the memory model.
+The original POC no longer works due to changes in Rust nightly since 11/3/18 and since then I have been contributing more code to the Apache Arrow project and decided to start implementing DataFusion from scratch based on that latest Arrow code and incorporating lessons learned from the first attempt. The original POC code is is now on the [original_poc branch](https://github.com/andygrove/datafusion/tree/original_poc) and supports single threaded SQL execution against Parquet and CSV files using Apache Arrow as the memory model.
 
 The current task list:
 
-- [x] Comment out all existing code and update the README with the new plan
+- [x] Delete existing code and update the README with the new plan
 - [ ] Implement serializable logical query plan
-- [ ] Implement reader for CSV
-- [ ] Implement reader for Parquet
+- [ ] Implement data source for CSV
+- [ ] Implement data source for Parquet
 - [ ] Implement query execution: Projection
 - [ ] Implement query execution: Selection
 - [ ] Implement query execution: Sort
@@ -28,7 +28,7 @@ The current task list:
 - [ ] Implement parallel query execution (multithreaded, single process)
 - [ ] Generate query plan from SQL
 - [ ] Implement worker node that can receive a query plan, execute the query, and return a result in Arrow IPC format
-- [ ] Implement distributed query planner
+- [ ] Implement distributed query execution using Kubernetes
 
 # Prerequisites
 
