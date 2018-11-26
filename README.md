@@ -2,8 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/datafusion.svg)](https://crates.io/crates/datafusion)
-[![Build Status](https://travis-ci.org/datafusion-rs/datafusion.svg?branch=master)](https://travis-ci.org/datafusion-rs/datafusion)
-[![Coverage Status](https://coveralls.io/repos/github/datafusion-rs/datafusion/badge.svg?branch=master)](https://coveralls.io/github/datafusion-rs/datafusion?branch=master)
+[![Build Status](https://travis-ci.org/andygrove/datafusion.svg?branch=master)](https://travis-ci.org/datafusion-rs/datafusion)
+[![Coverage Status](https://coveralls.io/repos/github/andygrove/datafusion/badge.svg?branch=master)](https://coveralls.io/github/andygrove/datafusion?branch=master)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
 DataFusion is an attempt at building a modern distributed compute platform in Rust, using [Apache Arrow](https://arrow.apache.org/) as the memory model.
