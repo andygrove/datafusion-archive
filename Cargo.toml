@@ -1,12 +1,12 @@
 [package]
 name = "datafusion"
-description = "DataFusion is a SQL parser, planner, and execution framework for Rust with support for CSV and Apache Parquet file formats"
+description = "DataFusion is a modern distributed compute platform that uses Apache Arrow as the memory model"
 version = "0.4.0"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
-homepage = "https://datafusion.rs"
+homepage = "https://github.com/andygrove/datafusion"
 documentation = "https://datafusion.rs/docs/datafusion"
 keywords = [ "distributed", "query", "data", "processing", "sql" ]
-repository = "https://github.com/datafusion-rs/datafusion"
+repository = "https://github.com/andygrove/datafusion"
 license = "Apache-2.0"
 include = [
     "src/**/*.rs",
