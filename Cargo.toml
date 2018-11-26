@@ -39,7 +39,7 @@ datafusion-arrow = "0.12.1"
 #parquet = "0.4.1"
 serde = { version = "1.0.80", features = ["alloc", "rc"] }
 serde_derive = "1.0.80"
-serde_json = "*"
+serde_json = "1.0.33"
 
 #sqlparser = "0.1.8"
 
