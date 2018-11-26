@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Logical plan
+//! Logical query plan
 
 use std::fmt;
 use std::fmt::{Error, Formatter};
@@ -20,49 +20,49 @@ use std::rc::Rc;
 
 use arrow::datatypes::*;
 
-#[derive(Debug, Clone)]
-pub enum FunctionType {
-    Scalar,
-    Aggregate,
-}
+//#[derive(Serialize, Deserialize, Debug, Clone)]
+//pub enum FunctionType {
+//    Scalar,
+//    Aggregate,
+//}
+//
+//#[derive(Debug, Clone)]
+//pub struct FunctionMeta {
+//    name: String,
+//    args: Vec<Field>,
+//    return_type: DataType,
+//    function_type: FunctionType,
+//}
+//
+//impl FunctionMeta {
+//    pub fn new(
+//        name: String,
+//        args: Vec<Field>,
+//        return_type: DataType,
+//        function_type: FunctionType,
+//    ) -> Self {
+//        FunctionMeta {
+//            name,
+//            args,
+//            return_type,
+//            function_type,
+//        }
+//    }
+//    pub fn name(&self) -> &String {
+//        &self.name
+//    }
+//    pub fn args(&self) -> &Vec<Field> {
+//        &self.args
+//    }
+//    pub fn return_type(&self) -> &DataType {
+//        &self.return_type
+//    }
+//    pub fn function_type(&self) -> &FunctionType {
+//        &self.function_type
+//    }
+//}
 
-#[derive(Debug, Clone)]
-pub struct FunctionMeta {
-    name: String,
-    args: Vec<Field>,
-    return_type: DataType,
-    function_type: FunctionType,
-}
-
-impl FunctionMeta {
-    pub fn new(
-        name: String,
-        args: Vec<Field>,
-        return_type: DataType,
-        function_type: FunctionType,
-    ) -> Self {
-        FunctionMeta {
-            name,
-            args,
-            return_type,
-            function_type,
-        }
-    }
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-    pub fn args(&self) -> &Vec<Field> {
-        &self.args
-    }
-    pub fn return_type(&self) -> &DataType {
-        &self.return_type
-    }
-    pub fn function_type(&self) -> &FunctionType {
-        &self.function_type
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Operator {
     Eq,
     NotEq,
@@ -88,7 +88,7 @@ impl Operator {
 }
 
 /// ScalarValue enumeration
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ScalarValue {
     Null,
     Boolean(bool),
@@ -128,7 +128,7 @@ impl ScalarValue {
 }
 
 /// Relation Expression
-#[derive(Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum Expr {
     /// index into a value within the row or complex value
     Column(usize),
@@ -301,7 +301,7 @@ impl fmt::Debug for Expr {
 
 /// The LogicalPlan represents different types of relations (such as Projection, Selection, etc) and
 /// can be created by the SQL query planner and the DataFrame API.
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum LogicalPlan {
     /// A relation that applies a row limit to its child relation
     Limit {
@@ -344,12 +344,6 @@ pub enum LogicalPlan {
         has_header: bool,
         projection: Option<Vec<usize>>,
     },
-    /// Represents an ndjson file with a provided schema
-    NdJsonFile {
-        filename: String,
-        schema: Rc<Schema>,
-        projection: Option<Vec<usize>>,
-    },
     /// Represents a Parquet file that contains schema information
     ParquetFile {
         filename: String,
@@ -367,7 +361,6 @@ impl LogicalPlan {
             LogicalPlan::EmptyRelation { schema } => &schema,
             LogicalPlan::TableScan { schema, .. } => &schema,
             LogicalPlan::CsvFile { schema, .. } => &schema,
-            LogicalPlan::NdJsonFile { schema, .. } => &schema,
             LogicalPlan::ParquetFile { schema, .. } => &schema,
             LogicalPlan::Projection { schema, .. } => &schema,
             LogicalPlan::Selection { input, .. } => input.schema(),
@@ -398,11 +391,6 @@ impl LogicalPlan {
                 ref schema,
                 ..
             } => write!(f, "CsvFile: file={}, schema={:?}", filename, schema),
-            LogicalPlan::NdJsonFile {
-                ref filename,
-                ref schema,
-                ..
-            } => write!(f, "NdJsonFile: file={}, schema={:?}", filename, schema),
             LogicalPlan::ParquetFile { .. } => write!(f, "ParquetFile:"),
             LogicalPlan::Projection {
                 ref expr,
@@ -630,5 +618,51 @@ pub fn can_coerce_from(left: &DataType, other: &DataType) -> bool {
             _ => false,
         },
         _ => false,
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn serialize_plan() {
+
+        let schema = Schema::new(vec![
+            Field::new("first_name", DataType::Utf8, false),
+            Field::new("last_name", DataType::Utf8, false),
+            Field::new(
+                "address",
+                DataType::Struct(vec![
+                    Field::new("street", DataType::Utf8, false),
+                    Field::new("zip", DataType::UInt16, false),
+                ]),
+                false,
+            ),
+        ]);
+
+        let plan = LogicalPlan::ParquetFile {
+            filename: "/tmp/foo.parquet".to_string(),
+            schema: Rc::new(schema),
+            projection: Some(vec![0, 1, 4])
+        };
+
+        let serialized = serde_json::to_string(&plan).unwrap();
+
+        assert_eq!("{\"ParquetFile\":{\
+        \"filename\":\"/tmp/foo.parquet\",\
+        \"schema\":{\"fields\":[\
+            {\"name\":\"first_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
+            {\"name\":\"last_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
+            {\"name\":\"address\",\"data_type\":{\"Struct\":\
+            [\
+                {\"name\":\"street\",\"data_type\":\"Utf8\",\"nullable\":false},\
+                {\"name\":\"zip\",\"data_type\":\"UInt16\",\"nullable\":false}]},\"nullable\":false}\
+            ]},\
+        \"projection\":[0,1,4]}}", serialized);
+
+
     }
 }
