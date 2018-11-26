@@ -1,7 +1,7 @@
 [package]
 name = "datafusion"
 description = "DataFusion is a SQL parser, planner, and execution framework for Rust with support for CSV and Apache Parquet file formats"
-version = "0.3.5"
+version = "0.4.0"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://datafusion.rs"
 documentation = "https://datafusion.rs/docs/datafusion"
@@ -17,31 +17,26 @@ include = [
 name = "datafusion"
 path = "src/lib.rs"
 
-[[bin]]
-name = "worker"
-path = "src/bin/worker/main.rs"
-
-[[bin]]
-name = "console"
-path = "src/bin/console/main.rs"
+#[[bin]]
+#name = "worker"
+#path = "src/bin/worker/main.rs"
+#
+#[[bin]]
+#name = "console"
+#path = "src/bin/console/main.rs"
 
 [dependencies]
-bytes = "0.4"
-byteorder = "1"
-fnv = "1.0.3"
-csv = "1.0.0"
-arrow = "0.10.0"
-
-lazy_static = "1.0"
-parquet = "0.4.1"
-#parquet = { path = "../parquet-rs" }
-json = "0.11.13"
-clap = "2.31.2"
-
-sqlparser = "0.1.8"
-#sqlparser = { path = "../datafusion-sql" }
-
-datafusion-rustyline = "2.0.0-alpha-20180628"
+#byteorder = "1"
+#bytes = "0.4"
+#clap = "2.31.2"
+#csv = "1.0.0"
+#fnv = "1.0.3"
+#datafusion-arrow = "0.12.0"
+#datafusion-rustyline = "2.0.0-alpha-20180628"
+#json = "0.11.13"
+#lazy_static = "1.0"
+#parquet = "0.4.1"
+#sqlparser = "0.1.8"
 
 [dev-dependencies]
 criterion = "0.2.0"

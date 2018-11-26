@@ -10,27 +10,25 @@ DataFusion is an attempt at building a modern distributed compute platform in Ru
 
 See my article [How To Build a Modern Distributed Compute Platform](https://andygrove.io/how_to_build_a_modern_distributed_compute_platform/) to learn about the design and my motivation for building this. The TL;DR is that this project is a great way to learn about building distributed systems but there are plenty of better choices if you need something mature and supported.
 
-The following features are currently supported:
+# Status
 
-- SQL Parser, Planner and Optimizer
-- DataFrame API
-- Columnar processing using [Apache Arrow](https://arrow.apache.org/)
-- Support for local CSV and [Apache Parquet](https://parquet.apache.org/) files
-- Single-threaded execution of SQL queries, supporting:
-  - Projection
-  - Selection
-  - Scalar Functions
-  - Aggregates (Min, Max, Count)
-  - Grouping
-- User-defined Scalar Functions (UDFs)
+The original POC no longer works due to changes in Rust nightly since 11/3/18 and since then I have been contributing more code to the Apache Arrow project and decided to start implementing DataFusion from scratch based on that latest Arrow code. The original code is tagged with `0.3.4` and supports single threaded SQL execution against Parquet and CSV files using Apache Arrow as the memory model.
 
-DataFusion can be used as a crate dependency in your project to add SQL support for custom data sources.
+The current task list:
 
-A [Docker image](https://datafusion.rs/guides/getting-started-docker/) is also available if you just want to run SQL queries against your CSV and Parquet files.
-
-# Project Home Page
-
-The project home page is now at [https://datafusion.rs](https://datafusion.rs) and contains the [roadmap](https://datafusion.rs/roadmap) as well as documentation for using this crate. I am using [GitHub issues](https://github.com/datafusion-rs/datafusion-rs/issues) to track development tasks and feedback.
+- [x] Comment out all existing code and update the README with the new plan
+- [ ] Implement serializable logical query plan
+- [ ] Implement reader for CSV
+- [ ] Implement reader for Parquet
+- [ ] Implement query execution: Projection
+- [ ] Implement query execution: Selection
+- [ ] Implement query execution: Sort
+- [ ] Implement query execution: Aggregate
+- [ ] Implement query execution: Scalar Functions
+- [ ] Implement parallel query execution (multithreaded, single process)
+- [ ] Generate query plan from SQL
+- [ ] Implement worker node that can receive a query plan, execute the query, and return a result in Arrow IPC format
+- [ ] Implement distributed query planner
 
 # Prerequisites
 
