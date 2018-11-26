@@ -17,7 +17,7 @@ The original POC no longer works due to changes in Rust nightly since 11/3/18 an
 The current task list:
 
 - [x] Delete existing code and update the README with the new plan
-- [ ] Implement serializable logical query plan
+- [x] Implement serializable logical query plan
 - [ ] Implement data source for CSV
 - [ ] Implement data source for Parquet
 - [ ] Implement query execution: Projection
