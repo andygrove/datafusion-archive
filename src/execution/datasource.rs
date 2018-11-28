@@ -17,33 +17,49 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use arrow::csv;
 use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;
 
-use super::error::Result;
+use super::error::{ExecutionError, Result};
 
 pub trait DataSource {
     fn schema(&self) -> &Rc<Schema>;
-    fn next(&mut self) -> Option<Result<Rc<RecordBatch>>>;
+    fn next(&mut self) -> Result<Option<RecordBatch>>;
 }
 
-pub struct DataSourceIterator {
-    pub ds: Rc<RefCell<DataSource>>,
-}
+impl DataSource for csv::Reader {
 
-impl DataSourceIterator {
-    pub fn new(ds: Rc<RefCell<DataSource>>) -> Self {
-        DataSourceIterator { ds }
+    fn schema(&self) -> &Rc<Schema> {
+        unimplemented!()
+    }
+
+    fn next(&mut self) -> Result<Option<RecordBatch>> {
+        match self.next() {
+            None => Ok(None),
+            Some(Ok(r)) => Ok(Some(r)),
+            Some(Err(e)) => Err(ExecutionError::from(e))
+        }
     }
 }
 
-impl Iterator for DataSourceIterator {
-    type Item = Result<Rc<RecordBatch>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.ds.borrow_mut().next()
-    }
-}
+//pub struct DataSourceIterator {
+//    pub ds: Rc<RefCell<DataSource>>,
+//}
+//
+//impl DataSourceIterator {
+//    pub fn new(ds: Rc<RefCell<DataSource>>) -> Self {
+//        DataSourceIterator { ds }
+//    }
+//}
+//
+//impl Iterator for DataSourceIterator {
+//    type Item = Result<Rc<RecordBatch>>;
+//
+//    fn next(&mut self) -> Option<Self::Item> {
+//        self.ds.borrow_mut().next()
+//    }
+//}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum DataSourceMeta {

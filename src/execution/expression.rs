@@ -14,6 +14,7 @@
 
 use std::rc::Rc;
 
+use arrow::array::ArrayRef;
 use arrow::datatypes::DataType;
 use arrow::record_batch::RecordBatch;
 
@@ -21,9 +22,9 @@ use super::error::Result;
 use super::value::Value;
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
-pub type CompiledExpr = Rc<Fn(&RecordBatch) -> Result<Value>>;
+pub type CompiledExpr = Rc<Fn(&RecordBatch) -> Result<ArrayRef>>;
 
-pub type CompiledCastFunction = Rc<Fn(&Value) -> Result<Value>>;
+pub type CompiledCastFunction = Rc<Fn(&Value) -> Result<ArrayRef>>;
 
 pub enum AggregateType {
     Min,
@@ -45,4 +46,20 @@ pub enum RuntimeExpr {
         args: Vec<CompiledExpr>,
         t: DataType,
     },
+}
+
+
+impl RuntimeExpr {
+    pub fn get_func(&self) -> CompiledExpr {
+        match self {
+            &RuntimeExpr::Compiled { ref f, .. } => f.clone(),
+            _ => panic!(),
+        }
+    }
+    pub fn get_type(&self) -> DataType {
+        match self {
+            &RuntimeExpr::Compiled { ref t, .. } => t.clone(),
+            &RuntimeExpr::AggregateFunction { ref t, .. } => t.clone(),
+        }
+    }
 }

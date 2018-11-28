@@ -12,37 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;
 
-use super::datasource::{DataSource, DataSourceIterator};
+use super::datasource::DataSource;
 use super::error::Result;
 
 /// trait for all relations (a relation is essentially just an iterator over rows with
 /// a known schema)
 pub trait Relation {
-    /// scan all records in this relation
-    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a>;
+
+    fn next(&mut self) -> Result<Option<RecordBatch>>;
 
     /// get the schema for this relation
-    fn schema<'a>(&'a self) -> &'a Schema;
+    fn schema(&self) -> &Arc<Schema>;
 }
 
-struct DataSourceRelation {
-    schema: Schema,
+pub struct DataSourceRelation {
+    schema: Arc<Schema>,
     ds: Rc<RefCell<DataSource>>,
+}
+
+impl DataSourceRelation {
+    pub fn new(schema: Arc<Schema>, ds: Rc<RefCell<DataSource>>) -> Self {
+        Self { schema, ds }
+    }
 }
 
 impl Relation for DataSourceRelation {
 
-    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-        Box::new(DataSourceIterator::new(self.ds.clone()))
+    fn next(&mut self) -> Result<Option<RecordBatch>> {
+        self.ds.borrow_mut().next()
     }
 
-    fn schema<'a>(&'a self) -> &'a Schema {
+    fn schema(&self) -> &Arc<Schema> {
         &self.schema
     }
 }
