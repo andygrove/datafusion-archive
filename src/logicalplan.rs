@@ -337,19 +337,6 @@ pub enum LogicalPlan {
         schema: Rc<Schema>,
         projection: Option<Vec<usize>>,
     },
-    /// Represents a CSV file with a provided schema
-    CsvFile {
-        filename: String,
-        schema: Rc<Schema>,
-        has_header: bool,
-        projection: Option<Vec<usize>>,
-    },
-    /// Represents a Parquet file that contains schema information
-    ParquetFile {
-        filename: String,
-        schema: Rc<Schema>,
-        projection: Option<Vec<usize>>,
-    },
     /// An empty relation with an empty schema
     EmptyRelation { schema: Rc<Schema> },
 }
@@ -360,8 +347,6 @@ impl LogicalPlan {
         match self {
             LogicalPlan::EmptyRelation { schema } => &schema,
             LogicalPlan::TableScan { schema, .. } => &schema,
-            LogicalPlan::CsvFile { schema, .. } => &schema,
-            LogicalPlan::ParquetFile { schema, .. } => &schema,
             LogicalPlan::Projection { schema, .. } => &schema,
             LogicalPlan::Selection { input, .. } => input.schema(),
             LogicalPlan::Aggregate { schema, .. } => &schema,
@@ -386,12 +371,6 @@ impl LogicalPlan {
                 ref projection,
                 ..
             } => write!(f, "TableScan: {} projection={:?}", table_name, projection),
-            LogicalPlan::CsvFile {
-                ref filename,
-                ref schema,
-                ..
-            } => write!(f, "CsvFile: file={}, schema={:?}", filename, schema),
-            LogicalPlan::ParquetFile { .. } => write!(f, "ParquetFile:"),
             LogicalPlan::Projection {
                 ref expr,
                 ref input,
@@ -643,16 +622,18 @@ mod tests {
             ),
         ]);
 
-        let plan = LogicalPlan::ParquetFile {
-            filename: "/tmp/foo.parquet".to_string(),
+        let plan = LogicalPlan::TableScan {
+            schema_name: "".to_string(),
+            table_name: "people".to_string(),
             schema: Rc::new(schema),
             projection: Some(vec![0, 1, 4])
         };
 
         let serialized = serde_json::to_string(&plan).unwrap();
 
-        assert_eq!("{\"ParquetFile\":{\
-        \"filename\":\"/tmp/foo.parquet\",\
+        assert_eq!("{\"TableScan\":{\
+        \"schema_name\":\"\",\
+        \"table_name\":\"people\",\
         \"schema\":{\"fields\":[\
             {\"name\":\"first_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
             {\"name\":\"last_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
