@@ -16,11 +16,11 @@
 //! as the memory model
 
 extern crate arrow;
-
 #[macro_use]
 extern crate serde_derive;
-
 extern crate serde_json;
+extern crate sqlparser;
 
+pub mod dfparser;
 pub mod execution;
 pub mod logicalplan;

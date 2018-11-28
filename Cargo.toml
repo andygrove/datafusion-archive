@@ -41,7 +41,7 @@ serde = { version = "1.0.80", features = ["alloc", "rc"] }
 serde_derive = "1.0.80"
 serde_json = "1.0.33"
 
-#sqlparser = "0.1.8"
+sqlparser = "0.1.8"
 
 [dev-dependencies]
 criterion = "0.2.0"
