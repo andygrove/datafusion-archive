@@ -17,6 +17,7 @@
 use std::fmt;
 use std::fmt::{Error, Formatter};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use arrow::datatypes::*;
 
@@ -307,13 +308,13 @@ pub enum LogicalPlan {
     Limit {
         limit: usize,
         input: Rc<LogicalPlan>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// A Projection (essentially a SELECT with an expression list)
     Projection {
         expr: Vec<Expr>,
         input: Rc<LogicalPlan>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// A Selection (essentially a WHERE clause with a predicate expression)
     Selection { expr: Expr, input: Rc<LogicalPlan> },
@@ -322,28 +323,28 @@ pub enum LogicalPlan {
         input: Rc<LogicalPlan>,
         group_expr: Vec<Expr>,
         aggr_expr: Vec<Expr>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// Represents a list of sort expressions to be applied to a relation
     Sort {
         expr: Vec<Expr>,
         input: Rc<LogicalPlan>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// A table scan against a table that has been registered on a context
     TableScan {
         schema_name: String,
         table_name: String,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
         projection: Option<Vec<usize>>,
     },
     /// An empty relation with an empty schema
-    EmptyRelation { schema: Rc<Schema> },
+    EmptyRelation { schema: Arc<Schema> },
 }
 
 impl LogicalPlan {
     /// Get a reference to the logical plan's schema
-    pub fn schema(&self) -> &Rc<Schema> {
+    pub fn schema(&self) -> &Arc<Schema> {
         match self {
             LogicalPlan::EmptyRelation { schema } => &schema,
             LogicalPlan::TableScan { schema, .. } => &schema,

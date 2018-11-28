@@ -17,6 +17,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::string::String;
+use std::sync::Arc;
 
 use super::logicalplan::*;
 
@@ -25,8 +26,8 @@ use arrow::datatypes::*;
 use sqlparser::sqlast::*;
 
 pub trait SchemaProvider {
-    fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>>;
-    fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>>;
+    fn get_table_meta(&self, name: &str) -> Option<Arc<Schema>>;
+    fn get_function_meta(&self, name: &str) -> Option<Arc<FunctionMeta>>;
 }
 
 /// SQL query planner
@@ -57,7 +58,7 @@ impl SqlToRel {
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
                     &None => Rc::new(LogicalPlan::EmptyRelation {
-                        schema: Rc::new(Schema::empty()),
+                        schema: Arc::new(Schema::empty()),
                     }),
                 };
 
@@ -112,7 +113,7 @@ impl SqlToRel {
                         input: aggregate_input,
                         group_expr,
                         aggr_expr,
-                        schema: Rc::new(aggr_schema),
+                        schema: Arc::new(aggr_schema),
                     }))
                 } else {
                     let projection_input: Rc<LogicalPlan> = match selection_plan {
@@ -120,7 +121,7 @@ impl SqlToRel {
                         _ => input.clone(),
                     };
 
-                    let projection_schema = Rc::new(Schema::new(exprlist_to_fields(
+                    let projection_schema = Arc::new(Schema::new(exprlist_to_fields(
                         &expr,
                         input_schema.as_ref(),
                     )));
@@ -735,9 +736,9 @@ mod tests {
     struct MockSchemaProvider {}
 
     impl SchemaProvider for MockSchemaProvider {
-        fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>> {
+        fn get_table_meta(&self, name: &str) -> Option<Arc<Schema>> {
             match name {
-                "person" => Some(Rc::new(Schema::new(vec![
+                "person" => Some(Arc::new(Schema::new(vec![
                     Field::new("id", DataType::UInt32, false),
                     Field::new("first_name", DataType::Utf8, false),
                     Field::new("last_name", DataType::Utf8, false),
