@@ -31,19 +31,16 @@ pub trait DataSource {
 
 pub struct CsvDataSource {
     schema: Arc<Schema>,
-    reader: csv::Reader
+    reader: csv::Reader,
 }
 
 impl CsvDataSource {
-    pub fn new(schema: Arc<Schema>,
-               reader: csv::Reader) -> Self {
+    pub fn new(schema: Arc<Schema>, reader: csv::Reader) -> Self {
         Self { schema, reader }
     }
 }
 
-
 impl DataSource for CsvDataSource {
-
     fn schema(&self) -> &Arc<Schema> {
         &self.schema
     }
@@ -52,7 +49,7 @@ impl DataSource for CsvDataSource {
         match self.reader.next() {
             None => Ok(None),
             Some(Ok(r)) => Ok(Some(r)),
-            Some(Err(e)) => Err(ExecutionError::from(e))
+            Some(Err(e)) => Err(ExecutionError::from(e)),
         }
     }
 }
@@ -90,5 +87,4 @@ pub enum DataSourceMeta {
         schema: Rc<Schema>,
         projection: Option<Vec<usize>>,
     },
-
 }

@@ -269,11 +269,13 @@ impl fmt::Debug for Expr {
             Expr::IsNull(expr) => write!(f, "{:?} IS NULL", expr),
             Expr::IsNotNull(expr) => write!(f, "{:?} IS NOT NULL", expr),
             Expr::BinaryExpr { left, op, right } => write!(f, "{:?} {:?} {:?}", left, op, right),
-            Expr::Sort { expr, asc } => if *asc {
-                write!(f, "{:?} ASC", expr)
-            } else {
-                write!(f, "{:?} DESC", expr)
-            },
+            Expr::Sort { expr, asc } => {
+                if *asc {
+                    write!(f, "{:?} ASC", expr)
+                } else {
+                    write!(f, "{:?} DESC", expr)
+                }
+            }
             Expr::ScalarFunction { name, ref args, .. } => {
                 write!(f, "{}(", name)?;
                 for i in 0..args.len() {
@@ -437,7 +439,6 @@ impl fmt::Debug for LogicalPlan {
     }
 }
 
-
 //TODO move to Arrow DataType impl?
 pub fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
     match _get_supertype(l, r) {
@@ -549,7 +550,6 @@ fn _get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
     }
 }
 
-
 pub fn can_coerce_from(left: &DataType, other: &DataType) -> bool {
     use self::DataType::*;
     match left {
@@ -601,7 +601,6 @@ pub fn can_coerce_from(left: &DataType, other: &DataType) -> bool {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -609,7 +608,6 @@ mod tests {
 
     #[test]
     fn serialize_plan() {
-
         let schema = Schema::new(vec![
             Field::new("first_name", DataType::Utf8, false),
             Field::new("last_name", DataType::Utf8, false),
@@ -627,24 +625,25 @@ mod tests {
             schema_name: "".to_string(),
             table_name: "people".to_string(),
             schema: Arc::new(schema),
-            projection: Some(vec![0, 1, 4])
+            projection: Some(vec![0, 1, 4]),
         };
 
         let serialized = serde_json::to_string(&plan).unwrap();
 
-        assert_eq!("{\"TableScan\":{\
-        \"schema_name\":\"\",\
-        \"table_name\":\"people\",\
-        \"schema\":{\"fields\":[\
-            {\"name\":\"first_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
-            {\"name\":\"last_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
-            {\"name\":\"address\",\"data_type\":{\"Struct\":\
-            [\
-                {\"name\":\"street\",\"data_type\":\"Utf8\",\"nullable\":false},\
-                {\"name\":\"zip\",\"data_type\":\"UInt16\",\"nullable\":false}]},\"nullable\":false}\
-            ]},\
-        \"projection\":[0,1,4]}}", serialized);
-
-
+        assert_eq!(
+            "{\"TableScan\":{\
+             \"schema_name\":\"\",\
+             \"table_name\":\"people\",\
+             \"schema\":{\"fields\":[\
+             {\"name\":\"first_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
+             {\"name\":\"last_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
+             {\"name\":\"address\",\"data_type\":{\"Struct\":\
+             [\
+             {\"name\":\"street\",\"data_type\":\"Utf8\",\"nullable\":false},\
+             {\"name\":\"zip\",\"data_type\":\"UInt16\",\"nullable\":false}]},\"nullable\":false}\
+             ]},\
+             \"projection\":[0,1,4]}}",
+            serialized
+        );
     }
 }

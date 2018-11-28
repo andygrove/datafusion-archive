@@ -24,7 +24,7 @@ use super::error::{ExecutionError, Result};
 /// Value enumeration
 pub enum Value {
     ScalarValue(ScalarValue),
-    ArrowValue(ArrowValue)
+    ArrowValue(ArrowValue),
 }
 
 pub enum ArrowValue {
@@ -123,7 +123,6 @@ pub fn can_coerce_from(left: &DataType, other: &DataType) -> bool {
         _ => false,
     }
 }
-
 
 macro_rules! primitive_accessor {
     ($NAME:ident, $VARIANT:ident, $TY:ty) => {

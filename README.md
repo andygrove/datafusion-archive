@@ -27,6 +27,7 @@ The current task list:
 - [ ] Implement query execution: Scalar Functions
 - [ ] Implement parallel query execution (multithreaded, single process)
 - [x] Generate query plan from SQL
+- [ ] Execute SQL against DataSource
 - [ ] Implement worker node that can receive a query plan, execute the query, and return a result in Arrow IPC format
 - [ ] Implement distributed query execution using Kubernetes
 

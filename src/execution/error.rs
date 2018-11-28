@@ -30,7 +30,7 @@ pub enum ExecutionError {
     General(String),
     InvalidColumn(String),
     NotImplemented,
-    ArrowError(ArrowError)
+    ArrowError(ArrowError),
 }
 
 impl From<Error> for ExecutionError {

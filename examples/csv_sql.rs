@@ -23,16 +23,16 @@ extern crate datafusion;
 use arrow::csv;
 use arrow::datatypes::*;
 
-use datafusion::execution::datasource::{CsvDataSource, DataSource};
 use datafusion::execution::context::ExecutionContext;
+use datafusion::execution::datasource::{CsvDataSource, DataSource};
 
 //use datafusion::functions::geospatial::st_astext::*;
 /// This example shows the steps to parse, plan, and execute simple SQL in the current process
 fn main() {
     // create execution context
     let mut ctx = ExecutionContext::new();
-//    ctx.register_scalar_function(Rc::new(STPointFunc {}));
-//    ctx.register_scalar_function(Rc::new(STAsText {}));
+    //    ctx.register_scalar_function(Rc::new(STPointFunc {}));
+    //    ctx.register_scalar_function(Rc::new(STAsText {}));
 
     // define schema for data source (csv file)
     let schema = Arc::new(Schema::new(vec![
@@ -47,17 +47,17 @@ fn main() {
 
     let csv_datasource = CsvDataSource::new(schema.clone(), arrow_csv_reader);
 
-    ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)) );
+    ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)));
 
     // define the SQL statement
     let sql = "SELECT lat, lng FROM cities";
-//    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM cities WHERE lat < 53.0";
+    //    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM cities WHERE lat < 53.0";
 
     // create a data frame
     let results = ctx.sql(&sql).unwrap();
-//
-//    // show the first 10 rows of output
-//    df1.show(10)
+    //
+    //    // show the first 10 rows of output
+    //    df1.show(10)
 }
 
 //use datafusion::functions::geospatial::st_point::*;
