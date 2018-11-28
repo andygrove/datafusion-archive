@@ -72,7 +72,7 @@ impl Relation for ProjectRelation {
 mod tests {
     use super::*;
     use super::super::context::ExecutionContext;
-    use super::super::datasource::DataSource;
+    use super::super::datasource::{CsvDataSource, DataSource};
     use super::super::super::logicalplan::Expr;
     use super::super::relation::DataSourceRelation;
     use super::super::expression;
@@ -86,10 +86,10 @@ mod tests {
             Field::new("first_name", DataType::Utf8, false)
         ]));
         let file = File::open("test/data/people.csv").unwrap();
-        let csv = Rc::new(RefCell::new(csv::Reader::new(file, schema.clone(), true, 1024, None)));
-        let ds = csv as Rc<RefCell<DataSource>>;
-        let relation = Rc::new(RefCell::new(DataSourceRelation::new(schema.clone(), ds)));
-        let context = Rc::new(ExecutionContext {} );
+        let arrow_csv_reader = csv::Reader::new(file, schema.clone(), true, 1024, None);
+        let ds = CsvDataSource::new(schema.clone(), arrow_csv_reader);
+        let relation = Rc::new(RefCell::new(DataSourceRelation::new(schema.clone(), Rc::new(RefCell::new(ds)))));
+        let context = Rc::new(ExecutionContext::new() );
 
         let projection_expr = vec![
             expression::compile_expr(context, &Expr::Column(0), schema.as_ref()).unwrap()

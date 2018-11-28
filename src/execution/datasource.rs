@@ -30,9 +30,15 @@ pub trait DataSource {
 }
 
 pub struct CsvDataSource {
-    pub schema: Arc<Schema>,
-    pub reader: csv::Reader
+    schema: Arc<Schema>,
+    reader: csv::Reader
+}
 
+impl CsvDataSource {
+    pub fn new(schema: Arc<Schema>,
+               reader: csv::Reader) -> Self {
+        Self { schema, reader }
+    }
 }
 
 

@@ -626,7 +626,7 @@ mod tests {
         let plan = LogicalPlan::TableScan {
             schema_name: "".to_string(),
             table_name: "people".to_string(),
-            schema: Rc::new(schema),
+            schema: Arc::new(schema),
             projection: Some(vec![0, 1, 4])
         };
 

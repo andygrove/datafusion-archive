@@ -750,9 +750,9 @@ mod tests {
             }
         }
 
-        fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
+        fn get_function_meta(&self, name: &str) -> Option<Arc<FunctionMeta>> {
             match name {
-                "sqrt" => Some(Rc::new(FunctionMeta::new(
+                "sqrt" => Some(Arc::new(FunctionMeta::new(
                     "sqrt".to_string(),
                     vec![Field::new("n", DataType::Float64, false)],
                     DataType::Float64,

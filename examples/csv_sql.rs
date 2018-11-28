@@ -27,8 +27,6 @@ use datafusion::execution::datasource::{CsvDataSource, DataSource};
 use datafusion::execution::context::ExecutionContext;
 
 //use datafusion::functions::geospatial::st_astext::*;
-//use datafusion::functions::geospatial::st_point::*;
-
 /// This example shows the steps to parse, plan, and execute simple SQL in the current process
 fn main() {
     // create execution context
@@ -47,10 +45,7 @@ fn main() {
 
     let arrow_csv_reader = csv::Reader::new(file, schema.clone(), true, 1024, None);
 
-    let csv_datasource = CsvDataSource {
-        schema: schema.clone(),
-        reader: arrow_csv_reader
-    };
+    let csv_datasource = CsvDataSource::new(schema.clone(), arrow_csv_reader);
 
     ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)) );
 
@@ -64,3 +59,5 @@ fn main() {
 //    // show the first 10 rows of output
 //    df1.show(10)
 }
+
+//use datafusion::functions::geospatial::st_point::*;
