@@ -16,6 +16,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use arrow::csv;
 use arrow::datatypes::Schema;
@@ -24,21 +25,31 @@ use arrow::record_batch::RecordBatch;
 use super::error::{ExecutionError, Result};
 
 pub trait DataSource {
-    fn schema(&self) -> &Rc<Schema>;
+    fn schema(&self) -> &Arc<Schema>;
     fn next(&mut self) -> Result<Option<RecordBatch>>;
 }
 
-impl DataSource for csv::Reader {
+pub struct CsvDataSource {
+    schema: Arc<Schema>,
+    reader: csv::Reader,
+}
 
-    fn schema(&self) -> &Rc<Schema> {
-        unimplemented!()
+impl CsvDataSource {
+    pub fn new(schema: Arc<Schema>, reader: csv::Reader) -> Self {
+        Self { schema, reader }
+    }
+}
+
+impl DataSource for CsvDataSource {
+    fn schema(&self) -> &Arc<Schema> {
+        &self.schema
     }
 
     fn next(&mut self) -> Result<Option<RecordBatch>> {
-        match self.next() {
+        match self.reader.next() {
             None => Ok(None),
             Some(Ok(r)) => Ok(Some(r)),
-            Some(Err(e)) => Err(ExecutionError::from(e))
+            Some(Err(e)) => Err(ExecutionError::from(e)),
         }
     }
 }
@@ -76,5 +87,4 @@ pub enum DataSourceMeta {
         schema: Rc<Schema>,
         projection: Option<Vec<usize>>,
     },
-
 }

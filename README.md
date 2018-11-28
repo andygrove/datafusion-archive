@@ -18,15 +18,16 @@ The current task list:
 
 - [x] Delete existing code and update the README with the new plan
 - [x] Implement serializable logical query plan
-- [ ] Implement data source for CSV
+- [x] Implement data source for CSV
 - [ ] Implement data source for Parquet
-- [ ] Implement query execution: Projection
+- [x] Implement query execution: Projection
 - [ ] Implement query execution: Selection
 - [ ] Implement query execution: Sort
 - [ ] Implement query execution: Aggregate
 - [ ] Implement query execution: Scalar Functions
 - [ ] Implement parallel query execution (multithreaded, single process)
-- [ ] Generate query plan from SQL
+- [x] Generate query plan from SQL
+- [ ] Execute SQL against DataSource
 - [ ] Implement worker node that can receive a query plan, execute the query, and return a result in Arrow IPC format
 - [ ] Implement distributed query execution using Kubernetes
 

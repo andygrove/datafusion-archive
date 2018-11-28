@@ -19,16 +19,18 @@ use std::result;
 
 use arrow::error::ArrowError;
 
+use sqlparser::sqlparser::ParserError;
+
 pub type Result<T> = result::Result<T, ExecutionError>;
 
 #[derive(Debug)]
 pub enum ExecutionError {
     IoError(Error),
-    //ParserError(ParserError),
+    ParserError(ParserError),
     General(String),
     InvalidColumn(String),
     NotImplemented,
-    ArrowError(ArrowError)
+    ArrowError(ArrowError),
 }
 
 impl From<Error> for ExecutionError {
@@ -55,8 +57,8 @@ impl From<ArrowError> for ExecutionError {
     }
 }
 
-//impl From<ParserError> for ExecutionError {
-//    fn from(e: ParserError) -> Self {
-//        ExecutionError::ParserError(e)
-//    }
-//}
+impl From<ParserError> for ExecutionError {
+    fn from(e: ParserError) -> Self {
+        ExecutionError::ParserError(e)
+    }
+}

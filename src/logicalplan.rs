@@ -17,6 +17,7 @@
 use std::fmt;
 use std::fmt::{Error, Formatter};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use arrow::datatypes::*;
 
@@ -268,11 +269,13 @@ impl fmt::Debug for Expr {
             Expr::IsNull(expr) => write!(f, "{:?} IS NULL", expr),
             Expr::IsNotNull(expr) => write!(f, "{:?} IS NOT NULL", expr),
             Expr::BinaryExpr { left, op, right } => write!(f, "{:?} {:?} {:?}", left, op, right),
-            Expr::Sort { expr, asc } => if *asc {
-                write!(f, "{:?} ASC", expr)
-            } else {
-                write!(f, "{:?} DESC", expr)
-            },
+            Expr::Sort { expr, asc } => {
+                if *asc {
+                    write!(f, "{:?} ASC", expr)
+                } else {
+                    write!(f, "{:?} DESC", expr)
+                }
+            }
             Expr::ScalarFunction { name, ref args, .. } => {
                 write!(f, "{}(", name)?;
                 for i in 0..args.len() {
@@ -307,13 +310,13 @@ pub enum LogicalPlan {
     Limit {
         limit: usize,
         input: Rc<LogicalPlan>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// A Projection (essentially a SELECT with an expression list)
     Projection {
         expr: Vec<Expr>,
         input: Rc<LogicalPlan>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// A Selection (essentially a WHERE clause with a predicate expression)
     Selection { expr: Expr, input: Rc<LogicalPlan> },
@@ -322,28 +325,28 @@ pub enum LogicalPlan {
         input: Rc<LogicalPlan>,
         group_expr: Vec<Expr>,
         aggr_expr: Vec<Expr>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// Represents a list of sort expressions to be applied to a relation
     Sort {
         expr: Vec<Expr>,
         input: Rc<LogicalPlan>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
     },
     /// A table scan against a table that has been registered on a context
     TableScan {
         schema_name: String,
         table_name: String,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
         projection: Option<Vec<usize>>,
     },
     /// An empty relation with an empty schema
-    EmptyRelation { schema: Rc<Schema> },
+    EmptyRelation { schema: Arc<Schema> },
 }
 
 impl LogicalPlan {
     /// Get a reference to the logical plan's schema
-    pub fn schema(&self) -> &Rc<Schema> {
+    pub fn schema(&self) -> &Arc<Schema> {
         match self {
             LogicalPlan::EmptyRelation { schema } => &schema,
             LogicalPlan::TableScan { schema, .. } => &schema,
@@ -435,7 +438,6 @@ impl fmt::Debug for LogicalPlan {
         self.fmt_with_indent(f, 0)
     }
 }
-
 
 //TODO move to Arrow DataType impl?
 pub fn get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
@@ -548,7 +550,6 @@ fn _get_supertype(l: &DataType, r: &DataType) -> Option<DataType> {
     }
 }
 
-
 pub fn can_coerce_from(left: &DataType, other: &DataType) -> bool {
     use self::DataType::*;
     match left {
@@ -600,7 +601,6 @@ pub fn can_coerce_from(left: &DataType, other: &DataType) -> bool {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -608,7 +608,6 @@ mod tests {
 
     #[test]
     fn serialize_plan() {
-
         let schema = Schema::new(vec![
             Field::new("first_name", DataType::Utf8, false),
             Field::new("last_name", DataType::Utf8, false),
@@ -625,25 +624,26 @@ mod tests {
         let plan = LogicalPlan::TableScan {
             schema_name: "".to_string(),
             table_name: "people".to_string(),
-            schema: Rc::new(schema),
-            projection: Some(vec![0, 1, 4])
+            schema: Arc::new(schema),
+            projection: Some(vec![0, 1, 4]),
         };
 
         let serialized = serde_json::to_string(&plan).unwrap();
 
-        assert_eq!("{\"TableScan\":{\
-        \"schema_name\":\"\",\
-        \"table_name\":\"people\",\
-        \"schema\":{\"fields\":[\
-            {\"name\":\"first_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
-            {\"name\":\"last_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
-            {\"name\":\"address\",\"data_type\":{\"Struct\":\
-            [\
-                {\"name\":\"street\",\"data_type\":\"Utf8\",\"nullable\":false},\
-                {\"name\":\"zip\",\"data_type\":\"UInt16\",\"nullable\":false}]},\"nullable\":false}\
-            ]},\
-        \"projection\":[0,1,4]}}", serialized);
-
-
+        assert_eq!(
+            "{\"TableScan\":{\
+             \"schema_name\":\"\",\
+             \"table_name\":\"people\",\
+             \"schema\":{\"fields\":[\
+             {\"name\":\"first_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
+             {\"name\":\"last_name\",\"data_type\":\"Utf8\",\"nullable\":false},\
+             {\"name\":\"address\",\"data_type\":{\"Struct\":\
+             [\
+             {\"name\":\"street\",\"data_type\":\"Utf8\",\"nullable\":false},\
+             {\"name\":\"zip\",\"data_type\":\"UInt16\",\"nullable\":false}]},\"nullable\":false}\
+             ]},\
+             \"projection\":[0,1,4]}}",
+            serialized
+        );
     }
 }

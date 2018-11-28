@@ -17,6 +17,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::string::String;
+use std::sync::Arc;
 
 use super::logicalplan::*;
 
@@ -25,8 +26,8 @@ use arrow::datatypes::*;
 use sqlparser::sqlast::*;
 
 pub trait SchemaProvider {
-    fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>>;
-    fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>>;
+    fn get_table_meta(&self, name: &str) -> Option<Arc<Schema>>;
+    fn get_function_meta(&self, name: &str) -> Option<Arc<FunctionMeta>>;
 }
 
 /// SQL query planner
@@ -57,7 +58,7 @@ impl SqlToRel {
                 let input = match relation {
                     &Some(ref r) => self.sql_to_rel(r)?,
                     &None => Rc::new(LogicalPlan::EmptyRelation {
-                        schema: Rc::new(Schema::empty()),
+                        schema: Arc::new(Schema::empty()),
                     }),
                 };
 
@@ -112,7 +113,7 @@ impl SqlToRel {
                         input: aggregate_input,
                         group_expr,
                         aggr_expr,
-                        schema: Rc::new(aggr_schema),
+                        schema: Arc::new(aggr_schema),
                     }))
                 } else {
                     let projection_input: Rc<LogicalPlan> = match selection_plan {
@@ -120,7 +121,7 @@ impl SqlToRel {
                         _ => input.clone(),
                     };
 
-                    let projection_schema = Rc::new(Schema::new(exprlist_to_fields(
+                    let projection_schema = Arc::new(Schema::new(exprlist_to_fields(
                         &expr,
                         input_schema.as_ref(),
                     )));
@@ -142,10 +143,11 @@ impl SqlToRel {
                                 .iter()
                                 .map(|e| {
                                     Ok(Expr::Sort {
-                                        expr: Rc::new(self.sql_to_rex(&e.expr, &input_schema).unwrap()),
-                                        asc: e.asc
+                                        expr: Rc::new(
+                                            self.sql_to_rex(&e.expr, &input_schema).unwrap(),
+                                        ),
+                                        asc: e.asc,
                                     })
-
                                 })
                                 .collect();
 
@@ -199,8 +201,12 @@ impl SqlToRel {
     /// Generate a relational expression from a SQL expression
     pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
         match sql {
-            &ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => Ok(Expr::Literal(ScalarValue::Int64(n))),
-            &ASTNode::SQLValue(sqlparser::sqlast::Value::Double(n)) => Ok(Expr::Literal(ScalarValue::Float64(n))),
+            &ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => {
+                Ok(Expr::Literal(ScalarValue::Int64(n)))
+            }
+            &ASTNode::SQLValue(sqlparser::sqlast::Value::Double(n)) => {
+                Ok(Expr::Literal(ScalarValue::Float64(n)))
+            }
             &ASTNode::SQLValue(sqlparser::sqlast::Value::SingleQuotedString(ref s)) => {
                 Ok(Expr::Literal(ScalarValue::Utf8(Rc::new(s.clone()))))
             }
@@ -280,11 +286,10 @@ impl SqlToRel {
                 }
             }
 
-//            &ASTNode::SQLOrderBy { ref expr, asc } => Ok(Expr::Sort {
-//                expr: Rc::new(self.sql_to_rex(&expr, &schema)?),
-//                asc,
-//            }),
-
+            //            &ASTNode::SQLOrderBy { ref expr, asc } => Ok(Expr::Sort {
+            //                expr: Rc::new(self.sql_to_rex(&expr, &schema)?),
+            //                asc,
+            //            }),
             &ASTNode::SQLFunction { ref id, ref args } => {
                 //TODO: fix this hack
                 match id.to_lowercase().as_ref() {
@@ -308,7 +313,9 @@ impl SqlToRel {
                             .iter()
                             .map(|a| match a {
                                 // this feels hacky but translate COUNT(1)/COUNT(*) to COUNT(first_column)
-                                ASTNode::SQLValue(sqlparser::sqlast::Value::Long(1)) => Ok(Expr::Column(0)),
+                                ASTNode::SQLValue(sqlparser::sqlast::Value::Long(1)) => {
+                                    Ok(Expr::Column(0))
+                                }
                                 ASTNode::SQLWildcard => Ok(Expr::Column(0)),
                                 _ => self.sql_to_rex(a, schema),
                             })
@@ -362,7 +369,7 @@ pub fn convert_data_type(sql: &SQLType) -> DataType {
         SQLType::Float(_) | SQLType::Real => DataType::Float64,
         SQLType::Double => DataType::Float64,
         SQLType::Char(_) | SQLType::Varchar(_) => DataType::Utf8,
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 }
 
@@ -476,35 +483,35 @@ pub fn push_down_projection(
             schema: schema.clone(),
             projection: Some(projection.iter().cloned().collect()),
         }),
-//        LogicalPlan::CsvFile {
-//            ref filename,
-//            ref schema,
-//            ref has_header,
-//            ..
-//        } => Rc::new(LogicalPlan::CsvFile {
-//            filename: filename.to_string(),
-//            schema: schema.clone(),
-//            has_header: *has_header,
-//            projection: Some(projection.iter().cloned().collect()),
-//        }),
-//        LogicalPlan::NdJsonFile {
-//            ref filename,
-//            ref schema,
-//            ..
-//        } => Rc::new(LogicalPlan::NdJsonFile {
-//            filename: filename.to_string(),
-//            schema: schema.clone(),
-//            projection: Some(projection.iter().cloned().collect()),
-//        }),
-//        LogicalPlan::ParquetFile {
-//            ref filename,
-//            ref schema,
-//            ..
-//        } => Rc::new(LogicalPlan::ParquetFile {
-//            filename: filename.to_string(),
-//            schema: schema.clone(),
-//            projection: Some(projection.iter().cloned().collect()),
-//        }),
+        //        LogicalPlan::CsvFile {
+        //            ref filename,
+        //            ref schema,
+        //            ref has_header,
+        //            ..
+        //        } => Rc::new(LogicalPlan::CsvFile {
+        //            filename: filename.to_string(),
+        //            schema: schema.clone(),
+        //            has_header: *has_header,
+        //            projection: Some(projection.iter().cloned().collect()),
+        //        }),
+        //        LogicalPlan::NdJsonFile {
+        //            ref filename,
+        //            ref schema,
+        //            ..
+        //        } => Rc::new(LogicalPlan::NdJsonFile {
+        //            filename: filename.to_string(),
+        //            schema: schema.clone(),
+        //            projection: Some(projection.iter().cloned().collect()),
+        //        }),
+        //        LogicalPlan::ParquetFile {
+        //            ref filename,
+        //            ref schema,
+        //            ..
+        //        } => Rc::new(LogicalPlan::ParquetFile {
+        //            filename: filename.to_string(),
+        //            schema: schema.clone(),
+        //            projection: Some(projection.iter().cloned().collect()),
+        //        }),
         LogicalPlan::Projection { .. } => plan.clone(),
         LogicalPlan::Limit { .. } => plan.clone(),
         LogicalPlan::Sort { .. } => plan.clone(),
@@ -515,8 +522,8 @@ pub fn push_down_projection(
 #[cfg(test)]
 mod tests {
 
-    use sqlparser::sqlparser::*;
     use super::*;
+    use sqlparser::sqlparser::*;
 
     #[test]
     fn select_no_relation() {
@@ -725,7 +732,7 @@ mod tests {
     /// Create logical plan, write with formatter, compare to expected output
     fn quick_test(sql: &str, expected: &str) {
         use sqlparser::dialect::*;
-        let dialect = GenericSqlDialect{};
+        let dialect = GenericSqlDialect {};
         let planner = SqlToRel::new(Rc::new(MockSchemaProvider {}));
         let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
         let plan = planner.sql_to_rel(&ast).unwrap();
@@ -735,9 +742,9 @@ mod tests {
     struct MockSchemaProvider {}
 
     impl SchemaProvider for MockSchemaProvider {
-        fn get_table_meta(&self, name: &str) -> Option<Rc<Schema>> {
+        fn get_table_meta(&self, name: &str) -> Option<Arc<Schema>> {
             match name {
-                "person" => Some(Rc::new(Schema::new(vec![
+                "person" => Some(Arc::new(Schema::new(vec![
                     Field::new("id", DataType::UInt32, false),
                     Field::new("first_name", DataType::Utf8, false),
                     Field::new("last_name", DataType::Utf8, false),
@@ -749,9 +756,9 @@ mod tests {
             }
         }
 
-        fn get_function_meta(&self, name: &str) -> Option<Rc<FunctionMeta>> {
+        fn get_function_meta(&self, name: &str) -> Option<Arc<FunctionMeta>> {
             match name {
-                "sqrt" => Some(Rc::new(FunctionMeta::new(
+                "sqrt" => Some(Arc::new(FunctionMeta::new(
                     "sqrt".to_string(),
                     vec![Field::new("n", DataType::Float64, false)],
                     DataType::Float64,

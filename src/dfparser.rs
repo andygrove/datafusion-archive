@@ -32,7 +32,7 @@ macro_rules! parser_err {
 pub enum FileType {
     NdJson,
     Parquet,
-    CSV
+    CSV,
 }
 
 #[derive(Debug, Clone)]
@@ -50,25 +50,23 @@ pub enum DFASTNode {
         /// Header row?
         header_row: bool,
         /// Path to file
-        location: String
+        location: String,
     },
 }
 
-
 /// SQL Parser
 pub struct DFParser {
-    parser: Parser
+    parser: Parser,
 }
 
 impl DFParser {
-
     /// Parse the specified tokens
     pub fn new(sql: String) -> Result<Self, ParserError> {
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize()?;
         Ok(DFParser {
-            parser: Parser::new(tokens)
+            parser: Parser::new(tokens),
         })
     }
 
@@ -101,8 +99,10 @@ impl DFParser {
 
     /// Parse an expression prefix
     fn parse_prefix(&mut self) -> Result<DFASTNode, ParserError> {
-        if self.parser.parse_keywords(vec!["CREATE", "EXTERNAL", "TABLE"]) {
-
+        if self
+            .parser
+            .parse_keywords(vec!["CREATE", "EXTERNAL", "TABLE"])
+        {
             match self.parser.next_token() {
                 Some(Token::Identifier(id)) => {
                     // parse optional column list (schema)
@@ -111,13 +111,14 @@ impl DFParser {
                         loop {
                             if let Some(Token::Identifier(column_name)) = self.parser.next_token() {
                                 if let Ok(data_type) = self.parser.parse_data_type() {
-                                    let allow_null = if self.parser.parse_keywords(vec!["NOT", "NULL"]) {
-                                        false
-                                    } else if self.parser.parse_keyword("NULL") {
-                                        true
-                                    } else {
-                                        true
-                                    };
+                                    let allow_null =
+                                        if self.parser.parse_keywords(vec!["NOT", "NULL"]) {
+                                            false
+                                        } else if self.parser.parse_keyword("NULL") {
+                                            true
+                                        } else {
+                                            true
+                                        };
 
                                     match self.parser.peek_token() {
                                         Some(Token::Comma) => {
@@ -163,23 +164,24 @@ impl DFParser {
                     //println!("Parsed {} column defs", columns.len());
 
                     let mut headers = true;
-                    let file_type: FileType = if self.parser.parse_keywords(vec!["STORED", "AS", "CSV"]) {
-                        if self.parser.parse_keywords(vec!["WITH", "HEADER", "ROW"]) {
-                            headers = true;
-                        } else if self.parser.parse_keywords(vec!["WITHOUT", "HEADER", "ROW"]) {
-                            headers = false;
-                        }
-                        FileType::CSV
-                    } else if self.parser.parse_keywords(vec!["STORED", "AS", "NDJSON"]) {
-                        FileType::NdJson
-                    } else if self.parser.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
-                        FileType::Parquet
-                    } else {
-                        return parser_err!(format!(
-                            "Expected 'STORED AS' clause, found {:?}",
-                            self.parser.peek_token()
-                        ));
-                    };
+                    let file_type: FileType =
+                        if self.parser.parse_keywords(vec!["STORED", "AS", "CSV"]) {
+                            if self.parser.parse_keywords(vec!["WITH", "HEADER", "ROW"]) {
+                                headers = true;
+                            } else if self.parser.parse_keywords(vec!["WITHOUT", "HEADER", "ROW"]) {
+                                headers = false;
+                            }
+                            FileType::CSV
+                        } else if self.parser.parse_keywords(vec!["STORED", "AS", "NDJSON"]) {
+                            FileType::NdJson
+                        } else if self.parser.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
+                            FileType::Parquet
+                        } else {
+                            return parser_err!(format!(
+                                "Expected 'STORED AS' clause, found {:?}",
+                                self.parser.peek_token()
+                            ));
+                        };
 
                     let location: String = if self.parser.parse_keywords(vec!["LOCATION"]) {
                         self.parser.parse_literal_string()?
@@ -198,7 +200,7 @@ impl DFParser {
                 _ => parser_err!(format!(
                     "Unexpected token after CREATE EXTERNAL TABLE: {:?}",
                     self.parser.peek_token()
-                ))
+                )),
             }
         } else {
             Ok(DFASTNode::ANSI(self.parser.parse_prefix()?))
@@ -210,12 +212,10 @@ impl DFParser {
         _expr: DFASTNode,
         _precedence: u8,
     ) -> Result<Option<DFASTNode>, ParserError> {
-
-
-//        match expr {
-//            DFASTNode::ANSI(ansi) => {
-//                //DFASTNode::ANSI(self.parser.parse_infix(ansi, precedence)?)
-//            })
+        //        match expr {
+        //            DFASTNode::ANSI(ansi) => {
+        //                //DFASTNode::ANSI(self.parser.parse_infix(ansi, precedence)?)
+        //            })
 
         unimplemented!()
     }
