@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod context;
-pub mod datasource;
-pub mod error;
-pub mod expression;
-pub mod projection;
-pub mod relation;
-pub mod value;
+
+pub struct ExecutionContext {
+
+}

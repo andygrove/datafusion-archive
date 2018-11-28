@@ -46,45 +46,36 @@ impl ProjectRelation {
 impl Relation for ProjectRelation {
     fn next(&mut self) -> Result<Option<RecordBatch>> {
         //TODO: apply projection
-        self.input.borrow_mut().next()
+        match self.input.borrow_mut().next()? {
+            Some(batch) => {
+
+            let projected_columns: Result<Vec<ArrayRef>> = self.expr
+                .iter()
+                .map(|e| e.get_func()(&batch))
+                .collect();
+
+            let projected_batch: RecordBatch = RecordBatch::new(
+                Arc::new(Schema::empty()), projected_columns?);
+
+                Ok(Some(projected_batch))
+            },
+            None => Ok(None)
+        }
     }
 
     fn schema(&self) -> &Arc<Schema> {
         &self.schema
     }
 }
-//    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-//        let project_expr = &self.expr;
-//        let x = self.input.borrow();
-//
-//        let projection_iter = x.scan().map(move |r| match r {
-//            Ok(ref batch) => {
-//                let projected_columns: Result<Vec<ArrayRef>> = project_expr
-//                    .iter()
-//                    .map(|e| e.get_func()(batch.as_ref()))
-//                    .collect();
-//
-//                let projected_batch: Rc<RecordBatch> = Rc::new(RecordBatch::new(
-//                    Arc::new(Schema::empty()), projected_columns?));
-//
-//                Ok(projected_batch)
-//            }
-//            Err(_) => r,
-//        });
-//
-//        Box::new(projection_iter)
-//    }
-//
-//    fn schema<'a>(&'a self) -> &'a Schema {
-//        self.schema.as_ref()
-//    }
-//}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::context::ExecutionContext;
     use super::super::datasource::DataSource;
+    use super::super::super::logicalplan::Expr;
     use super::super::relation::DataSourceRelation;
+    use super::super::expression;
     use arrow::csv;
     use arrow::datatypes::{Schema, Field, DataType};
 
@@ -98,10 +89,15 @@ mod tests {
         let csv = Rc::new(RefCell::new(csv::Reader::new(file, schema.clone(), true, 1024, None)));
         let ds = csv as Rc<RefCell<DataSource>>;
         let relation = Rc::new(RefCell::new(DataSourceRelation::new(schema.clone(), ds)));
+        let context = Rc::new(ExecutionContext {} );
 
-        let mut projection = ProjectRelation::new(relation, vec![], schema);
+        let projection_expr = vec![
+            expression::compile_expr(context, &Expr::Column(0), schema.as_ref()).unwrap()
+        ];
+
+        let mut projection = ProjectRelation::new(relation, projection_expr, schema);
         let batch = projection.next().unwrap().unwrap();
-        assert_eq!(2, batch.num_columns());
+        assert_eq!(1, batch.num_columns());
     }
 
 }
