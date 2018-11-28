@@ -20,47 +20,47 @@ use std::rc::Rc;
 
 use arrow::datatypes::*;
 
-//#[derive(Serialize, Deserialize, Debug, Clone)]
-//pub enum FunctionType {
-//    Scalar,
-//    Aggregate,
-//}
-//
-//#[derive(Debug, Clone)]
-//pub struct FunctionMeta {
-//    name: String,
-//    args: Vec<Field>,
-//    return_type: DataType,
-//    function_type: FunctionType,
-//}
-//
-//impl FunctionMeta {
-//    pub fn new(
-//        name: String,
-//        args: Vec<Field>,
-//        return_type: DataType,
-//        function_type: FunctionType,
-//    ) -> Self {
-//        FunctionMeta {
-//            name,
-//            args,
-//            return_type,
-//            function_type,
-//        }
-//    }
-//    pub fn name(&self) -> &String {
-//        &self.name
-//    }
-//    pub fn args(&self) -> &Vec<Field> {
-//        &self.args
-//    }
-//    pub fn return_type(&self) -> &DataType {
-//        &self.return_type
-//    }
-//    pub fn function_type(&self) -> &FunctionType {
-//        &self.function_type
-//    }
-//}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum FunctionType {
+    Scalar,
+    Aggregate,
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionMeta {
+    name: String,
+    args: Vec<Field>,
+    return_type: DataType,
+    function_type: FunctionType,
+}
+
+impl FunctionMeta {
+    pub fn new(
+        name: String,
+        args: Vec<Field>,
+        return_type: DataType,
+        function_type: FunctionType,
+    ) -> Self {
+        FunctionMeta {
+            name,
+            args,
+            return_type,
+            function_type,
+        }
+    }
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+    pub fn args(&self) -> &Vec<Field> {
+        &self.args
+    }
+    pub fn return_type(&self) -> &DataType {
+        &self.return_type
+    }
+    pub fn function_type(&self) -> &FunctionType {
+        &self.function_type
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Operator {
