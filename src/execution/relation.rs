@@ -37,8 +37,9 @@ pub struct DataSourceRelation {
 }
 
 impl DataSourceRelation {
-    pub fn new(schema: Arc<Schema>, ds: Rc<RefCell<DataSource>>) -> Self {
-        Self { schema, ds }
+    pub fn new(ds: Rc<RefCell<DataSource>>) -> Self {
+        let schema = ds.borrow().schema().clone();
+        Self { ds, schema }
     }
 }
 

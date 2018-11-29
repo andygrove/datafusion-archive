@@ -25,7 +25,7 @@ use super::super::sqlplanner::{SchemaProvider, SqlToRel};
 use super::datasource::DataSource;
 use super::expression::*;
 use super::error::{ExecutionError, Result};
-use super::relation::Relation;
+use super::relation::{DataSourceRelation, Relation};
 use super::projection::ProjectRelation;
 
 pub struct ExecutionContext {
@@ -125,6 +125,17 @@ impl ExecutionContext {
                 ref projection,
                 ..
             } => {
+
+                match self.datasources.borrow().get(table_name) {
+                    Some(ds) => {
+                        //TODO: projection
+                        Ok(Rc::new(RefCell::new(DataSourceRelation::new(ds.clone()))))
+                    },
+                    _ => Err(ExecutionError::General(format!(
+                        "No table registered as '{}'",
+                        table_name
+                    )))
+                }
                 //println!("TableScan: {}", table_name);
 //                match self.tables.borrow().get(table_name) {
 //                    Some(df) => match projection {
@@ -143,7 +154,6 @@ impl ExecutionContext {
 //                        table_name
 //                    ))),
 //                }
-                unimplemented!()
             }
 
 //            LogicalPlan::CsvFile {
