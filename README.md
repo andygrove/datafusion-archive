@@ -24,7 +24,7 @@ The current task list:
 - [ ] Implement query execution: Selection
 - [ ] Implement query execution: Sort
 - [ ] Implement query execution: Aggregate
-- [ ] Implement query execution: Scalar Functions
+- [ ] Implement query execution: Scalar Functions / UDFs
 - [ ] Implement parallel query execution (multithreaded, single process)
 - [x] Generate query plan from SQL
 - [ ] Execute SQL against DataSource

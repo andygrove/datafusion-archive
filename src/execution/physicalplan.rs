@@ -12,11 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod context;
-pub mod datasource;
-pub mod error;
-pub mod expression;
-pub mod physicalplan;
-pub mod projection;
-pub mod relation;
-pub mod value;
+use std::rc::Rc;
+use super::super::logicalplan::LogicalPlan;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum PhysicalPlan {
+    /// Run a query and return the results to the client
+    Interactive {
+        plan: Rc<LogicalPlan>,
+    },
+    /// Execute a logical plan and write the output to a file
+    Write {
+        plan: Rc<LogicalPlan>,
+        filename: String,
+        kind: String,
+    },
+    Show {
+        plan: Rc<LogicalPlan>,
+        count: usize,
+    },
+}

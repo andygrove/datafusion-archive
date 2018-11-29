@@ -17,23 +17,23 @@ include = [
 name = "datafusion"
 path = "src/lib.rs"
 
+[[bin]]
+name = "console"
+path = "src/bin/console/main.rs"
+
 #[[bin]]
 #name = "worker"
 #path = "src/bin/worker/main.rs"
-#
-#[[bin]]
-#name = "console"
-#path = "src/bin/console/main.rs"
 
 [dependencies]
 #byteorder = "1"
 #bytes = "0.4"
-#clap = "2.31.2"
+clap = "2.31.2"
 #csv = "1.0.0"
 #fnv = "1.0.3"
 #datafusion-arrow = { path = "../datafusion-arrow" }
 datafusion-arrow = "0.12.1"
-#datafusion-rustyline = "2.0.0-alpha-20180628"
+datafusion-rustyline = "2.0.0-alpha-20180628"
 #json = "0.11.13"
 #lazy_static = "1.0"
 #parquet = "0.4.1"

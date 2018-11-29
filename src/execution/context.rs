@@ -40,6 +40,7 @@ impl ExecutionContext {
     }
 
     pub fn sql(&mut self, sql: &str) -> Result<Rc<RefCell<Relation>>> {
+
         let ast = DFParser::parse_sql(String::from(sql))?;
 
         match ast {
@@ -87,7 +88,7 @@ impl ExecutionContext {
                 let optimized_plan = plan; //push_down_projection(&plan, &HashSet::new());
                                            //println!("Optimized logical plan: {:?}", new_plan);
 
-                let relation = self.create_execution_plan(&optimized_plan)?;
+                let relation = self.execute(&optimized_plan)?;
 
                 Ok(relation)
 
@@ -102,15 +103,8 @@ impl ExecutionContext {
 
     fn create_schema_provider() {}
 
-    fn execute(&mut self, plan: Rc<LogicalPlan>) -> Result<Rc<Relation>> {
-        match plan.as_ref() {
-            LogicalPlan::Projection { .. } => unimplemented!(),
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Rc<RefCell<Relation>>> {
-        //println!("Logical plan: {:?}", plan);
+    pub fn execute(&mut self, plan: &LogicalPlan) -> Result<Rc<RefCell<Relation>>> {
+        println!("Logical plan: {:?}", plan);
 
         match *plan {
 //            LogicalPlan::EmptyRelation { .. } => Ok(Box::new(DataSourceRelation {
@@ -221,7 +215,7 @@ impl ExecutionContext {
                 ref input,
                 ..
             } => {
-                let input_rel = self.create_execution_plan(&input)?;
+                let input_rel = self.execute(input)?;
 
                 let input_schema = input_rel.as_ref().borrow().schema().clone();
 
@@ -307,6 +301,12 @@ impl ExecutionContext {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ExecutionResult {
+    Unit,
+    Count(usize),
+    Str(String),
+}
 
 pub fn expr_to_field(e: &Expr, input_schema: &Schema) -> Field {
     match e {
