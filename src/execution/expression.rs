@@ -107,7 +107,7 @@ pub fn compile_expr(
 
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(
-    ctx: &Rc<ExecutionContext>,
+    ctx: &ExecutionContext,
     expr: &Expr,
     input_schema: &Schema,
 ) -> Result<RuntimeExpr> {

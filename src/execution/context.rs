@@ -20,11 +20,13 @@ use std::sync::Arc;
 use arrow::datatypes::{DataType, Field, Schema};
 
 use super::super::dfparser::{DFASTNode, DFParser};
-use super::super::logicalplan::{FunctionMeta, LogicalPlan};
+use super::super::logicalplan::*;
 use super::super::sqlplanner::{SchemaProvider, SqlToRel};
 use super::datasource::DataSource;
-use super::error::Result;
+use super::expression::*;
+use super::error::{ExecutionError, Result};
 use super::relation::Relation;
+use super::projection::ProjectRelation;
 
 pub struct ExecutionContext {
     datasources: Rc<RefCell<HashMap<String, Rc<RefCell<DataSource>>>>>,
@@ -37,7 +39,7 @@ impl ExecutionContext {
         }
     }
 
-    pub fn sql(&mut self, sql: &str) -> Result<Rc<Relation>> {
+    pub fn sql(&mut self, sql: &str) -> Result<Rc<RefCell<Relation>>> {
         let ast = DFParser::parse_sql(String::from(sql))?;
 
         match ast {
@@ -85,10 +87,10 @@ impl ExecutionContext {
                 let optimized_plan = plan; //push_down_projection(&plan, &HashSet::new());
                                            //println!("Optimized logical plan: {:?}", new_plan);
 
-                // return the DataFrame
-                //Ok(Rc::new(DF::new(self.clone(), new_plan)))
+                let relation = self.create_execution_plan(&optimized_plan)?;
 
-                self.execute(optimized_plan)
+                Ok(relation)
+
             }
             _ => unimplemented!(),
         }
@@ -106,7 +108,234 @@ impl ExecutionContext {
             _ => unimplemented!(),
         }
     }
+
+    pub fn create_execution_plan(&self, plan: &LogicalPlan) -> Result<Rc<RefCell<Relation>>> {
+        //println!("Logical plan: {:?}", plan);
+
+        match *plan {
+//            LogicalPlan::EmptyRelation { .. } => Ok(Box::new(DataSourceRelation {
+//                schema: Schema::new(vec![]),
+//                ds: Rc::new(RefCell::new(EmptyRelation::new())),
+//            })),
+//
+//            LogicalPlan::Sort { .. } => unimplemented!(),
+
+            LogicalPlan::TableScan {
+                ref table_name,
+                ref projection,
+                ..
+            } => {
+                //println!("TableScan: {}", table_name);
+//                match self.tables.borrow().get(table_name) {
+//                    Some(df) => match projection {
+//                        Some(p) => {
+////                            let mut h: HashSet<usize> = HashSet::new();
+////                            p.iter().for_each(|i| {
+////                                h.insert(*i);
+////                            });
+////                            self.create_execution_plan(&push_down_projection(df.plan(), &h))
+//                            unimplemented!()
+//                        }
+//                        None => self.create_execution_plan(df.plan()),
+//                    },
+//                    _ => Err(ExecutionError::General(format!(
+//                        "No table registered as '{}'",
+//                        table_name
+//                    ))),
+//                }
+                unimplemented!()
+            }
+
+//            LogicalPlan::CsvFile {
+//                ref filename,
+//                ref schema,
+//                ref has_header,
+//                ref projection,
+//            } => {
+//                let file = File::open(filename)?;
+//                let ds = Rc::new(RefCell::new(CsvFile::open(
+//                    file,
+//                    schema.clone(),
+//                    *has_header,
+//                    projection.clone(),
+//                )?)) as Rc<RefCell<DataSource>>;
+//                Ok(Box::new(DataSourceRelation {
+//                    schema: schema.as_ref().clone(),
+//                    ds,
+//                }))
+//            }
+//
+//            LogicalPlan::NdJsonFile {
+//                ref filename,
+//                ref schema,
+//                ref projection,
+//            } => {
+//                let file = File::open(filename)?;
+//                let ds = Rc::new(RefCell::new(NdJsonFile::open(
+//                    file,
+//                    schema.clone(),
+//                    projection.clone(),
+//                )?)) as Rc<RefCell<DataSource>>;
+//                Ok(Box::new(DataSourceRelation {
+//                    schema: schema.as_ref().clone(),
+//                    ds,
+//                }))
+//            }
+//
+//            LogicalPlan::ParquetFile {
+//                ref filename,
+//                ref schema,
+//                ref projection,
+//            } => {
+//                let file = File::open(filename)?;
+//                let ds = Rc::new(RefCell::new(ParquetFile::open(file, projection.clone())?))
+//                    as Rc<RefCell<DataSource>>;
+//                Ok(Box::new(DataSourceRelation {
+//                    schema: schema.as_ref().clone(),
+//                    ds,
+//                }))
+//            }
+//
+//            LogicalPlan::Selection {
+//                ref expr,
+//                ref input,
+//            } => {
+//                let input_rel = self.create_execution_plan(input)?;
+//                let runtime_expr = compile_scalar_expr(&self, expr, input_rel.schema())?;
+//                let rel = FilterRelation::new(input_rel, runtime_expr.get_func().clone());
+//                Ok(Box::new(rel))
+//            }
+
+            LogicalPlan::Projection {
+                ref expr,
+                ref input,
+                ..
+            } => {
+                let input_rel = self.create_execution_plan(&input)?;
+
+                let input_schema = input_rel.as_ref().borrow().schema().clone();
+
+                let project_columns: Vec<Field> = exprlist_to_fields(&expr, &input_schema);
+
+                let project_schema = Arc::new(Schema::new(project_columns));
+
+                let compiled_expr: Result<Vec<RuntimeExpr>> = expr
+                    .iter()
+                    .map(|e| compile_scalar_expr(&self, e, &input_schema))
+                    .collect();
+
+                let rel = ProjectRelation::new(input_rel, compiled_expr?, project_schema);
+
+                Ok(Rc::new(RefCell::new(rel)))
+            }
+
+//            LogicalPlan::Aggregate {
+//                ref input,
+//                ref group_expr,
+//                ref aggr_expr,
+//                ..
+//            } => {
+//                let input_rel = self.create_execution_plan(&input)?;
+//
+//                let compiled_group_expr_result: Result<Vec<RuntimeExpr>> = group_expr
+//                    .iter()
+//                    .map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
+//                    .collect();
+//                let compiled_group_expr = compiled_group_expr_result?;
+//
+//                let compiled_aggr_expr_result: Result<Vec<RuntimeExpr>> = aggr_expr
+//                    .iter()
+//                    .map(|e| compile_expr(&self, e, input.schema()))
+//                    .collect();
+//                let compiled_aggr_expr = compiled_aggr_expr_result?;
+//
+//                let rel = AggregateRelation::new(
+//                    Rc::new(Schema::empty()), //(expr_to_field(&compiled_group_expr, &input_schema))),
+//                    input_rel,
+//                    compiled_group_expr,
+//                    compiled_aggr_expr,
+//                );
+//
+//                Ok(Box::new(rel))
+//            }
+            //LogicalPlan::Sort { .. /*ref expr, ref input, ref schema*/ } => {
+
+            //                let input_rel = self.create_execution_plan(data_dir, input)?;
+            //
+            //                let compiled_expr : Result<Vec<CompiledExpr>> = expr.iter()
+            //                    .map(|e| compile_expr(&self,e))
+            //                    .collect();
+            //
+            //                let sort_asc : Vec<bool> = expr.iter()
+            //                    .map(|e| match e {
+            //                        &Expr::Sort { asc, .. } => asc,
+            //                        _ => panic!()
+            //                    })
+            //                    .collect();
+            //
+            //                let rel = SortRelation {
+            //                    input: input_rel,
+            //                    sort_expr: compiled_expr?,
+            //                    sort_asc: sort_asc,
+            //                    schema: schema.clone()
+            //                };
+            //                Ok(Box::new(rel))
+            //            },
+            //}
+//            LogicalPlan::Limit {
+//                limit,
+//                ref input,
+//                ref schema,
+//                ..
+//            } => {
+//                let input_rel = self.create_execution_plan(input)?;
+//                let rel = LimitRelation::new(schema.clone(), input_rel, limit);
+//                Ok(Box::new(rel))
+//            }
+            _ => unimplemented!()
+        }
+    }
 }
+
+
+pub fn expr_to_field(e: &Expr, input_schema: &Schema) -> Field {
+    match e {
+        Expr::Column(i) => input_schema.fields()[*i].clone(),
+        Expr::Literal(ref lit) => Field::new("lit", lit.get_datatype(), true),
+        Expr::ScalarFunction {
+            ref name,
+            ref return_type,
+            ..
+        } => Field::new(&name, return_type.clone(), true),
+        Expr::AggregateFunction {
+            ref name,
+            ref return_type,
+            ..
+        } => Field::new(&name, return_type.clone(), true),
+        Expr::Cast { ref data_type, .. } => Field::new("cast", data_type.clone(), true),
+        Expr::BinaryExpr {
+            ref left,
+            ref right,
+            ..
+        } => {
+            let left_type = left.get_type(input_schema);
+            let right_type = right.get_type(input_schema);
+            Field::new(
+                "binary_expr",
+                get_supertype(&left_type, &right_type).unwrap(),
+                true,
+            )
+        }
+        _ => unimplemented!("Cannot determine schema type for expression {:?}", e),
+    }
+}
+
+pub fn exprlist_to_fields(expr: &Vec<Expr>, input_schema: &Schema) -> Vec<Field> {
+    expr.iter()
+        .map(|e| expr_to_field(e, input_schema))
+        .collect()
+}
+
 
 struct ExecutionContextSchemaProvider {
     datasources: Rc<RefCell<HashMap<String, Rc<RefCell<DataSource>>>>>,
