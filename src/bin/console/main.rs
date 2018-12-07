@@ -18,7 +18,6 @@ extern crate datafusion;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
-use std::rc::Rc;
 use std::str;
 use std::time::Instant;
 
@@ -29,7 +28,6 @@ use clap::{App, Arg};
 use datafusion::dfparser::DFASTNode::CreateExternalTable;
 use datafusion::dfparser::DFParser;
 use datafusion::execution::context::ExecutionContext;
-use datafusion::execution::physicalplan::PhysicalPlan;
 mod linereader;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -44,7 +42,7 @@ fn setup_console(cmdline: clap::ArgMatches) {
         Some(filename) => match File::open(filename) {
             Ok(f) => {
                 let mut cmd_buffer = String::new();
-                let mut reader = BufReader::new(&f);
+                let reader = BufReader::new(&f);
                 for line in reader.lines() {
                     match line {
                         Ok(cmd) => {

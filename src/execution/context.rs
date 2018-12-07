@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::datatypes::{Field, Schema};
 
 use super::super::dfparser::{DFASTNode, DFParser};
 use super::super::logicalplan::*;
@@ -99,8 +99,6 @@ impl ExecutionContext {
         self.datasources.borrow_mut().insert(name.to_string(), ds);
     }
 
-    fn create_schema_provider() {}
-
     pub fn execute(&mut self, plan: &LogicalPlan) -> Result<Rc<RefCell<Relation>>> {
         println!("Logical plan: {:?}", plan);
 
@@ -113,7 +111,6 @@ impl ExecutionContext {
             //            LogicalPlan::Sort { .. } => unimplemented!(),
             LogicalPlan::TableScan {
                 ref table_name,
-                ref projection,
                 ..
             } => {
                 match self.datasources.borrow().get(table_name) {
@@ -352,7 +349,7 @@ impl SchemaProvider for ExecutionContextSchemaProvider {
         }
     }
 
-    fn get_function_meta(&self, name: &str) -> Option<Arc<FunctionMeta>> {
+    fn get_function_meta(&self, _name: &str) -> Option<Arc<FunctionMeta>> {
         unimplemented!()
     }
 }

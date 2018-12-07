@@ -18,10 +18,9 @@ use arrow::array::ArrayRef;
 use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
 
-use super::super::logicalplan::{Expr, Operator};
+use super::super::logicalplan::Expr;
 use super::context::ExecutionContext;
 use super::error::{ExecutionError, Result};
-use super::value::ScalarValue;
 
 /// Compiled Expression (basically just a closure to evaluate the expression at runtime)
 pub type CompiledExpr = Rc<Fn(&RecordBatch) -> Result<ArrayRef>>;
@@ -107,12 +106,12 @@ pub fn compile_expr(
 
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(
-    ctx: &ExecutionContext,
+    _ctx: &ExecutionContext,
     expr: &Expr,
     input_schema: &Schema,
 ) -> Result<RuntimeExpr> {
     match expr {
-        &Expr::Literal(ref lit) => {
+        &Expr::Literal(ref _lit) => {
             unimplemented!()
             //            let literal_value = lit.clone();
             //            Ok(RuntimeExpr::Compiled {
@@ -130,9 +129,9 @@ pub fn compile_scalar_expr(
         }),
         &Expr::Cast {
             ref expr,
-            ref data_type,
+            ..
         } => match expr.as_ref() {
-            &Expr::Column(index) => {
+            &Expr::Column(_index) => {
                 unimplemented!()
                 //                let compiled_cast_expr = compile_cast_column(data_type.clone())?;
                 //                Ok(RuntimeExpr::Compiled {
@@ -142,7 +141,7 @@ pub fn compile_scalar_expr(
                 //                    t: data_type.clone(),
                 //                })
             }
-            &Expr::Literal(ref lit) => {
+            &Expr::Literal(ref _lit) => {
                 unimplemented!()
                 //                let compiled_cast_expr = compile_cast_scalar(lit, data_type)?;
                 //                Ok(RuntimeExpr::Compiled {

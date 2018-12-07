@@ -24,7 +24,7 @@ use arrow::csv;
 use arrow::datatypes::*;
 
 use datafusion::execution::context::ExecutionContext;
-use datafusion::execution::datasource::{CsvDataSource, DataSource};
+use datafusion::execution::datasource::CsvDataSource;
 
 //use datafusion::functions::geospatial::st_astext::*;
 //use datafusion::functions::geospatial::st_point::*;

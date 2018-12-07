@@ -15,7 +15,6 @@
 //! Execution of a projection
 
 use std::cell::RefCell;
-use std::fs::File;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -67,9 +66,10 @@ impl Relation for ProjectRelation {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
     use super::super::super::logicalplan::Expr;
     use super::super::context::ExecutionContext;
-    use super::super::datasource::{CsvDataSource, DataSource};
+    use super::super::datasource::CsvDataSource;
     use super::super::expression;
     use super::super::relation::DataSourceRelation;
     use super::*;

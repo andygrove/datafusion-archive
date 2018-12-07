@@ -16,7 +16,7 @@ use std::fmt;
 use std::ops::Add;
 use std::rc::Rc;
 
-use arrow::array::PrimitiveArray;
+use arrow::array::{Int32Array, Int64Array};
 use arrow::datatypes::DataType;
 
 use super::error::{ExecutionError, Result};
@@ -28,8 +28,8 @@ pub enum Value {
 }
 
 pub enum ArrowValue {
-    Int32Array(PrimitiveArray<i32>),
-    Int64Array(PrimitiveArray<i64>),
+    Int32Array(Int32Array),
+    Int64Array(Int64Array),
     //TODO add others
 }
 

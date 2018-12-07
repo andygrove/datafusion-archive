@@ -14,7 +14,6 @@
 
 //! Logical query plan
 
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -22,7 +21,7 @@ use arrow::csv;
 use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;
 
-use super::error::{ExecutionError, Result};
+use super::error::Result;
 
 pub trait DataSource {
     fn schema(&self) -> &Arc<Schema>;
@@ -46,11 +45,7 @@ impl DataSource for CsvDataSource {
     }
 
     fn next(&mut self) -> Result<Option<RecordBatch>> {
-        match self.reader.next() {
-            None => Ok(None),
-            Some(Ok(r)) => Ok(Some(r)),
-            Some(Err(e)) => Err(ExecutionError::from(e)),
-        }
+        Ok(self.reader.next()?)
     }
 }
 
