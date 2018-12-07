@@ -26,8 +26,8 @@ use clap::{App, Arg};
 //use datafusion::functions::geospatial::st_astext::*;
 //use datafusion::functions::geospatial::st_point::*;
 //use datafusion::functions::math::*;
-use datafusion::dfparser::DFParser;
 use datafusion::dfparser::DFASTNode::CreateExternalTable;
+use datafusion::dfparser::DFParser;
 use datafusion::execution::context::ExecutionContext;
 use datafusion::execution::physicalplan::PhysicalPlan;
 mod linereader;
@@ -91,25 +91,25 @@ fn main() {
     //    println!("");
 
     let cmdline = App::new("DataFusion Console")
-            .version(VERSION)
-//            .arg(
-//                Arg::with_name("ETCD")
-//                    .help("etcd endpoints")
-//                    .short("e")
-//                    .long("etcd")
-//                    .value_name("URL")
-//                    .required(true)
-//                    .takes_value(true),
-//            )
-            .arg(
-                Arg::with_name("SCRIPT")
-                    .help("SQL script to run")
-                    .short("s")
-                    .long("script")
-                    .required(false)
-                    .takes_value(true),
-            )
-            .get_matches();
+        .version(VERSION)
+        //            .arg(
+        //                Arg::with_name("ETCD")
+        //                    .help("etcd endpoints")
+        //                    .short("e")
+        //                    .long("etcd")
+        //                    .value_name("URL")
+        //                    .required(true)
+        //                    .takes_value(true),
+        //            )
+        .arg(
+            Arg::with_name("SCRIPT")
+                .help("SQL script to run")
+                .short("s")
+                .long("script")
+                .required(false)
+                .takes_value(true),
+        )
+        .get_matches();
     setup_console(cmdline);
 }
 
@@ -122,9 +122,9 @@ impl Console {
     /// Create a new instance of the console
     fn new() -> Self {
         let ctx = ExecutionContext::new();
-//        ctx.register_scalar_function(Rc::new(STPointFunc {}));
-//        ctx.register_scalar_function(Rc::new(STAsText {}));
-//        ctx.register_scalar_function(Rc::new(SqrtFunction {}));
+        //        ctx.register_scalar_function(Rc::new(STPointFunc {}));
+        //        ctx.register_scalar_function(Rc::new(STAsText {}));
+        //        ctx.register_scalar_function(Rc::new(SqrtFunction {}));
         Console { ctx }
     }
 
@@ -145,12 +145,12 @@ impl Console {
                 _ => match self.ctx.sql(sql) {
                     Ok(result) => {
                         let elapsed = timer.elapsed();
-                        let elapsed_seconds = elapsed.as_secs() as f64
-                            + elapsed.subsec_nanos() as f64 / 1000000000.0;
+                        let elapsed_seconds =
+                            elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1000000000.0;
                     }
                     Err(e) => println!("Error: {:?}", e),
-                }
-            }
+                },
+            },
             Err(e) => println!("Error: {:?}", e),
         }
     }

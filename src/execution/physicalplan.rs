@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
 use super::super::logicalplan::LogicalPlan;
+use std::rc::Rc;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum PhysicalPlan {

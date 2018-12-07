@@ -85,9 +85,9 @@ mod tests {
         let file = File::open("test/data/people.csv").unwrap();
         let arrow_csv_reader = csv::Reader::new(file, schema.clone(), true, 1024, None);
         let ds = CsvDataSource::new(schema.clone(), arrow_csv_reader);
-        let relation = Rc::new(RefCell::new(DataSourceRelation::new(
-            Rc::new(RefCell::new(ds)),
-        )));
+        let relation = Rc::new(RefCell::new(DataSourceRelation::new(Rc::new(
+            RefCell::new(ds),
+        ))));
         let context = Rc::new(ExecutionContext::new());
 
         let projection_expr =

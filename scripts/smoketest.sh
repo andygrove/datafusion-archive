@@ -18,9 +18,9 @@ cargo test
 
 #TODO: check output from examples
 cargo run --example csv_sql
-cargo run --example csv_dataframe
-cargo run --example parquet_sql
-cargo run --example parquet_dataframe
+#cargo run --example csv_dataframe
+#cargo run --example parquet_sql
+#cargo run --example parquet_dataframe
 
 # run benchmarks
 #cargo bench
@@ -73,6 +73,9 @@ docker run \
  --script /test/data/smoketest.sql \
  > $output_file
 
+echo "###### Smoketest output"
+
+cat $output_file
 
 echo "###### Verifying smoke test results"
 

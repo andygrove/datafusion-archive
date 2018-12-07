@@ -60,11 +60,14 @@ fn main() {
     let mut ref_mut = results.borrow_mut();
 
     match ref_mut.next().unwrap() {
-        Some(batch) => println!("First batch has {} rows and {} columns", batch.num_rows(), batch.num_columns()),
-        _ => println!("No results")
+        Some(batch) => println!(
+            "First batch has {} rows and {} columns",
+            batch.num_rows(),
+            batch.num_columns()
+        ),
+        _ => println!("No results"),
     }
     //
     //    // show the first 10 rows of output
     //    df1.show(10)
 }
-
