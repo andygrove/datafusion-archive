@@ -143,9 +143,9 @@ impl Console {
                     ()
                 }
                 _ => match self.ctx.sql(sql) {
-                    Ok(result) => {
+                    Ok(_result) => {
                         let elapsed = timer.elapsed();
-                        let elapsed_seconds =
+                        let _elapsed_seconds =
                             elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1000000000.0;
                     }
                     Err(e) => println!("Error: {:?}", e),
