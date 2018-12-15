@@ -55,7 +55,7 @@ impl<'a> LineReader<'a> {
 
             match line {
                 Ok(i) => {
-                    let j = i.as_str().trim_right();
+                    let j = i.as_str().trim_end();
                     result.push_str(j);
 
                     match j {
