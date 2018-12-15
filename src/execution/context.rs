@@ -109,10 +109,7 @@ impl ExecutionContext {
             //            })),
             //
             //            LogicalPlan::Sort { .. } => unimplemented!(),
-            LogicalPlan::TableScan {
-                ref table_name,
-                ..
-            } => {
+            LogicalPlan::TableScan { ref table_name, .. } => {
                 match self.datasources.borrow().get(table_name) {
                     Some(ds) => {
                         //TODO: projection

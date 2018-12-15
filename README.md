@@ -24,12 +24,14 @@ The current task list:
 - [ ] Implement query execution: Selection
 - [ ] Implement query execution: Sort
 - [ ] Implement query execution: Aggregate
-- [ ] Implement query execution: Scalar Functions / UDFs
+- [ ] Implement query execution: Scalar UDFs
+- [ ] Implement query execution: Array UDFs
 - [ ] Implement parallel query execution (multithreaded, single process)
 - [x] Generate query plan from SQL
-- [ ] Execute SQL against DataSource
+- [x] Execute SQL against DataSource
 - [ ] Implement worker node that can receive a query plan, execute the query, and return a result in Arrow IPC format
-- [ ] Implement distributed query execution using Kubernetes
+- [ ] Kubernetes support for spinning up worker nodes
+- [ ] Implement distributed query execution
 
 # Prerequisites
 

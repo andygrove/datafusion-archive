@@ -66,7 +66,6 @@ impl Relation for ProjectRelation {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
     use super::super::super::logicalplan::Expr;
     use super::super::context::ExecutionContext;
     use super::super::datasource::CsvDataSource;
@@ -75,6 +74,7 @@ mod tests {
     use super::*;
     use arrow::csv;
     use arrow::datatypes::{DataType, Field, Schema};
+    use std::fs::File;
 
     #[test]
     fn project_all_columns() {

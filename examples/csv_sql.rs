@@ -20,8 +20,9 @@ use std::sync::Arc;
 extern crate arrow;
 extern crate datafusion;
 
+use arrow::array::{BinaryArray, Float64Array};
 use arrow::csv;
-use arrow::datatypes::*;
+use arrow::datatypes::{DataType, Field, Schema};
 
 use datafusion::execution::context::ExecutionContext;
 use datafusion::execution::datasource::CsvDataSource;
@@ -52,7 +53,7 @@ fn main() {
     ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)));
 
     // define the SQL statement
-    let sql = "SELECT lat, lng FROM cities";
+    let sql = "SELECT city, lat, lng, lat + lng FROM cities";
     //    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM cities WHERE lat < 53.0";
 
     // create a data frame
@@ -60,13 +61,49 @@ fn main() {
     let mut ref_mut = results.borrow_mut();
 
     match ref_mut.next().unwrap() {
-        Some(batch) => println!(
-            "First batch has {} rows and {} columns",
-            batch.num_rows(),
-            batch.num_columns()
-        ),
+        Some(batch) => {
+            println!(
+                "First batch has {} rows and {} columns",
+                batch.num_rows(),
+                batch.num_columns()
+            );
+
+            let city = batch
+                .column(0)
+                .as_any()
+                .downcast_ref::<BinaryArray>()
+                .unwrap();
+            let lat = batch
+                .column(1)
+                .as_any()
+                .downcast_ref::<Float64Array>()
+                .unwrap();
+            let lng = batch
+                .column(2)
+                .as_any()
+                .downcast_ref::<Float64Array>()
+                .unwrap();
+            let combined = batch
+                .column(3)
+                .as_any()
+                .downcast_ref::<Float64Array>()
+                .unwrap();
+
+            for i in 0..batch.num_rows() {
+                let city_name: String = String::from_utf8(city.get_value(i).to_vec()).unwrap();
+
+                println!(
+                    "City: {}, Latitude: {}, Longitude: {}, Combined: {}",
+                    city_name,
+                    lat.value(i),
+                    lng.value(i),
+                    combined.value(i),
+                );
+            }
+        }
         _ => println!("No results"),
     }
+
     //
     //    // show the first 10 rows of output
     //    df1.show(10)
