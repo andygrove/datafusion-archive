@@ -26,6 +26,7 @@ use super::datasource::DataSource;
 use super::error::{ExecutionError, Result};
 use super::expression::*;
 use super::projection::ProjectRelation;
+use super::filter::FilterRelation;
 use super::relation::{DataSourceRelation, Relation};
 
 pub struct ExecutionContext {
@@ -190,15 +191,16 @@ impl ExecutionContext {
             //                }))
             //            }
             //
-            //            LogicalPlan::Selection {
-            //                ref expr,
-            //                ref input,
-            //            } => {
-            //                let input_rel = self.create_execution_plan(input)?;
-            //                let runtime_expr = compile_scalar_expr(&self, expr, input_rel.schema())?;
-            //                let rel = FilterRelation::new(input_rel, runtime_expr.get_func().clone());
-            //                Ok(Box::new(rel))
-            //            }
+            LogicalPlan::Selection {
+                ref expr,
+                ref input,
+            } => {
+                let input_rel = self.execute(input)?;
+                let input_schema = input_rel.as_ref().borrow().schema().clone();
+                let runtime_expr = compile_scalar_expr(&self, expr, &input_schema)?;
+                let rel = FilterRelation::new(input_rel, runtime_expr /*.get_func().clone()*/, input_schema);
+                Ok(Rc::new(RefCell::new(rel)))
+            }
             LogicalPlan::Projection {
                 ref expr,
                 ref input,

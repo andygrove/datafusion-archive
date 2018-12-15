@@ -53,7 +53,7 @@ fn main() {
     ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)));
 
     // define the SQL statement
-    let sql = "SELECT city, lat, lng, lat + lng FROM cities";
+    let sql = "SELECT city, lat, lng, lat + lng FROM cities WHERE lat < lng";
     //    let sql = "SELECT ST_AsText(ST_Point(lat, lng)) FROM cities WHERE lat < 53.0";
 
     // create a data frame
