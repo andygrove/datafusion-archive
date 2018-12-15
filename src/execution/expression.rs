@@ -207,6 +207,20 @@ macro_rules! comparison_ops {
     }};
 }
 
+macro_rules! boolean_ops {
+    ($LEFT:expr, $RIGHT:expr, $BATCH:expr, $OP:ident) => {{
+        let left_values = $LEFT.get_func()($BATCH)?;
+        let right_values = $RIGHT.get_func()($BATCH)?;
+        Ok(Arc::new(array_ops::$OP(
+            left_values.as_any().downcast_ref::<BooleanArray>().unwrap(),
+            right_values
+                .as_any()
+                .downcast_ref::<BooleanArray>()
+                .unwrap(),
+        )?))
+    }};
+}
+
 macro_rules! literal_array {
     ($VALUE:expr, $ARRAY_TYPE:ident, $TY:ident) => {{
         let nn = *$VALUE;
@@ -352,22 +366,20 @@ pub fn compile_scalar_expr(
                     }),
                     t: DataType::Boolean,
                 }),
-                //                    &Operator::And => Ok(RuntimeExpr::Compiled {
-                //                        f: Rc::new(move |batch: &RecordBatch| {
-                //                            let left_values = left_expr.get_func()(batch)?;
-                //                            let right_values = right_expr.get_func()(batch)?;
-                //                            left_values.and(&right_values)
-                //                        }),
-                //                        t: DataType::Boolean,
-                //                    }),
-                //                    &Operator::Or => Ok(RuntimeExpr::Compiled {
-                //                        f: Rc::new(move |batch: &RecordBatch| {
-                //                            let left_values = left_expr.get_func()(batch)?;
-                //                            let right_values = right_expr.get_func()(batch)?;
-                //                            left_values.or(&right_values)
-                //                        }),
-                //                        t: DataType::Boolean,
-                //                    }),
+                &Operator::And => Ok(RuntimeExpr::Compiled {
+                    name,
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        boolean_ops!(left_expr, right_expr, batch, and)
+                    }),
+                    t: DataType::Boolean,
+                }),
+                &Operator::Or => Ok(RuntimeExpr::Compiled {
+                    name,
+                    f: Rc::new(move |batch: &RecordBatch| {
+                        boolean_ops!(left_expr, right_expr, batch, or)
+                    }),
+                    t: DataType::Boolean,
+                }),
                 &Operator::Plus => Ok(RuntimeExpr::Compiled {
                     name,
                     f: Rc::new(move |batch: &RecordBatch| {
