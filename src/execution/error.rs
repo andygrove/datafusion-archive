@@ -29,8 +29,9 @@ pub enum ExecutionError {
     ParserError(ParserError),
     General(String),
     InvalidColumn(String),
-    NotImplemented,
+    NotImplemented(&'static str),
     ArrowError(ArrowError),
+    ExecutionError(String),
 }
 
 impl From<Error> for ExecutionError {

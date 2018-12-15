@@ -17,10 +17,11 @@ use std::sync::Arc;
 
 use arrow::array::*;
 use arrow::array_ops;
+use arrow::builder::ArrayBuilder;
 use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
 
-use super::super::logicalplan::{Expr, Operator};
+use super::super::logicalplan::{Expr, Operator, ScalarValue};
 use super::context::ExecutionContext;
 use super::error::{ExecutionError, Result};
 
@@ -149,7 +150,7 @@ macro_rules! math_ops {
             (DataType::Float64, DataType::Float64) => {
                 binary_op!(left_values, right_values, $OP, Float64Array)
             }
-            _ => Err(ExecutionError::NotImplemented),
+            _ => Err(ExecutionError::ExecutionError(format!("math_ops"))),
         }
     }};
 }
@@ -190,8 +191,26 @@ macro_rules! comparison_ops {
                 binary_op!(left_values, right_values, $OP, Float64Array)
             }
             //TODO other types
-            _ => Err(ExecutionError::NotImplemented),
+            _ => Err(ExecutionError::ExecutionError(format!("comparison_ops"))),
         }
+    }};
+}
+
+macro_rules! literal_array {
+    ($VALUE:expr, $ARRAY_TYPE:ident, $TY:ident) => {{
+        let nn = *$VALUE;
+        Ok(RuntimeExpr::Compiled {
+            f: Rc::new(move |batch: &RecordBatch| {
+                let capacity = batch.num_rows();
+                let mut builder = $ARRAY_TYPE::builder(capacity);
+                for _ in 0..capacity {
+                    builder.push(nn)?;
+                }
+                let array = builder.finish();
+                Ok(Arc::new(array) as ArrayRef)
+            }),
+            t: DataType::$TY,
+        })
     }};
 }
 
@@ -202,25 +221,29 @@ pub fn compile_scalar_expr(
     input_schema: &Schema,
 ) -> Result<RuntimeExpr> {
     match expr {
-        &Expr::Literal(ref _lit) => {
-            Err(ExecutionError::NotImplemented)
-            //            let literal_value = lit.clone();
-            //            Ok(RuntimeExpr::Compiled {
-            //                f: Rc::new(move |_| {
-            //                    // literal values are a bit special - we don't repeat them in a vector
-            //                    // because it would be redundant, so we have a single value in a vector instead
-            //                    Ok(Value::Scalar(Rc::new(literal_value.clone())))
-            //                }),
-            //                t: DataType::Float64, //TODO
-            //            })
-        }
+        &Expr::Literal(ref value) => match value {
+            ScalarValue::Int8(n) => literal_array!(n, Int8Array, Int8),
+            ScalarValue::Int16(n) => literal_array!(n, Int16Array, Int16),
+            ScalarValue::Int32(n) => literal_array!(n, Int32Array, Int32),
+            ScalarValue::Int64(n) => literal_array!(n, Int64Array, Int64),
+            ScalarValue::UInt8(n) => literal_array!(n, UInt8Array, UInt8),
+            ScalarValue::UInt16(n) => literal_array!(n, UInt16Array, UInt16),
+            ScalarValue::UInt32(n) => literal_array!(n, UInt32Array, UInt32),
+            ScalarValue::UInt64(n) => literal_array!(n, UInt64Array, UInt64),
+            ScalarValue::Float32(n) => literal_array!(n, Float32Array, Float32),
+            ScalarValue::Float64(n) => literal_array!(n, Float64Array, Float64),
+            other => Err(ExecutionError::ExecutionError(format!(
+                "No support for literal type {:?}",
+                other
+            ))),
+        },
         &Expr::Column(index) => Ok(RuntimeExpr::Compiled {
             f: Rc::new(move |batch: &RecordBatch| Ok((*batch.column(index)).clone())),
             t: input_schema.field(index).data_type().clone(),
         }),
         &Expr::Cast { ref expr, .. } => match expr.as_ref() {
             &Expr::Column(_index) => {
-                Err(ExecutionError::NotImplemented)
+                Err(ExecutionError::ExecutionError(format!("column reference")))
                 //                let compiled_cast_expr = compile_cast_column(data_type.clone())?;
                 //                Ok(RuntimeExpr::Compiled {
                 //                    f: Rc::new(move |batch: &RecordBatch| {
@@ -230,7 +253,7 @@ pub fn compile_scalar_expr(
                 //                })
             }
             &Expr::Literal(ref _lit) => {
-                Err(ExecutionError::NotImplemented)
+                Err(ExecutionError::NotImplemented("literal"))
                 //                let compiled_cast_expr = compile_cast_scalar(lit, data_type)?;
                 //                Ok(RuntimeExpr::Compiled {
                 //                    f: Rc::new(move |_: &RecordBatch| {
@@ -349,9 +372,15 @@ pub fn compile_scalar_expr(
                     }),
                     t: op_type,
                 }),
-                _ => Err(ExecutionError::NotImplemented),
+                other => Err(ExecutionError::ExecutionError(format!(
+                    "operator: {:?}",
+                    other
+                ))),
             }
         }
-        _ => Err(ExecutionError::NotImplemented),
+        other => Err(ExecutionError::ExecutionError(format!(
+            "expression {:?}",
+            other
+        ))),
     }
 }

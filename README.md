@@ -21,7 +21,7 @@ The current task list:
 - [x] Implement data source for CSV
 - [ ] Implement data source for Parquet
 - [x] Implement query execution: Projection
-- [ ] Implement query execution: Selection
+- [x] Implement query execution: Selection
 - [ ] Implement query execution: Sort
 - [ ] Implement query execution: Aggregate
 - [ ] Implement query execution: Scalar UDFs
