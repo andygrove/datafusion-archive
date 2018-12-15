@@ -19,7 +19,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use arrow::array::ArrayRef;
-use arrow::datatypes::Schema;
+use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
 
 use super::error::Result;
@@ -44,14 +44,20 @@ impl ProjectRelation {
 
 impl Relation for ProjectRelation {
     fn next(&mut self) -> Result<Option<RecordBatch>> {
-        //TODO: apply projection
         match self.input.borrow_mut().next()? {
             Some(batch) => {
                 let projected_columns: Result<Vec<ArrayRef>> =
                     self.expr.iter().map(|e| e.get_func()(&batch)).collect();
 
+                let schema = Schema::new(
+                    self.expr
+                        .iter()
+                        .map(|e| Field::new(&e.get_name(), e.get_type(), true))
+                        .collect(),
+                );
+
                 let projected_batch: RecordBatch =
-                    RecordBatch::new(Arc::new(Schema::empty()), projected_columns?);
+                    RecordBatch::new(Arc::new(schema), projected_columns?);
 
                 Ok(Some(projected_batch))
             }
@@ -96,6 +102,8 @@ mod tests {
         let mut projection = ProjectRelation::new(relation, projection_expr, schema);
         let batch = projection.next().unwrap().unwrap();
         assert_eq!(1, batch.num_columns());
+
+        assert_eq!("id", batch.schema().field(0).name());
     }
 
 }

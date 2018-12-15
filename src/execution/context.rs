@@ -121,76 +121,7 @@ impl ExecutionContext {
                         table_name
                     ))),
                 }
-                //println!("TableScan: {}", table_name);
-                //                match self.tables.borrow().get(table_name) {
-                //                    Some(df) => match projection {
-                //                        Some(p) => {
-                ////                            let mut h: HashSet<usize> = HashSet::new();
-                ////                            p.iter().for_each(|i| {
-                ////                                h.insert(*i);
-                ////                            });
-                ////                            self.create_execution_plan(&push_down_projection(df.plan(), &h))
-                //                            unimplemented!()
-                //                        }
-                //                        None => self.create_execution_plan(df.plan()),
-                //                    },
-                //                    _ => Err(ExecutionError::General(format!(
-                //                        "No table registered as '{}'",
-                //                        table_name
-                //                    ))),
-                //                }
             }
-
-            //            LogicalPlan::CsvFile {
-            //                ref filename,
-            //                ref schema,
-            //                ref has_header,
-            //                ref projection,
-            //            } => {
-            //                let file = File::open(filename)?;
-            //                let ds = Rc::new(RefCell::new(CsvFile::open(
-            //                    file,
-            //                    schema.clone(),
-            //                    *has_header,
-            //                    projection.clone(),
-            //                )?)) as Rc<RefCell<DataSource>>;
-            //                Ok(Box::new(DataSourceRelation {
-            //                    schema: schema.as_ref().clone(),
-            //                    ds,
-            //                }))
-            //            }
-            //
-            //            LogicalPlan::NdJsonFile {
-            //                ref filename,
-            //                ref schema,
-            //                ref projection,
-            //            } => {
-            //                let file = File::open(filename)?;
-            //                let ds = Rc::new(RefCell::new(NdJsonFile::open(
-            //                    file,
-            //                    schema.clone(),
-            //                    projection.clone(),
-            //                )?)) as Rc<RefCell<DataSource>>;
-            //                Ok(Box::new(DataSourceRelation {
-            //                    schema: schema.as_ref().clone(),
-            //                    ds,
-            //                }))
-            //            }
-            //
-            //            LogicalPlan::ParquetFile {
-            //                ref filename,
-            //                ref schema,
-            //                ref projection,
-            //            } => {
-            //                let file = File::open(filename)?;
-            //                let ds = Rc::new(RefCell::new(ParquetFile::open(file, projection.clone())?))
-            //                    as Rc<RefCell<DataSource>>;
-            //                Ok(Box::new(DataSourceRelation {
-            //                    schema: schema.as_ref().clone(),
-            //                    ds,
-            //                }))
-            //            }
-            //
             LogicalPlan::Selection {
                 ref expr,
                 ref input,
@@ -227,70 +158,6 @@ impl ExecutionContext {
 
                 Ok(Rc::new(RefCell::new(rel)))
             }
-
-            //            LogicalPlan::Aggregate {
-            //                ref input,
-            //                ref group_expr,
-            //                ref aggr_expr,
-            //                ..
-            //            } => {
-            //                let input_rel = self.create_execution_plan(&input)?;
-            //
-            //                let compiled_group_expr_result: Result<Vec<RuntimeExpr>> = group_expr
-            //                    .iter()
-            //                    .map(|e| compile_scalar_expr(&self, e, input_rel.schema()))
-            //                    .collect();
-            //                let compiled_group_expr = compiled_group_expr_result?;
-            //
-            //                let compiled_aggr_expr_result: Result<Vec<RuntimeExpr>> = aggr_expr
-            //                    .iter()
-            //                    .map(|e| compile_expr(&self, e, input.schema()))
-            //                    .collect();
-            //                let compiled_aggr_expr = compiled_aggr_expr_result?;
-            //
-            //                let rel = AggregateRelation::new(
-            //                    Rc::new(Schema::empty()), //(expr_to_field(&compiled_group_expr, &input_schema))),
-            //                    input_rel,
-            //                    compiled_group_expr,
-            //                    compiled_aggr_expr,
-            //                );
-            //
-            //                Ok(Box::new(rel))
-            //            }
-            //LogicalPlan::Sort { .. /*ref expr, ref input, ref schema*/ } => {
-
-            //                let input_rel = self.create_execution_plan(data_dir, input)?;
-            //
-            //                let compiled_expr : Result<Vec<CompiledExpr>> = expr.iter()
-            //                    .map(|e| compile_expr(&self,e))
-            //                    .collect();
-            //
-            //                let sort_asc : Vec<bool> = expr.iter()
-            //                    .map(|e| match e {
-            //                        &Expr::Sort { asc, .. } => asc,
-            //                        _ => panic!()
-            //                    })
-            //                    .collect();
-            //
-            //                let rel = SortRelation {
-            //                    input: input_rel,
-            //                    sort_expr: compiled_expr?,
-            //                    sort_asc: sort_asc,
-            //                    schema: schema.clone()
-            //                };
-            //                Ok(Box::new(rel))
-            //            },
-            //}
-            //            LogicalPlan::Limit {
-            //                limit,
-            //                ref input,
-            //                ref schema,
-            //                ..
-            //            } => {
-            //                let input_rel = self.create_execution_plan(input)?;
-            //                let rel = LimitRelation::new(schema.clone(), input_rel, limit);
-            //                Ok(Box::new(rel))
-            //            }
             _ => unimplemented!(),
         }
     }

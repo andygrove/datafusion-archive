@@ -26,6 +26,7 @@ The current task list:
 - [ ] Implement query execution: Aggregate
 - [ ] Implement query execution: Scalar UDFs
 - [ ] Implement query execution: Array UDFs
+- [ ] Implement query execution: StructArray
 - [ ] Implement parallel query execution (multithreaded, single process)
 - [x] Generate query plan from SQL
 - [x] Execute SQL against DataSource

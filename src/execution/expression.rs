@@ -42,10 +42,12 @@ pub enum AggregateType {
 /// Runtime expression
 pub enum RuntimeExpr {
     Compiled {
+        name: String,
         f: CompiledExpr,
         t: DataType,
     },
     AggregateFunction {
+        name: String,
         f: AggregateType,
         args: Vec<CompiledExpr>,
         t: DataType,
@@ -59,6 +61,14 @@ impl RuntimeExpr {
             _ => panic!(),
         }
     }
+
+    pub fn get_name(&self) -> &String {
+        match self {
+            &RuntimeExpr::Compiled { ref name, .. } => name,
+            &RuntimeExpr::AggregateFunction { ref name, .. } => name,
+        }
+    }
+
     pub fn get_type(&self) -> DataType {
         match self {
             &RuntimeExpr::Compiled { ref t, .. } => t.clone(),
@@ -95,6 +105,7 @@ pub fn compile_expr(
             };
 
             Ok(RuntimeExpr::AggregateFunction {
+                name: name.to_string(),
                 f: func,
                 args: compiled_args?
                     .iter()
@@ -200,6 +211,7 @@ macro_rules! literal_array {
     ($VALUE:expr, $ARRAY_TYPE:ident, $TY:ident) => {{
         let nn = *$VALUE;
         Ok(RuntimeExpr::Compiled {
+            name: format!("{}", nn),
             f: Rc::new(move |batch: &RecordBatch| {
                 let capacity = batch.num_rows();
                 let mut builder = $ARRAY_TYPE::builder(capacity);
@@ -238,6 +250,7 @@ pub fn compile_scalar_expr(
             ))),
         },
         &Expr::Column(index) => Ok(RuntimeExpr::Compiled {
+            name: input_schema.field(index).name().clone(),
             f: Rc::new(move |batch: &RecordBatch| Ok((*batch.column(index)).clone())),
             t: input_schema.field(index).data_type().clone(),
         }),
@@ -294,39 +307,46 @@ pub fn compile_scalar_expr(
         } => {
             let left_expr = compile_scalar_expr(ctx, left, input_schema)?;
             let right_expr = compile_scalar_expr(ctx, right, input_schema)?;
+            let name = format!("{:?} {:?} {:?}", left, op, right);
             let op_type = left_expr.get_type().clone();
             match op {
                 &Operator::Eq => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         comparison_ops!(left_expr, right_expr, batch, eq)
                     }),
                     t: DataType::Boolean,
                 }),
                 &Operator::NotEq => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         comparison_ops!(left_expr, right_expr, batch, neq)
                     }),
                     t: DataType::Boolean,
                 }),
                 &Operator::Lt => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         comparison_ops!(left_expr, right_expr, batch, lt)
                     }),
                     t: DataType::Boolean,
                 }),
                 &Operator::LtEq => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         comparison_ops!(left_expr, right_expr, batch, lt_eq)
                     }),
                     t: DataType::Boolean,
                 }),
                 &Operator::Gt => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         comparison_ops!(left_expr, right_expr, batch, gt)
                     }),
                     t: DataType::Boolean,
                 }),
                 &Operator::GtEq => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         comparison_ops!(left_expr, right_expr, batch, gt_eq)
                     }),
@@ -349,24 +369,28 @@ pub fn compile_scalar_expr(
                 //                        t: DataType::Boolean,
                 //                    }),
                 &Operator::Plus => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         math_ops!(left_expr, right_expr, batch, add)
                     }),
                     t: op_type,
                 }),
                 &Operator::Minus => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         math_ops!(left_expr, right_expr, batch, subtract)
                     }),
                     t: op_type,
                 }),
                 &Operator::Multiply => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         math_ops!(left_expr, right_expr, batch, multiply)
                     }),
                     t: op_type,
                 }),
                 &Operator::Divide => Ok(RuntimeExpr::Compiled {
+                    name,
                     f: Rc::new(move |batch: &RecordBatch| {
                         math_ops!(left_expr, right_expr, batch, divide)
                     }),

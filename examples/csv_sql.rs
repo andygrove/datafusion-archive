@@ -102,8 +102,4 @@ fn main() {
         }
         _ => println!("No results"),
     }
-
-    //
-    //    // show the first 10 rows of output
-    //    df1.show(10)
 }
