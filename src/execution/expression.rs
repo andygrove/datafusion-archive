@@ -196,6 +196,24 @@ macro_rules! comparison_ops {
     }};
 }
 
+macro_rules! literal_array {
+    ($VALUE:expr, $ARRAY_TYPE:ident, $TY:ident) => {{
+        let nn = *$VALUE;
+        Ok(RuntimeExpr::Compiled {
+            f: Rc::new(move |batch: &RecordBatch| {
+                let capacity = batch.num_rows();
+                let mut builder = $ARRAY_TYPE::builder(capacity);
+                for _ in 0..capacity {
+                    builder.push(nn)?;
+                }
+                let array = builder.finish();
+                Ok(Arc::new(array) as ArrayRef)
+            }),
+            t: DataType::$TY,
+        })
+    }};
+}
+
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(
     ctx: &ExecutionContext,
@@ -203,44 +221,22 @@ pub fn compile_scalar_expr(
     input_schema: &Schema,
 ) -> Result<RuntimeExpr> {
     match expr {
-        &Expr::Literal(ref value) => {
-            match value {
-                ScalarValue::Float64(n) => {
-                    let nn = *n;
-                    Ok(RuntimeExpr::Compiled {
-                        f: Rc::new(move |batch: &RecordBatch| {
-                            let capacity = batch.num_rows();
-                            let mut builder = Float64Array::builder(capacity);
-                            for _ in 0..capacity {
-                                builder.push(nn)?;
-                            }
-                            let array = builder.finish();
-                            Ok(Arc::new(array) as ArrayRef)
-                        }),
-                        t: DataType::Float64,
-                    })
-                }
-                //TODO define for all data types using a macro
-                _ => unimplemented!(),
-            }
-
-            //            // we represent literal values as arrays with a single value
-            //            let (literal_array, literal_type) = match value {
-            //                ScalarValue::Float64(n) => {
-            //                    let mut builder = Float64Array::builder(1);
-            //                    builder.push(*n)?;
-            //                    let array = builder.finish();
-            //                    (Arc::new(array) as ArrayRef, DataType::Float64)
-            //                }
-            //                //TODO define for all data types using a macro
-            //                _ => unimplemented!()
-            //            };
-            //
-            //            Ok(RuntimeExpr::Compiled {
-            //                f: Rc::new( move |batch: &RecordBatch| { Ok(literal_array.clone()) }),
-            //                t: literal_type,
-            //            })
-        }
+        &Expr::Literal(ref value) => match value {
+            ScalarValue::Int8(n) => literal_array!(n, Int8Array, Int8),
+            ScalarValue::Int16(n) => literal_array!(n, Int16Array, Int16),
+            ScalarValue::Int32(n) => literal_array!(n, Int32Array, Int32),
+            ScalarValue::Int64(n) => literal_array!(n, Int64Array, Int64),
+            ScalarValue::UInt8(n) => literal_array!(n, UInt8Array, UInt8),
+            ScalarValue::UInt16(n) => literal_array!(n, UInt16Array, UInt16),
+            ScalarValue::UInt32(n) => literal_array!(n, UInt32Array, UInt32),
+            ScalarValue::UInt64(n) => literal_array!(n, UInt64Array, UInt64),
+            ScalarValue::Float32(n) => literal_array!(n, Float32Array, Float32),
+            ScalarValue::Float64(n) => literal_array!(n, Float64Array, Float64),
+            other => Err(ExecutionError::ExecutionError(format!(
+                "No support for literal type {:?}",
+                other
+            ))),
+        },
         &Expr::Column(index) => Ok(RuntimeExpr::Compiled {
             f: Rc::new(move |batch: &RecordBatch| Ok((*batch.column(index)).clone())),
             t: input_schema.field(index).data_type().clone(),
