@@ -29,7 +29,7 @@ pub enum ExecutionError {
     ParserError(ParserError),
     General(String),
     InvalidColumn(String),
-    NotImplemented(&'static str),
+    NotImplemented(String),
     ArrowError(ArrowError),
     ExecutionError(String),
 }

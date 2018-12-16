@@ -248,6 +248,12 @@ pub fn compile_scalar_expr(
 ) -> Result<RuntimeExpr> {
     match expr {
         &Expr::Literal(ref value) => match value {
+            //NOTE: this is a temporary hack .. due to the way expressions like 'a > 1' are
+            // evaluated, currently the left and right are evaluated separately and must result
+            // in arrays and then the '>' operator is evaluated against the two arrays. This works
+            // but is dumb ... I intend to optimize this soon to add special handling for
+            // binary expressions that involve literal values to avoid creating arrays of literals
+            // filed as https://github.com/andygrove/datafusion/issues/191
             ScalarValue::Int8(n) => literal_array!(n, Int8Array, Int8),
             ScalarValue::Int16(n) => literal_array!(n, Int16Array, Int16),
             ScalarValue::Int32(n) => literal_array!(n, Int32Array, Int32),
@@ -268,7 +274,10 @@ pub fn compile_scalar_expr(
             f: Rc::new(move |batch: &RecordBatch| Ok((*batch.column(index)).clone())),
             t: input_schema.field(index).data_type().clone(),
         }),
-        &Expr::Cast { ref expr, .. } => match expr.as_ref() {
+        &Expr::Cast {
+            ref expr,
+            ref data_type,
+        } => match expr.as_ref() {
             &Expr::Column(_index) => {
                 Err(ExecutionError::ExecutionError(format!("column reference")))
                 //                let compiled_cast_expr = compile_cast_column(data_type.clone())?;
@@ -279,15 +288,35 @@ pub fn compile_scalar_expr(
                 //                    t: data_type.clone(),
                 //                })
             }
-            &Expr::Literal(ref _lit) => {
-                Err(ExecutionError::NotImplemented("literal"))
-                //                let compiled_cast_expr = compile_cast_scalar(lit, data_type)?;
-                //                Ok(RuntimeExpr::Compiled {
-                //                    f: Rc::new(move |_: &RecordBatch| {
-                //                        (compiled_cast_expr)(&Value::Scalar(Rc::new(ScalarValue::Null))) // pointless arg
-                //                    }),
-                //                    t: data_type.clone(),
-                //                })
+            &Expr::Literal(ref value) => {
+                //NOTE this is all very inefficient and needs to be optimized - tracking
+                // issue is https://github.com/andygrove/datafusion/issues/191
+                match value {
+                    ScalarValue::Int64(n) => {
+                        let nn = *n;
+                        match data_type {
+                            DataType::Float64 => Ok(RuntimeExpr::Compiled {
+                                name: "lit".to_string(),
+                                f: Rc::new(move |batch: &RecordBatch| {
+                                    let mut b = Float64Array::builder(batch.num_rows());
+                                    for _ in 0..batch.num_rows() {
+                                        b.push(nn as f64)?;
+                                    }
+                                    Ok(Arc::new(b.finish()) as ArrayRef)
+                                }),
+                                t: data_type.clone(),
+                            }),
+                            other => Err(ExecutionError::NotImplemented(format!(
+                                "CAST from Int64 to {:?}",
+                                other
+                            ))),
+                        }
+                    }
+                    other => Err(ExecutionError::NotImplemented(format!(
+                        "CAST from {:?} to {:?}",
+                        other, data_type
+                    ))),
+                }
             }
             other => Err(ExecutionError::General(format!(
                 "CAST not implemented for expression {:?}",
