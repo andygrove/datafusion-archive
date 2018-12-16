@@ -240,6 +240,40 @@ macro_rules! literal_array {
     }};
 }
 
+/// Casts a column to an array with a different data type
+macro_rules! cast_column {
+    ($INDEX:expr, $FROM_TYPE:ty, $TO_TYPE:ident, $DT:ty) => {{
+        Rc::new(move |batch: &RecordBatch| {
+            // get data and cast to known type
+            match batch.column($INDEX).as_any().downcast_ref::<$FROM_TYPE>() {
+                Some(array) => {
+                    // create builder for desired type
+                    let mut builder = $TO_TYPE::builder(batch.num_rows());
+                    for i in 0..batch.num_rows() {
+                        if array.is_null(i) {
+                            builder.push_null()?;
+                        } else {
+                            builder.push(array.value(i) as $DT)?;
+                        }
+                    }
+                    Ok(Arc::new(builder.finish()) as ArrayRef)
+                }
+                None => Err(ExecutionError::InternalError(format!("Column at index {} is not of expected type", $INDEX)))
+            }
+        })
+    }}
+}
+
+macro_rules! cast_column_outer {
+    ($INDEX:expr, $FROM_TYPE:ty, $TO_TYPE:expr) => {{
+        match $TO_TYPE {
+            DataType::Int16 => cast_column!($INDEX, $FROM_TYPE, Int16Array, i16),
+            DataType::Int32 => cast_column!($INDEX, $FROM_TYPE, Int32Array, i32),
+            _ => unimplemented!()
+        }
+    }}
+}
+
 /// Compiles a scalar expression into a closure
 pub fn compile_scalar_expr(
     ctx: &ExecutionContext,
@@ -278,15 +312,24 @@ pub fn compile_scalar_expr(
             ref expr,
             ref data_type,
         } => match expr.as_ref() {
-            &Expr::Column(_index) => {
-                Err(ExecutionError::ExecutionError(format!("column reference")))
-                //                let compiled_cast_expr = compile_cast_column(data_type.clone())?;
-                //                Ok(RuntimeExpr::Compiled {
-                //                    f: Rc::new(move |batch: &RecordBatch| {
-                //                        (compiled_cast_expr)(batch.column(index))
-                //                    }),
-                //                    t: data_type.clone(),
-                //                })
+            &Expr::Column(index) => {
+                let col = input_schema.field(index);
+                Ok(RuntimeExpr::Compiled {
+                    name: col.name().clone(),
+                    t: col.data_type().clone(),
+                    f: match col.data_type() {
+                        DataType::Int8 => cast_column_outer!(index, Int8Array, &data_type),
+                        DataType::Int16 => cast_column_outer!(index, Int16Array, &data_type),
+                        DataType::Int32 => cast_column_outer!(index, Int32Array, &data_type),
+                        DataType::Int64 => cast_column_outer!(index, Int64Array, &data_type),
+                        _ => panic!() //TODO
+                        /*Err(ExecutionError::NotImplemented(format!(
+                            "CAST column from {:?} to {:?}",
+                            col.data_type(),
+                            data_type
+                        )))*/
+                    }
+                })
             }
             &Expr::Literal(ref value) => {
                 //NOTE this is all very inefficient and needs to be optimized - tracking

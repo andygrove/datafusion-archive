@@ -19,6 +19,7 @@ use std::rc::Rc;
 use std::string::String;
 use std::sync::Arc;
 
+use super::execution::error::*;
 use super::logicalplan::*;
 
 use arrow::datatypes::*;
@@ -42,7 +43,7 @@ impl SqlToRel {
     }
 
     /// Generate a logic plan from a SQL AST node
-    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rc<LogicalPlan>, String> {
+    pub fn sql_to_rel(&self, sql: &ASTNode) -> Result<Rc<LogicalPlan>> {
         match sql {
             &ASTNode::SQLSelect {
                 ref projection,
@@ -76,7 +77,7 @@ impl SqlToRel {
                 let expr: Vec<Expr> = projection
                     .iter()
                     .map(|e| self.sql_to_rex(&e, &input_schema))
-                    .collect::<Result<Vec<Expr>, String>>()?;
+                    .collect::<Result<Vec<Expr>>>()?;
 
                 // collect aggregate expressions
                 let aggr_expr: Vec<Expr> = expr
@@ -98,7 +99,7 @@ impl SqlToRel {
                         Some(gbe) => gbe
                             .iter()
                             .map(|e| self.sql_to_rex(&e, &input_schema))
-                            .collect::<Result<Vec<Expr>, String>>()?,
+                            .collect::<Result<Vec<Expr>>>()?,
                         None => vec![],
                     };
                     //println!("GROUP BY: {:?}", group_expr);
@@ -133,13 +134,13 @@ impl SqlToRel {
                     };
 
                     if let &Some(_) = having {
-                        return Err(String::from("HAVING is not implemented yet"));
+                        return Err(ExecutionError::General("HAVING is not implemented yet".to_string()));
                     }
 
                     let order_by_plan = match order_by {
                         &Some(ref order_by_expr) => {
                             let input_schema = projection.schema();
-                            let order_by_rex: Result<Vec<Expr>, String> = order_by_expr
+                            let order_by_rex: Result<Vec<Expr>> = order_by_expr
                                 .iter()
                                 .map(|e| {
                                     Ok(Expr::Sort {
@@ -164,7 +165,7 @@ impl SqlToRel {
                         &Some(ref limit_ast_node) => {
                             let limit_count = match **limit_ast_node {
                                 ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => n,
-                                _ => return Err(String::from("LIMIT parameter is not a number")),
+                                _ => return Err(ExecutionError::General(String::from("LIMIT parameter is not a number"))),
                             };
                             LogicalPlan::Limit {
                                 limit: limit_count as usize,
@@ -187,19 +188,19 @@ impl SqlToRel {
                         schema: schema.clone(),
                         projection: None,
                     })),
-                    None => Err(format!("no schema found for table {}", id)),
+                    None => Err(ExecutionError::General(format!("no schema found for table {}", id))),
                 }
             }
 
-            _ => Err(format!(
+            _ => Err(ExecutionError::ExecutionError(format!(
                 "sql_to_rel does not support this relation: {:?}",
                 sql
-            )),
+            ))),
         }
     }
 
     /// Generate a relational expression from a SQL expression
-    pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr, String> {
+    pub fn sql_to_rex(&self, sql: &ASTNode, schema: &Schema) -> Result<Expr> {
         match sql {
             &ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => {
                 Ok(Expr::Literal(ScalarValue::Int64(n)))
@@ -214,11 +215,11 @@ impl SqlToRel {
             &ASTNode::SQLIdentifier(ref id) => {
                 match schema.fields().iter().position(|c| c.name().eq(id)) {
                     Some(index) => Ok(Expr::Column(index)),
-                    None => Err(format!(
+                    None => Err(ExecutionError::ExecutionError(format!(
                         "Invalid identifier '{}' for schema {}",
                         id,
                         schema.to_string()
-                    )),
+                    ))),
                 }
             }
 
@@ -233,7 +234,7 @@ impl SqlToRel {
                 ref data_type,
             } => Ok(Expr::Cast {
                 expr: Rc::new(self.sql_to_rex(&expr, schema)?),
-                data_type: convert_data_type(data_type),
+                data_type: convert_data_type(data_type)?,
             }),
 
             &ASTNode::SQLIsNull(ref expr) => {
@@ -277,11 +278,11 @@ impl SqlToRel {
                         right: Rc::new(right_expr.cast_to(&supertype, schema)?),
                     }),
                     None => {
-                        return Err(format!(
+                        return Err(ExecutionError::General(format!(
                             "No common supertype found for binary operator {:?} \
                              with input types {:?} and {:?}",
                             operator, left_type, right_type
-                        ))
+                        )))
                     }
                 }
             }
@@ -297,7 +298,7 @@ impl SqlToRel {
                         let rex_args = args
                             .iter()
                             .map(|a| self.sql_to_rex(a, schema))
-                            .collect::<Result<Vec<Expr>, String>>()?;
+                            .collect::<Result<Vec<Expr>>>()?;
 
                         // return type is same as the argument type for these aggregate functions
                         let return_type = rex_args[0].get_type(schema).clone();
@@ -319,7 +320,7 @@ impl SqlToRel {
                                 ASTNode::SQLWildcard => Ok(Expr::Column(0)),
                                 _ => self.sql_to_rex(a, schema),
                             })
-                            .collect::<Result<Vec<Expr>, String>>()?;
+                            .collect::<Result<Vec<Expr>>>()?;
 
                         Ok(Expr::AggregateFunction {
                             name: id.clone(),
@@ -332,7 +333,7 @@ impl SqlToRel {
                             let rex_args = args
                                 .iter()
                                 .map(|a| self.sql_to_rex(a, schema))
-                                .collect::<Result<Vec<Expr>, String>>()?;
+                                .collect::<Result<Vec<Expr>>>()?;
 
                             let mut safe_args: Vec<Expr> = vec![];
                             for i in 0..rex_args.len() {
@@ -346,12 +347,12 @@ impl SqlToRel {
                                 return_type: fm.return_type().clone(),
                             })
                         }
-                        _ => Err(format!("Invalid function '{}'", id)),
+                        _ => Err(ExecutionError::General(format!("Invalid function '{}'", id))),
                     },
                 }
             }
 
-            _ => Err(String::from(format!(
+            _ => Err(ExecutionError::General(format!(
                 "Unsupported ast node {:?} in sqltorel",
                 sql
             ))),
@@ -360,16 +361,16 @@ impl SqlToRel {
 }
 
 /// Convert SQL data type to relational representation of data type
-pub fn convert_data_type(sql: &SQLType) -> DataType {
+pub fn convert_data_type(sql: &SQLType) -> Result<DataType> {
     match sql {
-        SQLType::Boolean => DataType::Boolean,
-        SQLType::SmallInt => DataType::Int16,
-        SQLType::Int => DataType::Int32,
-        SQLType::BigInt => DataType::Int64,
-        SQLType::Float(_) | SQLType::Real => DataType::Float64,
-        SQLType::Double => DataType::Float64,
-        SQLType::Char(_) | SQLType::Varchar(_) => DataType::Utf8,
-        _ => unimplemented!(),
+        SQLType::Boolean => Ok(DataType::Boolean),
+        SQLType::SmallInt => Ok(DataType::Int16),
+        SQLType::Int => Ok(DataType::Int32),
+        SQLType::BigInt => Ok(DataType::Int64),
+        SQLType::Float(_) | SQLType::Real => Ok(DataType::Float64),
+        SQLType::Double => Ok(DataType::Float64),
+        SQLType::Char(_) | SQLType::Varchar(_) => Ok(DataType::Utf8),
+        other => Err(ExecutionError::NotImplemented(format!("Unsupported SQL type {:?}", other)))
     }
 }
 

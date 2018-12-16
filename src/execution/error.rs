@@ -30,6 +30,7 @@ pub enum ExecutionError {
     General(String),
     InvalidColumn(String),
     NotImplemented(String),
+    InternalError(String),
     ArrowError(ArrowError),
     ExecutionError(String),
 }
