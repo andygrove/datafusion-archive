@@ -258,10 +258,13 @@ macro_rules! cast_column {
                     }
                     Ok(Arc::new(builder.finish()) as ArrayRef)
                 }
-                None => Err(ExecutionError::InternalError(format!("Column at index {} is not of expected type", $INDEX)))
+                None => Err(ExecutionError::InternalError(format!(
+                    "Column at index {} is not of expected type",
+                    $INDEX
+                ))),
             }
         })
-    }}
+    }};
 }
 
 macro_rules! cast_column_outer {
@@ -269,9 +272,9 @@ macro_rules! cast_column_outer {
         match $TO_TYPE {
             DataType::Int16 => cast_column!($INDEX, $FROM_TYPE, Int16Array, i16),
             DataType::Int32 => cast_column!($INDEX, $FROM_TYPE, Int32Array, i32),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
-    }}
+    }};
 }
 
 /// Compiles a scalar expression into a closure
@@ -322,13 +325,19 @@ pub fn compile_scalar_expr(
                         DataType::Int16 => cast_column_outer!(index, Int16Array, &data_type),
                         DataType::Int32 => cast_column_outer!(index, Int32Array, &data_type),
                         DataType::Int64 => cast_column_outer!(index, Int64Array, &data_type),
-                        _ => panic!() //TODO
-                        /*Err(ExecutionError::NotImplemented(format!(
-                            "CAST column from {:?} to {:?}",
-                            col.data_type(),
-                            data_type
-                        )))*/
-                    }
+                        DataType::UInt8 => cast_column_outer!(index, UInt8Array, &data_type),
+                        DataType::UInt16 => cast_column_outer!(index, UInt16Array, &data_type),
+                        DataType::UInt32 => cast_column_outer!(index, UInt32Array, &data_type),
+                        DataType::UInt64 => cast_column_outer!(index, UInt64Array, &data_type),
+                        DataType::Float32 => cast_column_outer!(index, Float32Array, &data_type),
+                        DataType::Float64 => cast_column_outer!(index, Float64Array, &data_type),
+                        _ => panic!("unsupported CAST operation"), //TODO
+                                                                   /*Err(ExecutionError::NotImplemented(format!(
+                                                                       "CAST column from {:?} to {:?}",
+                                                                       col.data_type(),
+                                                                       data_type
+                                                                   )))*/
+                    },
                 })
             }
             &Expr::Literal(ref value) => {

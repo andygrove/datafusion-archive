@@ -52,8 +52,9 @@ fn main() {
 
     ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)));
 
-    // define the SQL statement
-    let sql = "SELECT city, lat, lng, lat + lng FROM cities WHERE CAST(lat AS f32) > 51.0 AND lat < 53";
+    // SQL statement doesn't make much sense but demonstrates some features such as math operations,
+    // comparisons and type coercion
+    let sql = "SELECT city, lat, lng, lat + lng FROM cities WHERE lat > 51.0 AND lat < 53";
 
     // create a data frame
     let results = ctx.sql(&sql).unwrap();

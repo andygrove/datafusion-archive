@@ -134,7 +134,9 @@ impl SqlToRel {
                     };
 
                     if let &Some(_) = having {
-                        return Err(ExecutionError::General("HAVING is not implemented yet".to_string()));
+                        return Err(ExecutionError::General(
+                            "HAVING is not implemented yet".to_string(),
+                        ));
                     }
 
                     let order_by_plan = match order_by {
@@ -165,7 +167,11 @@ impl SqlToRel {
                         &Some(ref limit_ast_node) => {
                             let limit_count = match **limit_ast_node {
                                 ASTNode::SQLValue(sqlparser::sqlast::Value::Long(n)) => n,
-                                _ => return Err(ExecutionError::General(String::from("LIMIT parameter is not a number"))),
+                                _ => {
+                                    return Err(ExecutionError::General(String::from(
+                                        "LIMIT parameter is not a number",
+                                    )))
+                                }
                             };
                             LogicalPlan::Limit {
                                 limit: limit_count as usize,
@@ -188,7 +194,10 @@ impl SqlToRel {
                         schema: schema.clone(),
                         projection: None,
                     })),
-                    None => Err(ExecutionError::General(format!("no schema found for table {}", id))),
+                    None => Err(ExecutionError::General(format!(
+                        "no schema found for table {}",
+                        id
+                    ))),
                 }
             }
 
@@ -347,7 +356,10 @@ impl SqlToRel {
                                 return_type: fm.return_type().clone(),
                             })
                         }
-                        _ => Err(ExecutionError::General(format!("Invalid function '{}'", id))),
+                        _ => Err(ExecutionError::General(format!(
+                            "Invalid function '{}'",
+                            id
+                        ))),
                     },
                 }
             }
@@ -370,7 +382,10 @@ pub fn convert_data_type(sql: &SQLType) -> Result<DataType> {
         SQLType::Float(_) | SQLType::Real => Ok(DataType::Float64),
         SQLType::Double => Ok(DataType::Float64),
         SQLType::Char(_) | SQLType::Varchar(_) => Ok(DataType::Utf8),
-        other => Err(ExecutionError::NotImplemented(format!("Unsupported SQL type {:?}", other)))
+        other => Err(ExecutionError::NotImplemented(format!(
+            "Unsupported SQL type {:?}",
+            other
+        ))),
     }
 }
 
