@@ -273,6 +273,7 @@ impl SqlToRel {
                     &SQLOperator::Modulus => Operator::Modulus,
                     &SQLOperator::And => Operator::And,
                     &SQLOperator::Or => Operator::Or,
+                    &SQLOperator::Like => Operator::Like,
                 };
 
                 let left_expr = self.sql_to_rex(&left, &schema)?;
