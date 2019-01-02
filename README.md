@@ -6,7 +6,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/andygrove/datafusion/badge.svg?branch=master)](https://coveralls.io/github/andygrove/datafusion?branch=master)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
-![logo](img/datafusion-logo.png)
+![logo](img/datafusion-logo.png | width=256)
 
 DataFusion is an attempt at building a modern distributed compute platform in Rust, leveraging [Apache Arrow](https://arrow.apache.org/) as the memory model and execution engine.
 
