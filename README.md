@@ -1,10 +1,11 @@
-# DataFusion: Modern Distributed Compute Platform implemented in Rust
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/datafusion.svg)](https://crates.io/crates/datafusion)
 [![Build Status](https://travis-ci.org/andygrove/datafusion.svg?branch=master)](https://travis-ci.org/andygrove/datafusion)
 [![Coverage Status](https://coveralls.io/repos/github/andygrove/datafusion/badge.svg?branch=master)](https://coveralls.io/github/andygrove/datafusion?branch=master)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
+
+# DataFusion: Modern Distributed Compute Platform implemented in Rust
 
 <img src="img/datafusion-logo.png" width="256" />
 
