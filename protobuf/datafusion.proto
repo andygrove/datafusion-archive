@@ -1,0 +1,56 @@
+syntax = "proto2";
+package datafusion;
+
+option java_package = "org.datafusion.protobuf";
+option java_outer_classname = "DataFusionProtobuf";
+option optimize_for = SPEED;
+
+import "gandiva.proto";
+
+message Projection {
+    required types.ExpressionList exprList = 1;
+    required LogicalPlan input = 2;
+}
+
+message Selection {
+    required types.ExpressionRoot expr = 1;
+    required LogicalPlan input = 2;
+}
+
+enum SortOrder {
+    ASC = 1;
+    DESC = 2;
+}
+
+message SortExpression {
+    required types.TreeNode expr = 1;
+    required SortOrder sortOrder = 2;
+    required LogicalPlan input = 3;
+}
+
+message Sort {
+    repeated SortExpression sortExpr = 1;
+}
+
+message Limit {
+    required int32 limit = 1;
+    required int32 offset = 2;
+    required LogicalPlan input = 3;
+}
+
+message LogicalPlan {
+    optional Projection projection = 1;
+    optional Selection selection = 2;
+    optional Sort sort = 3;
+    optional Limit limit = 4;
+}
+
+message ColumnData {
+    required bytes data = 1;
+}
+
+message RecordBatch {
+    repeated ColumnData columns = 1;
+
+}
+
