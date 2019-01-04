@@ -159,7 +159,13 @@ impl Relation for AggregateRelation {
                                 _ => unimplemented!()
                             }
                         }).collect();
+
+                        //TODO: lookup aggregate accumulators for this key
+
+                        //TODO: update the accumulators
                     }
+
+                    //TODO: create record batch from the accumulators
 
                     unimplemented!()
                 }
@@ -175,50 +181,8 @@ impl Relation for AggregateRelation {
     }
 }
 
-//impl GroupScalar {
-//    fn as_scalar(&self) -> ScalarValue {
-//        match *self {
-//            GroupScalar::Boolean(v) => ScalarValue::Boolean(v),
-//            GroupScalar::UInt8(v) => ScalarValue::UInt8(v),
-//            GroupScalar::UInt16(v) => ScalarValue::UInt16(v),
-//            GroupScalar::UInt32(v) => ScalarValue::UInt32(v),
-//            GroupScalar::UInt64(v) => ScalarValue::UInt64(v),
-//            GroupScalar::Int8(v) => ScalarValue::Int8(v),
-//            GroupScalar::Int16(v) => ScalarValue::Int16(v),
-//            GroupScalar::Int32(v) => ScalarValue::Int32(v),
-//            GroupScalar::Int64(v) => ScalarValue::Int64(v),
-//            GroupScalar::Utf8(ref v) => ScalarValue::Utf8(v.clone()),
-//        }
-//    }
-//}
-//
-///// Make a hash map key from a list of values
-//fn write_key(key: &mut Vec<GroupScalar>, group_values: &Vec<Value>, i: usize) {
-//    for j in 0..group_values.len() {
-//        key[j] = match group_values[j] {
-//            Value::Scalar(ref vv) => match vv.as_ref() {
-//                ScalarValue::Boolean(x) => GroupScalar::Boolean(*x),
-//                _ => unimplemented!(),
-//            },
-//            Value::Column(ref array) => match array.data() {
-//                ArrayData::Boolean(ref buf) => GroupScalar::Boolean(*buf.get(i)),
-//                ArrayData::Int8(ref buf) => GroupScalar::Int8(*buf.get(i)),
-//                ArrayData::Int16(ref buf) => GroupScalar::Int16(*buf.get(i)),
-//                ArrayData::Int32(ref buf) => GroupScalar::Int32(*buf.get(i)),
-//                ArrayData::Int64(ref buf) => GroupScalar::Int64(*buf.get(i)),
-//                ArrayData::UInt8(ref buf) => GroupScalar::UInt8(*buf.get(i)),
-//                ArrayData::UInt16(ref buf) => GroupScalar::UInt16(*buf.get(i)),
-//                ArrayData::UInt32(ref buf) => GroupScalar::UInt32(*buf.get(i)),
-//                ArrayData::UInt64(ref buf) => GroupScalar::UInt64(*buf.get(i)),
-//                ArrayData::Utf8(ref list) => {
-//                    GroupScalar::Utf8(Rc::new(str::from_utf8(list.get(i)).unwrap().to_string()))
-//                }
-//                _ => unimplemented!("Unsupported datatype for aggregate grouping expression"),
-//            },
-//        };
-//    }
-//}
-//
+// code from original POC
+
 ///// Create an initial aggregate entry
 //fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
 //    //println!("Creating new aggregate entry");
@@ -464,3 +428,84 @@ impl Relation for AggregateRelation {
 //        self.schema.as_ref()
 //    }
 //}
+
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::logicalplan::Expr;
+    use super::super::context::ExecutionContext;
+    use super::super::datasource::CsvDataSource;
+    use super::super::expression;
+    use super::super::relation::DataSourceRelation;
+    use super::*;
+    use arrow::csv;
+    use arrow::datatypes::{DataType, Field, Schema};
+    use std::fs::File;
+
+    #[test]
+    fn min_lat() {
+        let schema = schema();
+        let relation = load_cities();
+        let context = ExecutionContext::new();
+
+        let aggr_expr =
+            vec![expression::compile_expr(&context, &Expr::AggregateFunction {
+                name: String::from("min"),
+                args: vec![Expr::Column(1)],
+                return_type: DataType::Float64,
+            }, &schema).unwrap()];
+
+        let aggr_schema = Arc::new(Schema::new(vec![
+            Field::new("min_lat", DataType::Float64, false),
+        ]));
+
+        let mut projection = AggregateRelation::new(aggr_schema,relation, vec![], aggr_expr);
+        let batch = projection.next().unwrap().unwrap();
+        assert_eq!(1, batch.num_columns());
+        let min_lat = batch.column(0).as_any().downcast_ref::<Float64Array>().unwrap();
+        assert_eq!(50.376289, min_lat.value(0));
+    }
+
+    #[test]
+    fn max_lat() {
+        let schema = schema();
+        let relation = load_cities();
+        let context = ExecutionContext::new();
+
+        let aggr_expr =
+            vec![expression::compile_expr(&context, &Expr::AggregateFunction {
+                name: String::from("max"),
+                args: vec![Expr::Column(1)],
+                return_type: DataType::Float64,
+            }, &schema).unwrap()];
+
+        let aggr_schema = Arc::new(Schema::new(vec![
+            Field::new("max_lat", DataType::Float64, false),
+        ]));
+
+        let mut projection = AggregateRelation::new(aggr_schema,relation, vec![], aggr_expr);
+        let batch = projection.next().unwrap().unwrap();
+        assert_eq!(1, batch.num_columns());
+        let max_lat = batch.column(0).as_any().downcast_ref::<Float64Array>().unwrap();
+        assert_eq!(57.477772, max_lat.value(0));
+    }
+
+    fn schema() -> Arc<Schema> {
+        Arc::new(Schema::new(vec![
+            Field::new("name", DataType::Utf8, false),
+            Field::new("lat", DataType::Float64, false),
+            Field::new("lng", DataType::Float64, false),
+        ]))
+    }
+
+    fn load_cities() -> Rc<RefCell<Relation>> {
+        let schema = schema();
+        let file = File::open("test/data/uk_cities.csv").unwrap();
+        let arrow_csv_reader = csv::Reader::new(file, schema.clone(), true, 1024, None);
+        let ds = CsvDataSource::new(schema.clone(), arrow_csv_reader);
+        Rc::new(RefCell::new(DataSourceRelation::new(Rc::new(
+            RefCell::new(ds),
+        ))))
+    }
+
+}

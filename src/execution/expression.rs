@@ -35,8 +35,8 @@ pub enum AggregateType {
     Max,
     Sum,
     Count,
+    CountDistinct,
     Avg,
-    //CountDistinct()
 }
 
 /// Runtime expression
