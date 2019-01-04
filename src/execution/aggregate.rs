@@ -279,12 +279,25 @@ impl Relation for AggregateRelation {
                         }
                     }
 
-                    //TODO: create record batch from the accumulators
+                    // create record batch from the accumulators
+                    let mut result_columns: Vec<ArrayRef> =
+                        Vec::with_capacity(self.group_expr.len() + self.aggr_expr.len());
 
-                    unimplemented!()
+                    for i in 0..group_by_keys.len() {
+                        result_columns.push(group_by_keys[i].clone());
+                    }
+
+                    for _ in 0..self.aggr_expr.len() {
+                      //  result_columns.push(Vec::new());
+                    }
+
+
+                    Ok(Some(RecordBatch::new(
+                        self.schema.clone(),
+                        result_columns
+
+                    )))
                 }
-
-
             }
             None => Ok(None),
         }
@@ -294,255 +307,6 @@ impl Relation for AggregateRelation {
         &self.schema
     }
 }
-
-// code from original POC
-
-///// Create an initial aggregate entry
-//fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
-//    //println!("Creating new aggregate entry");
-//
-//    let functions = aggr_expr
-//        .iter()
-//        .map(|e| match e {
-//            RuntimeExpr::AggregateFunction { ref f, ref t, .. } => match f {
-//                AggregateType::Min => Box::new(MinFunction::new(t)) as Box<AggregateFunction>,
-//                AggregateType::Max => Box::new(MaxFunction::new(t)) as Box<AggregateFunction>,
-//                AggregateType::Count => Box::new(CountFunction::new()) as Box<AggregateFunction>,
-//                AggregateType::Sum => Box::new(SumFunction::new(t)) as Box<AggregateFunction>,
-//                _ => panic!(),
-//            },
-//            _ => panic!(),
-//        })
-//        .collect();
-//
-//    Rc::new(RefCell::new(AggregateEntry {
-//        aggr_values: functions,
-//    }))
-//}
-//
-//macro_rules! build_aggregate_array {
-//    ($TY:ty, $NAME:ident, $DATA:expr) => {{
-//        let mut b: Builder<$TY> = Builder::new();
-//        for v in $DATA {
-//            b.push(v.$NAME().unwrap());
-//        }
-//        Array::from(b.finish())
-//    }};
-//}
-//
-//impl SimpleRelation for AggregateRelation {
-//    fn scan<'a>(&'a mut self) -> Box<Iterator<Item = Result<Rc<RecordBatch>>> + 'a> {
-//        let aggr_expr = &self.aggr_expr;
-//        let group_expr = &self.group_expr;
-//        //        let mut map: HashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> = HashMap::new();
-//        let mut map: FnvHashMap<Vec<GroupScalar>, Rc<RefCell<AggregateEntry>>> =
-//            FnvHashMap::default();
-//
-//        //println!("There are {} aggregate expressions", aggr_expr.len());
-//
-//        self.input.scan().for_each(|batch| {
-//            match batch {
-//                Ok(ref b) => {
-//                    //println!("Processing aggregates for batch with {} rows", b.num_rows());
-//
-//                    // evaluate the single argument to each aggregate function
-//                    let mut aggr_col_args: Vec<Vec<Value>> = Vec::with_capacity(aggr_expr.len());
-//                    for i in 0..aggr_expr.len() {
-//                        match aggr_expr[i] {
-//                            RuntimeExpr::AggregateFunction { ref args, .. } => {
-//                                // arguments to the aggregate function
-//                                let aggr_func_args: Result<
-//                                    Vec<Value>,
-//                                > = args.iter().map(|e| (*e)(b.as_ref())).collect();
-//
-//                                // push the column onto the vector
-//                                aggr_col_args.push(aggr_func_args.unwrap());
-//                            }
-//                            _ => panic!(),
-//                        }
-//                    }
-//
-//                    // evaluate the grouping expressions
-//                    let group_values_result: Result<Vec<Value>> = group_expr
-//                        .iter()
-//                        .map(|e| e.get_func()(b.as_ref()))
-//                        .collect();
-//
-//                    let group_values: Vec<Value> = group_values_result.unwrap(); //TODO
-//
-//                    if group_values.len() == 0 {
-//                        // aggregate columns directly
-//                        let key: Vec<GroupScalar> = Vec::with_capacity(0);
-//
-//                        let entry = map
-//                            .entry(key)
-//                            .or_insert_with(|| create_aggregate_entry(aggr_expr));
-//                        let mut entry_mut = entry.borrow_mut();
-//
-//                        for i in 0..aggr_expr.len() {
-//                            (*entry_mut).aggr_values[i]
-//                                .execute(&aggr_col_args[i])
-//                                .unwrap();
-//                        }
-//                    } else {
-//                        let mut key: Vec<GroupScalar> = Vec::with_capacity(group_values.len());
-//                        for _ in 0..group_values.len() {
-//                            key.push(GroupScalar::Int32(0));
-//                        }
-//
-//                        // expensive row-based aggregation by group
-//                        for i in 0..b.num_rows() {
-//                            write_key(&mut key, &group_values, i);
-//                            //let key = make_key(&group_values, i);
-//                            //println!("key = {:?}", key);
-//
-//                            let x = match map.get(&key) {
-//                                Some(entry) => {
-//                                    let mut entry_mut = entry.borrow_mut();
-//
-//                                    for j in 0..aggr_expr.len() {
-//                                        let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
-//                                            .map(|col| match col {
-//                                                Value::Column(ref col) => Value::Scalar(Rc::new(get_value(col, i))),
-//                                                Value::Scalar(ref v) => Value::Scalar(v.clone())
-//                                            }).collect();
-//                                        (*entry_mut).aggr_values[j]
-//                                            .execute(&row_aggr_values)
-//                                            .unwrap();
-//                                    }
-//
-//                                    true
-//                                }
-//                                None => false,
-//                            };
-//
-//                            if !x {
-//                                let entry = create_aggregate_entry(aggr_expr);
-//                                {
-//                                    let mut entry_mut = entry.borrow_mut();
-//
-//                                    for j in 0..aggr_expr.len() {
-//                                        let row_aggr_values: Vec<Value> = aggr_col_args[j].iter()
-//                                            .map(|col| match col {
-//                                                Value::Column(ref col) =>
-//                                                    Value::Scalar(Rc::new(get_value(col, i))),
-//                                                Value::Scalar(ref v) => Value::Scalar(v.clone())
-//                                            }).collect();
-//                                        (*entry_mut).aggr_values[j]
-//                                            .execute(&row_aggr_values)
-//                                            .unwrap();
-//                                    }
-//                                }
-//                                map.insert(key.clone(), entry);
-//                            }
-//                        }
-//                    }
-//                }
-//                Err(e) => panic!("Error aggregating batch: {:?}", e),
-//            }
-//        });
-//
-//        //        println!("Preparing results");
-//
-//        let mut result_columns: Vec<Vec<ScalarValue>> =
-//            Vec::with_capacity(group_expr.len() + aggr_expr.len());
-//        for _ in 0..group_expr.len() {
-//            result_columns.push(Vec::new());
-//        }
-//        for _ in 0..aggr_expr.len() {
-//            result_columns.push(Vec::new());
-//        }
-//
-//        for (k, v) in map.iter() {
-//            for col_index in 0..k.len() {
-//                result_columns[col_index].push(k[col_index].as_scalar());
-//            }
-//
-//            let g: Vec<Value> = v
-//                .borrow()
-//                .aggr_values
-//                .iter()
-//                .map(|v| v.finish().unwrap())
-//                .collect();
-//
-//            //            println!("aggregate entry: {:?}", g);
-//
-//            for col_index in 0..g.len() {
-//                result_columns[col_index + group_expr.len()].push(match g[col_index] {
-//                    Value::Scalar(ref v) => v.as_ref().clone(),
-//                    _ => panic!(),
-//                });
-//            }
-//        }
-//
-//        let mut aggr_batch = DefaultRecordBatch {
-//            schema: Rc::new(Schema::empty()),
-//            data: Vec::new(),
-//            row_count: map.len(),
-//        };
-//
-//        // create Arrow arrays from grouping scalar values
-//        for i in 0..group_expr.len() {
-//            //TODO: should not use string version of group keys
-//            let mut tmp: Vec<String> = vec![];
-//            for v in &result_columns[i] {
-//                tmp.push(format!("{}", v));
-//            }
-//            aggr_batch
-//                .data
-//                .push(Value::Column(Rc::new(Array::from(tmp))));
-//        }
-//
-//        // create Arrow arrays from aggregate scalar values
-//        for i in 0..aggr_expr.len() {
-//            match aggr_expr[i] {
-//                RuntimeExpr::AggregateFunction { ref t, .. } => {
-//                    let aggr_values = &result_columns[i + group_expr.len()];
-//
-//                    let array: Array = match t {
-//                        DataType::Boolean => build_aggregate_array!(bool, get_bool, aggr_values),
-//                        DataType::UInt8 => build_aggregate_array!(u8, get_u8, aggr_values),
-//                        DataType::UInt16 => build_aggregate_array!(u16, get_u16, aggr_values),
-//                        DataType::UInt32 => build_aggregate_array!(u32, get_u32, aggr_values),
-//                        DataType::UInt64 => build_aggregate_array!(u64, get_u64, aggr_values),
-//                        DataType::Int8 => build_aggregate_array!(i8, get_i8, aggr_values),
-//                        DataType::Int16 => build_aggregate_array!(i16, get_i16, aggr_values),
-//                        DataType::Int32 => build_aggregate_array!(i32, get_i32, aggr_values),
-//                        DataType::Int64 => build_aggregate_array!(i64, get_i64, aggr_values),
-//                        DataType::Float32 => build_aggregate_array!(f32, get_f32, aggr_values),
-//                        DataType::Float64 => build_aggregate_array!(f64, get_f64, aggr_values),
-//                        DataType::Utf8 => {
-//                            let mut b: ListBuilder<u8> =
-//                                ListBuilder::with_capacity(aggr_values.len());
-//                            for v in aggr_values {
-//                                b.push(v.get_string().unwrap().as_bytes());
-//                            }
-//                            Array::new(
-//                                aggr_values.len(),
-//                                ArrayData::Utf8(ListArray::from(b.finish())),
-//                            )
-//                        }
-//                        _ => unimplemented!("No support for aggregate with return type {:?}", t),
-//                    };
-//
-//                    aggr_batch.data.push(Value::Column(Rc::new(array)))
-//                }
-//                _ => panic!(),
-//            }
-//        }
-//
-//        let tb: Rc<RecordBatch> = Rc::new(aggr_batch);
-//
-//        // create iterator over the single batch
-//        let v = vec![Ok(tb)];
-//        Box::new(v.into_iter())
-//    }
-//
-//    fn schema<'a>(&'a self) -> &'a Schema {
-//        self.schema.as_ref()
-//    }
-//}
-
 
 #[cfg(test)]
 mod tests {
