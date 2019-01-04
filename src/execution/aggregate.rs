@@ -19,12 +19,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::str;
 
-use arrow::array::{ArrayRef, Int32Array, BinaryArray};
+use arrow::array::{ArrayRef, Int32Array, Float64Array, BinaryArray};
+use arrow::array_ops;
 use arrow::datatypes::{Field, Schema, DataType};
 use arrow::record_batch::RecordBatch;
 
-use super::error::Result;
-use super::expression::RuntimeExpr;
+use super::error::{Result, ExecutionError};
+use super::expression::{RuntimeExpr, AggregateType};
 use super::relation::Relation;
 
 use fnv::FnvHashMap;
@@ -53,9 +54,50 @@ impl AggregateRelation {
     }
 }
 
+/// Enumeration of types that can be used in a GROUP BY expression
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum GroupByScalar {
+    Boolean(bool),
+    UInt8(u8),
+    UInt16(u16),
+    UInt32(u32),
+    UInt64(u64),
+    Int8(i8),
+    Int16(i16),
     Int32(i32),
-    Utf8(String)
+    Int64(i64),
+    Utf8(String),
+}
+
+struct AggregateEntry {
+}
+
+fn array_min(array: ArrayRef, dt: &DataType) -> Result<ArrayRef> {
+    match dt {
+        DataType::Int32 => {
+            let value = array_ops::min(array.as_any().downcast_ref::<Int32Array>().unwrap());
+            Ok(Arc::new(Int32Array::from(vec![value])) as ArrayRef)
+        }
+        DataType::Float64 => {
+            let value = array_ops::min(array.as_any().downcast_ref::<Float64Array>().unwrap());
+            Ok(Arc::new(Float64Array::from(vec![value])) as ArrayRef)
+        }
+        _ => Err(ExecutionError::NotImplemented(String::new()))
+    }
+}
+
+fn array_max(array: ArrayRef, dt: &DataType) -> Result<ArrayRef> {
+    match dt {
+        DataType::Int32 => {
+            let value = array_ops::max(array.as_any().downcast_ref::<Int32Array>().unwrap());
+            Ok(Arc::new(Int32Array::from(vec![value])) as ArrayRef)
+        }
+        DataType::Float64 => {
+            let value = array_ops::max(array.as_any().downcast_ref::<Float64Array>().unwrap());
+            Ok(Arc::new(Float64Array::from(vec![value])) as ArrayRef)
+        }
+        _ => Err(ExecutionError::NotImplemented(String::new()))
+    }
 }
 
 impl Relation for AggregateRelation {
@@ -63,89 +105,76 @@ impl Relation for AggregateRelation {
         match self.input.borrow_mut().next()? {
             Some(batch) => {
 
-                // evaulate the group by expressions on this batch
-                let group_by_keys: Vec<ArrayRef> =
-                    self.group_expr.iter()
-                        .map(|e| e.get_func()(&batch))
-                        .collect::<Result<Vec<ArrayRef>>>()?;
+                if self.group_expr.is_empty() {
+                    // perform simple aggregate on entire columns without grouping logic
 
-                // iterate over each row in the batch
-                for row in 0..batch.num_rows() {
+                    let columns: Result<Vec<ArrayRef>> = self.aggr_expr.iter().map(|expr| match expr {
+                        RuntimeExpr::AggregateFunction { f, args, t, .. } => {
 
-                    //NOTE: this seems pretty inefficient, performing a match and a downcast on each row
-
-                    // create key
-                    let key: Vec<GroupByScalar> = group_by_keys.iter().map(|col| {
-                        match col.data_type() {
-                            DataType::Int32 => {
-                                let array = col.as_any().downcast_ref::<Int32Array>().unwrap();
-                                GroupByScalar::Int32(array.value(row))
+                            // evaluate argument to aggregate function
+                            match args[0](&batch) {
+                                Ok(y) => match f {
+                                    AggregateType::Min => array_min(y, &t),
+                                    AggregateType::Max => array_max(y, &t),
+                                    _ => Err(ExecutionError::NotImplemented("Unsupported aggregate function".to_string()))
+                                }
+                                Err(e) => Err(ExecutionError::ExecutionError("Failed to evaluate argument to aggregate function".to_string()))
                             }
-                            DataType::Utf8 => {
-                                let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
-                                GroupByScalar::Utf8(String::from(str::from_utf8(array.get_value(row)).unwrap())       )
-                            }
-                            //TODO add all types
-                            _ =>  unimplemented!()
-                        }
+
+                        },
+                        _ => Err(ExecutionError::General("Invalid aggregate expression".to_string()))
+
                     }).collect();
 
+                    Ok(Some(RecordBatch::new(self.schema.clone(), columns?)))
 
-//
-//                    // find or create accumulator set
-//
-//
-//
-//
-//
+                } else {
+                    let mut map: FnvHashMap<Vec<GroupByScalar>, Rc<RefCell<AggregateEntry>>> =
+                        FnvHashMap::default();
+
+                    // evaulate the group by expressions on this batch
+                    let group_by_keys: Vec<ArrayRef> =
+                        self.group_expr.iter()
+                            .map(|e| e.get_func()(&batch))
+                            .collect::<Result<Vec<ArrayRef>>>()?;
+
+
+                    // iterate over each row in the batch
+                    for row in 0..batch.num_rows() {
+
+                        //NOTE: this seems pretty inefficient, performing a match and a downcast on each row
+
+                        // create key
+                        let key: Vec<GroupByScalar> = group_by_keys.iter().map(|col| {
+                            match col.data_type() {
+                                DataType::Int32 => {
+                                    let array = col.as_any().downcast_ref::<Int32Array>().unwrap();
+                                    GroupByScalar::Int32(array.value(row))
+                                }
+                                DataType::Utf8 => {
+                                    let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
+                                    GroupByScalar::Utf8(String::from(str::from_utf8(array.get_value(row)).unwrap()))
+                                }
+                                //TODO add all types
+                                _ => unimplemented!()
+                            }
+                        }).collect();
+                    }
+
+                    unimplemented!()
                 }
 
-                unimplemented!()
+
             }
             None => Ok(None),
         }
     }
 
     fn schema(&self) -> &Arc<Schema> {
-        unimplemented!()
+        &self.schema
     }
 }
 
-//struct AggregateEntry {
-//    aggr_values: Vec<Box<AggregateFunction>>,
-//}
-//
-//impl AggregateRelation {
-//    pub fn new(
-//        schema: Rc<Schema>,
-//        input: Box<SimpleRelation>,
-//        group_expr: Vec<RuntimeExpr>,
-//        aggr_expr: Vec<RuntimeExpr>,
-//    ) -> Self {
-//        AggregateRelation {
-//            schema,
-//            input,
-//            group_expr,
-//            aggr_expr,
-//        }
-//    }
-//}
-//
-///// Enumeration of types that can be used in a GROUP BY expression
-//#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-//enum GroupScalar {
-//    Boolean(bool),
-//    UInt8(u8),
-//    UInt16(u16),
-//    UInt32(u32),
-//    UInt64(u64),
-//    Int8(i8),
-//    Int16(i16),
-//    Int32(i32),
-//    Int64(i64),
-//    Utf8(Rc<String>),
-//}
-//
 //impl GroupScalar {
 //    fn as_scalar(&self) -> ScalarValue {
 //        match *self {
