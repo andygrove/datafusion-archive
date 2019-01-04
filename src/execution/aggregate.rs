@@ -84,7 +84,6 @@ struct MinFunction {
 impl MinFunction {
     fn new(data_type: &DataType) -> Self {
         Self { data_type: data_type.clone(), value: None }
-
     }
 }
 
@@ -102,11 +101,12 @@ impl AggregateFunction for MinFunction {
 }
 
 struct AggregateEntry {
-    pub aggr_values: Vec<Rc<AggregateFunction>>
+    aggr_values: Vec<Rc<RefCell<AggregateFunction>>>
 }
 
 impl AggregateEntry {
     fn accumulate(&mut self, i: usize, value: Option<ScalarValue>) {
+        self.aggr_values[i].borrow_mut().accumulate(&value);
 
     }
 }
@@ -119,7 +119,7 @@ fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateE
         .iter()
         .map(|e| match e {
             RuntimeExpr::AggregateFunction { ref f, ref t, .. } => match f {
-                AggregateType::Min => Rc::new(MinFunction::new(t)) as Rc<AggregateFunction>,
+                AggregateType::Min => Rc::new(RefCell::new(MinFunction::new(t))) as Rc<RefCell<AggregateFunction>>,
 //                AggregateType::Max => Box::new(MaxFunction::new(t)) as Box<AggregateFunction>,
 //                AggregateType::Count => Box::new(CountFunction::new()) as Box<AggregateFunction>,
 //                AggregateType::Sum => Box::new(SumFunction::new(t)) as Box<AggregateFunction>,
@@ -270,7 +270,7 @@ impl Relation for AggregateRelation {
                         };
 
                         if !updated {
-                            let mut accumulator_set = create_aggregate_entry(&self.aggr_expr);
+                            let accumulator_set = create_aggregate_entry(&self.aggr_expr);
                             {
                                 let mut entry_mut = accumulator_set.borrow_mut();
                                 update_accumulators(&batch, row, &mut entry_mut, &self.aggr_expr);
@@ -287,10 +287,10 @@ impl Relation for AggregateRelation {
                         result_columns.push(group_by_keys[i].clone());
                     }
 
-                    for _ in 0..self.aggr_expr.len() {
-                      //  result_columns.push(Vec::new());
-                    }
+                    //TODO build record batch from aggregate results
+                    for (k, v) in map.iter() {
 
+                    }
 
                     Ok(Some(RecordBatch::new(
                         self.schema.clone(),
