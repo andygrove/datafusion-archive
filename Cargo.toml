@@ -31,7 +31,7 @@ path = "src/bin/console/main.rs"
 #bytes = "0.4"
 clap = "2.31.2"
 #csv = "1.0.0"
-#fnv = "1.0.3"
+fnv = "1.0.3"
 #datafusion-arrow = { path = "../datafusion-arrow" }
 datafusion-arrow = "0.12.4"
 datafusion-rustyline = "2.0.0-alpha-20180628"

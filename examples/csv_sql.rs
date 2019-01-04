@@ -54,7 +54,8 @@ fn main() {
 
     // SQL statement doesn't make much sense but demonstrates some features such as math operations,
     // comparisons and type coercion
-    let sql = "SELECT city, lat, lng, lat + lng FROM cities WHERE lat > 51.0 AND lat < 53";
+    let sql = "SELECT SUM(lat) FROM cities WHERE lat > 51.0 AND lat < 53";
+//    let sql = "SELECT city, lat, lng, lat + lng FROM cities WHERE lat > 51.0 AND lat < 53";
 
     // create a data frame
     let results = ctx.sql(&sql).unwrap();
