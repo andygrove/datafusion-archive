@@ -26,6 +26,7 @@ use arrow::record_batch::RecordBatch;
 
 use super::error::{Result, ExecutionError};
 use super::expression::{RuntimeExpr, AggregateType};
+use crate::logicalplan::ScalarValue;
 use super::relation::Relation;
 
 use fnv::FnvHashMap;
@@ -69,7 +70,68 @@ enum GroupByScalar {
     Utf8(String),
 }
 
+trait AggregateFunction {
+    fn accumulate(&mut self, value: &Option<ScalarValue>);
+    fn result(&self) -> &Option<ScalarValue>;
+    fn data_type(&self) -> &DataType;
+}
+
+struct MinFunction {
+    data_type: DataType,
+    value: Option<ScalarValue>,
+}
+
+impl MinFunction {
+    fn new(data_type: &DataType) -> Self {
+        Self { data_type: data_type.clone(), value: None }
+
+    }
+}
+
+impl AggregateFunction for MinFunction {
+    fn accumulate(&mut self, value: &Option<ScalarValue>) {
+    }
+
+    fn result(&self) -> &Option<ScalarValue> {
+        &self.value
+    }
+
+    fn data_type(&self) -> &DataType {
+        &self.data_type
+    }
+}
+
 struct AggregateEntry {
+    pub aggr_values: Vec<Rc<AggregateFunction>>
+}
+
+impl AggregateEntry {
+    fn accumulate(&mut self, i: usize, value: Option<ScalarValue>) {
+
+    }
+}
+
+/// Create an initial aggregate entry
+fn create_aggregate_entry(aggr_expr: &Vec<RuntimeExpr>) -> Rc<RefCell<AggregateEntry>> {
+    //println!("Creating new aggregate entry");
+
+    let functions = aggr_expr
+        .iter()
+        .map(|e| match e {
+            RuntimeExpr::AggregateFunction { ref f, ref t, .. } => match f {
+                AggregateType::Min => Rc::new(MinFunction::new(t)) as Rc<AggregateFunction>,
+//                AggregateType::Max => Box::new(MaxFunction::new(t)) as Box<AggregateFunction>,
+//                AggregateType::Count => Box::new(CountFunction::new()) as Box<AggregateFunction>,
+//                AggregateType::Sum => Box::new(SumFunction::new(t)) as Box<AggregateFunction>,
+                _ => panic!(),
+            },
+            _ => panic!(),
+        })
+        .collect();
+
+    Rc::new(RefCell::new(AggregateEntry {
+        aggr_values: functions,
+    }))
 }
 
 //TODO macros to make this code less verbose
@@ -99,8 +161,40 @@ fn array_max(array: ArrayRef, dt: &DataType) -> Result<ArrayRef> {
             let value = array_ops::max(array.as_any().downcast_ref::<Float64Array>().unwrap());
             Ok(Arc::new(Float64Array::from(vec![value])) as ArrayRef)
         }
+        //TODO support all types
         _ => Err(ExecutionError::NotImplemented("Unsupported data type for MAX".to_string()))
     }
+}
+
+fn update_accumulators(batch: &RecordBatch, row: usize, accumulator_set: &mut AggregateEntry, aggr_expr: &Vec<RuntimeExpr>) {
+    // update the accumulators
+    for j in 0..accumulator_set.aggr_values.len() {
+        match &aggr_expr[j] {
+            RuntimeExpr::AggregateFunction { f, args, t, .. } => {
+
+                // evaluate argument to aggregate function
+                match args[0](&batch) {
+                    Ok(array) => {
+                        let value: Option<ScalarValue> = match t {
+                            DataType::Int32 => {
+                                let z = array.as_any().downcast_ref::<Int32Array>().unwrap();
+                                Some(ScalarValue::Int32(z.value(row)))
+                            }
+                            DataType::Float64 => {
+                                let z = array.as_any().downcast_ref::<Float64Array>().unwrap();
+                                Some(ScalarValue::Float64(z.value(row)))
+                            }
+                            _ => panic!()
+                        };
+                        accumulator_set.accumulate(j, value);
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
 }
 
 impl Relation for AggregateRelation {
@@ -109,16 +203,16 @@ impl Relation for AggregateRelation {
             Some(batch) => {
 
                 if self.group_expr.is_empty() {
-                    // perform simple aggregate on entire columns without grouping logic
 
+                    // perform simple aggregate on entire columns without grouping logic
                     let columns: Result<Vec<ArrayRef>> = self.aggr_expr.iter().map(|expr| match expr {
                         RuntimeExpr::AggregateFunction { f, args, t, .. } => {
 
                             // evaluate argument to aggregate function
                             match args[0](&batch) {
-                                Ok(y) => match f {
-                                    AggregateType::Min => array_min(y, &t),
-                                    AggregateType::Max => array_max(y, &t),
+                                Ok(array) => match f {
+                                    AggregateType::Min => array_min(array, &t),
+                                    AggregateType::Max => array_max(array, &t),
                                     _ => Err(ExecutionError::NotImplemented("Unsupported aggregate function".to_string()))
                                 }
                                 Err(e) => Err(ExecutionError::ExecutionError("Failed to evaluate argument to aggregate function".to_string()))
@@ -149,6 +243,7 @@ impl Relation for AggregateRelation {
 
                         // create key
                         let key: Vec<GroupByScalar> = group_by_keys.iter().map(|col| {
+                            //TODO: use macro to make this less verbose
                             match col.data_type() {
                                 DataType::Int32 => {
                                     let array = col.as_any().downcast_ref::<Int32Array>().unwrap();
@@ -163,9 +258,25 @@ impl Relation for AggregateRelation {
                             }
                         }).collect();
 
-                        //TODO: lookup aggregate accumulators for this key
+                        //TODO: find more elegant way to write this instead of hacking around ownership issues
 
-                        //TODO: update the accumulators
+                        let updated = match map.get(&key) {
+                            Some(entry) => {
+                                let mut accumulator_set = entry.borrow_mut();
+                                update_accumulators(&batch, row, &mut accumulator_set, &self.aggr_expr);
+                                true
+                            }
+                            None => false
+                        };
+
+                        if !updated {
+                            let mut accumulator_set = create_aggregate_entry(&self.aggr_expr);
+                            {
+                                let mut entry_mut = accumulator_set.borrow_mut();
+                                update_accumulators(&batch, row, &mut entry_mut, &self.aggr_expr);
+                            }
+                            map.insert(key.clone(), accumulator_set);
+                        }
                     }
 
                     //TODO: create record batch from the accumulators
