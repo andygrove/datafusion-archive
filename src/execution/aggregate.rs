@@ -72,6 +72,8 @@ enum GroupByScalar {
 struct AggregateEntry {
 }
 
+//TODO macros to make this code less verbose
+
 fn array_min(array: ArrayRef, dt: &DataType) -> Result<ArrayRef> {
     match dt {
         DataType::Int32 => {
@@ -82,7 +84,8 @@ fn array_min(array: ArrayRef, dt: &DataType) -> Result<ArrayRef> {
             let value = array_ops::min(array.as_any().downcast_ref::<Float64Array>().unwrap());
             Ok(Arc::new(Float64Array::from(vec![value])) as ArrayRef)
         }
-        _ => Err(ExecutionError::NotImplemented(String::new()))
+        //TODO support all types
+        _ => Err(ExecutionError::NotImplemented("Unsupported data type for MIN".to_string()))
     }
 }
 
@@ -96,7 +99,7 @@ fn array_max(array: ArrayRef, dt: &DataType) -> Result<ArrayRef> {
             let value = array_ops::max(array.as_any().downcast_ref::<Float64Array>().unwrap());
             Ok(Arc::new(Float64Array::from(vec![value])) as ArrayRef)
         }
-        _ => Err(ExecutionError::NotImplemented(String::new()))
+        _ => Err(ExecutionError::NotImplemented("Unsupported data type for MAX".to_string()))
     }
 }
 
