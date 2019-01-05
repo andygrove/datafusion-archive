@@ -101,7 +101,10 @@ pub fn compile_expr(
                 "max" => Ok(AggregateType::Max),
                 "count" => Ok(AggregateType::Count),
                 "sum" => Ok(AggregateType::Sum),
-                _ => Err(ExecutionError::General(format!("Unsupported aggregate function '{}'", name))),
+                _ => Err(ExecutionError::General(format!(
+                    "Unsupported aggregate function '{}'",
+                    name
+                ))),
             };
 
             Ok(RuntimeExpr::AggregateFunction {

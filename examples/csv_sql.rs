@@ -55,7 +55,7 @@ fn main() {
     // SQL statement doesn't make much sense but demonstrates some features such as math operations,
     // comparisons and type coercion
     let sql = "SELECT MAX(lat) FROM cities WHERE lat > 51.0 AND lat < 53";
-//    let sql = "SELECT city, lat, lng, lat + lng FROM cities WHERE lat > 51.0 AND lat < 53";
+    //    let sql = "SELECT city, lat, lng, lat + lng FROM cities WHERE lat > 51.0 AND lat < 53";
 
     // create a data frame
     let results = ctx.sql(&sql).unwrap();
@@ -69,34 +69,31 @@ fn main() {
                 batch.num_columns()
             );
 
-//            let city = batch
-//                .column(0)
-//                .as_any()
-//                .downcast_ref::<BinaryArray>()
-//                .unwrap();
+            //            let city = batch
+            //                .column(0)
+            //                .as_any()
+            //                .downcast_ref::<BinaryArray>()
+            //                .unwrap();
             let lat = batch
                 .column(0)
                 .as_any()
                 .downcast_ref::<Float64Array>()
                 .unwrap();
-//            let lng = batch
-//                .column(2)
-//                .as_any()
-//                .downcast_ref::<Float64Array>()
-//                .unwrap();
-//            let combined = batch
-//                .column(3)
-//                .as_any()
-//                .downcast_ref::<Float64Array>()
-//                .unwrap();
+            //            let lng = batch
+            //                .column(2)
+            //                .as_any()
+            //                .downcast_ref::<Float64Array>()
+            //                .unwrap();
+            //            let combined = batch
+            //                .column(3)
+            //                .as_any()
+            //                .downcast_ref::<Float64Array>()
+            //                .unwrap();
 
             for i in 0..batch.num_rows() {
-//                let city_name: String = String::from_utf8(city.get_value(i).to_vec()).unwrap();
+                //                let city_name: String = String::from_utf8(city.get_value(i).to_vec()).unwrap();
 
-                println!(
-                    "Min Latitude: {}",
-                    lat.value(i),
-                );
+                println!("Min Latitude: {}", lat.value(i),);
             }
         }
         _ => println!("No results"),

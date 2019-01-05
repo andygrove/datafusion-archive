@@ -22,12 +22,12 @@ use arrow::datatypes::{Field, Schema};
 use super::super::dfparser::{DFASTNode, DFParser};
 use super::super::logicalplan::*;
 use super::super::sqlplanner::{SchemaProvider, SqlToRel};
+use super::aggregate::AggregateRelation;
 use super::datasource::DataSource;
 use super::error::{ExecutionError, Result};
 use super::expression::*;
 use super::filter::FilterRelation;
 use super::projection::ProjectRelation;
-use super::aggregate::AggregateRelation;
 use super::relation::{DataSourceRelation, Relation};
 
 pub struct ExecutionContext {
