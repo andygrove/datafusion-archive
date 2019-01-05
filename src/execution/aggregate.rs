@@ -198,114 +198,135 @@ fn update_accumulators(batch: &RecordBatch, row: usize, accumulator_set: &mut Ag
 }
 
 impl Relation for AggregateRelation {
+
     fn next(&mut self) -> Result<Option<RecordBatch>> {
-        match self.input.borrow_mut().next()? {
-            Some(batch) => {
-
-                if self.group_expr.is_empty() {
-
-                    // perform simple aggregate on entire columns without grouping logic
-                    let columns: Result<Vec<ArrayRef>> = self.aggr_expr.iter().map(|expr| match expr {
-                        RuntimeExpr::AggregateFunction { f, args, t, .. } => {
-
-                            // evaluate argument to aggregate function
-                            match args[0](&batch) {
-                                Ok(array) => match f {
-                                    AggregateType::Min => array_min(array, &t),
-                                    AggregateType::Max => array_max(array, &t),
-                                    _ => Err(ExecutionError::NotImplemented("Unsupported aggregate function".to_string()))
-                                }
-                                Err(e) => Err(ExecutionError::ExecutionError("Failed to evaluate argument to aggregate function".to_string()))
-                            }
-
-                        },
-                        _ => Err(ExecutionError::General("Invalid aggregate expression".to_string()))
-
-                    }).collect();
-
-                    Ok(Some(RecordBatch::new(self.schema.clone(), columns?)))
-
-                } else {
-                    let mut map: FnvHashMap<Vec<GroupByScalar>, Rc<RefCell<AggregateEntry>>> =
-                        FnvHashMap::default();
-
-                    // evaulate the group by expressions on this batch
-                    let group_by_keys: Vec<ArrayRef> =
-                        self.group_expr.iter()
-                            .map(|e| e.get_func()(&batch))
-                            .collect::<Result<Vec<ArrayRef>>>()?;
-
-
-                    // iterate over each row in the batch
-                    for row in 0..batch.num_rows() {
-
-                        //NOTE: this seems pretty inefficient, performing a match and a downcast on each row
-
-                        // create key
-                        let key: Vec<GroupByScalar> = group_by_keys.iter().map(|col| {
-                            //TODO: use macro to make this less verbose
-                            match col.data_type() {
-                                DataType::Int32 => {
-                                    let array = col.as_any().downcast_ref::<Int32Array>().unwrap();
-                                    GroupByScalar::Int32(array.value(row))
-                                }
-                                DataType::Utf8 => {
-                                    let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
-                                    GroupByScalar::Utf8(String::from(str::from_utf8(array.get_value(row)).unwrap()))
-                                }
-                                //TODO add all types
-                                _ => unimplemented!()
-                            }
-                        }).collect();
-
-                        //TODO: find more elegant way to write this instead of hacking around ownership issues
-
-                        let updated = match map.get(&key) {
-                            Some(entry) => {
-                                let mut accumulator_set = entry.borrow_mut();
-                                update_accumulators(&batch, row, &mut accumulator_set, &self.aggr_expr);
-                                true
-                            }
-                            None => false
-                        };
-
-                        if !updated {
-                            let accumulator_set = create_aggregate_entry(&self.aggr_expr);
-                            {
-                                let mut entry_mut = accumulator_set.borrow_mut();
-                                update_accumulators(&batch, row, &mut entry_mut, &self.aggr_expr);
-                            }
-                            map.insert(key.clone(), accumulator_set);
-                        }
-                    }
-
-                    // create record batch from the accumulators
-                    let mut result_columns: Vec<ArrayRef> =
-                        Vec::with_capacity(self.group_expr.len() + self.aggr_expr.len());
-
-                    for i in 0..group_by_keys.len() {
-                        result_columns.push(group_by_keys[i].clone());
-                    }
-
-                    //TODO build record batch from aggregate results
-                    for (k, v) in map.iter() {
-
-                    }
-
-                    Ok(Some(RecordBatch::new(
-                        self.schema.clone(),
-                        result_columns
-
-                    )))
-                }
-            }
-            None => Ok(None),
+        if self.group_expr.is_empty() {
+            self.without_group_by()
+        } else {
+            self.with_group_by()
         }
     }
 
     fn schema(&self) -> &Arc<Schema> {
         &self.schema
     }
+}
+
+impl AggregateRelation {
+
+    fn without_group_by(&mut self) -> Result<Option<RecordBatch>> {
+
+        let accumulator_set = create_aggregate_entry(&self.aggr_expr);
+
+        while let Some(batch) = self.input.borrow_mut().next()? {
+            // perform simple aggregate on entire columns without grouping logic
+            let columns: Result<Vec<ArrayRef>> = self.aggr_expr.iter().map(|expr| match expr {
+                RuntimeExpr::AggregateFunction { f, args, t, .. } => {
+
+                    // evaluate argument to aggregate function
+                    match args[0](&batch) {
+                        Ok(array) => match f {
+                            AggregateType::Min => array_min(array, &t),
+                            AggregateType::Max => array_max(array, &t),
+                            _ => Err(ExecutionError::NotImplemented("Unsupported aggregate function".to_string()))
+                        }
+                        Err(e) => Err(ExecutionError::ExecutionError("Failed to evaluate argument to aggregate function".to_string()))
+                    }
+
+                },
+                _ => Err(ExecutionError::General("Invalid aggregate expression".to_string()))
+
+            }).collect();
+
+
+        }
+
+        self.create_result_batch(&map)
+    }
+
+    fn with_group_by(&mut self) -> Result<Option<RecordBatch>> {
+
+        // create map to store aggregate results
+        let mut map: FnvHashMap<Vec<GroupByScalar>, Rc<RefCell<AggregateEntry>>> =
+            FnvHashMap::default();
+
+        while let Some(batch) = self.input.borrow_mut().next()? {
+
+            // evaulate the group by expressions on this batch
+            let group_by_keys: Vec<ArrayRef> =
+                self.group_expr.iter()
+                    .map(|e| e.get_func()(&batch))
+                    .collect::<Result<Vec<ArrayRef>>>()?;
+
+
+            // iterate over each row in the batch
+            for row in 0..batch.num_rows() {
+
+                //NOTE: this seems pretty inefficient, performing a match and a downcast on each row
+
+                // create key
+                let key: Vec<GroupByScalar> = group_by_keys.iter().map(|col| {
+                    //TODO: use macro to make this less verbose
+                    match col.data_type() {
+                        DataType::Int32 => {
+                            let array = col.as_any().downcast_ref::<Int32Array>().unwrap();
+                            GroupByScalar::Int32(array.value(row))
+                        }
+                        DataType::Utf8 => {
+                            let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
+                            GroupByScalar::Utf8(String::from(str::from_utf8(array.get_value(row)).unwrap()))
+                        }
+                        //TODO add all types
+                        _ => unimplemented!()
+                    }
+                }).collect();
+
+                //TODO: find more elegant way to write this instead of hacking around ownership issues
+
+                let updated = match map.get(&key) {
+                    Some(entry) => {
+                        let mut accumulator_set = entry.borrow_mut();
+                        update_accumulators(&batch, row, &mut accumulator_set, &self.aggr_expr);
+                        true
+                    }
+                    None => false
+                };
+
+                if !updated {
+                    let accumulator_set = create_aggregate_entry(&self.aggr_expr);
+                    {
+                        let mut entry_mut = accumulator_set.borrow_mut();
+                        update_accumulators(&batch, row, &mut entry_mut, &self.aggr_expr);
+                    }
+                    map.insert(key.clone(), accumulator_set);
+                }
+            }
+        }
+
+        self.create_result_batch(&map)
+    }
+
+    fn create_result_batch(&self, map: &FnvHashMap<Vec<GroupByScalar>, Rc<RefCell<AggregateEntry>>>) -> Result<Option<RecordBatch>> {
+
+        // create record batch from the accumulators
+        let mut result_columns: Vec<ArrayRef> =
+            Vec::with_capacity(self.group_expr.len() + self.aggr_expr.len());
+
+//        for i in 0..group_by_keys.len() {
+//            result_columns.push(group_by_keys[i].clone());
+//        }
+
+        //TODO build record batch from aggregate results
+        for (k, v) in map.iter() {
+
+        }
+
+        Ok(Some(RecordBatch::new(
+            self.schema.clone(),
+            result_columns
+        )))
+    }
+
 }
 
 #[cfg(test)]
