@@ -462,12 +462,38 @@ impl Relation for AggregateRelation {
 macro_rules! array_from_scalar {
     ($BUILDER:ident, $TY:ident, $ACCUM:expr) => {{
         let mut b = $BUILDER::new(1);
+        let mut err = false;
         match $ACCUM.result() {
-            Some(ScalarValue::$TY(n)) => b.push(*n)?,
-            Some(_) => panic!("unexpected type when creating array from scalar value"),
-            None => b.push_null()?,
+            Some(ScalarValue::$TY(n)) => {
+                b.push(*n)?;
+            }
+            None => {
+                b.push_null()?;
+            }
+            Some(_) => {
+                err = true;
+            }
         };
-        Arc::new(b.finish())
+        if err {
+            Err(ExecutionError::ExecutionError(
+                "unexpected type when creating array from scalar value".to_string(),
+            ))
+        } else {
+            Ok(Arc::new(b.finish()))
+        }
+    }};
+}
+
+macro_rules! array_from_map_entries {
+    ($BUILDER:ident, $TY:ident, $ENTRIES:expr, $COL_INDEX:expr) => {{
+        let mut builder = $BUILDER::new($ENTRIES.len());
+        for j in 0..$ENTRIES.len() {
+            match $ENTRIES[j].k[$COL_INDEX] {
+                GroupByScalar::$TY(n) => builder.push(n).unwrap(),
+                _ => panic!("unexpected type when creating array from aggregate map"),
+            }
+        }
+        Ok(Arc::new(builder.finish()))
     }};
 }
 
@@ -518,32 +544,34 @@ impl AggregateRelation {
             let accum = accumulator_set.aggr_values[i].borrow();
             match accum.data_type() {
                 DataType::UInt8 => {
-                    result_columns.push(array_from_scalar!(UInt8Builder, UInt8, accum))
+                    result_columns.push(array_from_scalar!(UInt8Builder, UInt8, accum)?)
                 }
                 DataType::UInt16 => {
-                    result_columns.push(array_from_scalar!(UInt16Builder, UInt16, accum))
+                    result_columns.push(array_from_scalar!(UInt16Builder, UInt16, accum)?)
                 }
                 DataType::UInt32 => {
-                    result_columns.push(array_from_scalar!(UInt32Builder, UInt32, accum))
+                    result_columns.push(array_from_scalar!(UInt32Builder, UInt32, accum)?)
                 }
                 DataType::UInt64 => {
-                    result_columns.push(array_from_scalar!(UInt64Builder, UInt64, accum))
+                    result_columns.push(array_from_scalar!(UInt64Builder, UInt64, accum)?)
                 }
-                DataType::Int8 => result_columns.push(array_from_scalar!(Int8Builder, Int8, accum)),
+                DataType::Int8 => {
+                    result_columns.push(array_from_scalar!(Int8Builder, Int8, accum)?)
+                }
                 DataType::Int16 => {
-                    result_columns.push(array_from_scalar!(Int16Builder, Int16, accum))
+                    result_columns.push(array_from_scalar!(Int16Builder, Int16, accum)?)
                 }
                 DataType::Int32 => {
-                    result_columns.push(array_from_scalar!(Int32Builder, Int32, accum))
+                    result_columns.push(array_from_scalar!(Int32Builder, Int32, accum)?)
                 }
                 DataType::Int64 => {
-                    result_columns.push(array_from_scalar!(Int64Builder, Int64, accum))
+                    result_columns.push(array_from_scalar!(Int64Builder, Int64, accum)?)
                 }
                 DataType::Float32 => {
-                    result_columns.push(array_from_scalar!(Float32Builder, Float32, accum))
+                    result_columns.push(array_from_scalar!(Float32Builder, Float32, accum)?)
                 }
                 DataType::Float64 => {
-                    result_columns.push(array_from_scalar!(Float64Builder, Float64, accum))
+                    result_columns.push(array_from_scalar!(Float64Builder, Float64, accum)?)
                 }
                 _ => return Err(ExecutionError::NotImplemented("tbd".to_string())),
             }
@@ -660,36 +688,26 @@ impl AggregateRelation {
 
         // grouping values
         for i in 0..self.group_expr.len() {
-            match self.group_expr[i].get_type() {
-                //TOD: macros, all types
-                DataType::Int16 => {
-                    let mut builder = Int16Builder::new(entries.len());
-                    for j in 0..entries.len() {
-                        match entries[j].k[i] {
-                            GroupByScalar::Int16(n) => builder.push(n).unwrap(),
-                            _ => panic!(),
-                        }
-                    }
-                    result_arrays.push(Arc::new(builder.finish()));
-                }
-                DataType::Int32 => {
-                    let mut builder = Int32Builder::new(entries.len());
-                    for j in 0..entries.len() {
-                        match entries[j].k[i] {
-                            GroupByScalar::Int32(n) => builder.push(n).unwrap(),
-                            _ => panic!(),
-                        }
-                    }
-                    result_arrays.push(Arc::new(builder.finish()));
-                }
-                _ => unimplemented!(),
-            }
+            let array: Result<ArrayRef> = match self.group_expr[i].get_type() {
+                DataType::UInt8 => array_from_map_entries!(UInt8Builder, UInt8, entries, i),
+                DataType::UInt16 => array_from_map_entries!(UInt16Builder, UInt16, entries, i),
+                DataType::UInt32 => array_from_map_entries!(UInt32Builder, UInt32, entries, i),
+                DataType::UInt64 => array_from_map_entries!(UInt64Builder, UInt64, entries, i),
+                DataType::Int8 => array_from_map_entries!(Int8Builder, Int8, entries, i),
+                DataType::Int16 => array_from_map_entries!(Int16Builder, Int16, entries, i),
+                DataType::Int32 => array_from_map_entries!(Int32Builder, Int32, entries, i),
+                DataType::Int64 => array_from_map_entries!(Int64Builder, Int64, entries, i),
+                _ => Err(ExecutionError::ExecutionError(
+                    "Unsupported group by expr".to_string(),
+                )),
+            };
+            result_arrays.push(array?);
         }
 
         // aggregate values
         for i in 0..self.aggr_expr.len() {
             match self.aggr_expr[i].get_type() {
-                //TOD: macros, all types
+                //TODO: macros, all types
                 DataType::Int16 => {
                     let mut builder = Int16Builder::new(entries.len());
                     for j in 0..entries.len() {
