@@ -765,6 +765,16 @@ impl AggregateRelation {
                 DataType::Int16 => group_array_from_map_entries!(Int16Builder, Int16, entries, i),
                 DataType::Int32 => group_array_from_map_entries!(Int32Builder, Int32, entries, i),
                 DataType::Int64 => group_array_from_map_entries!(Int64Builder, Int64, entries, i),
+                DataType::Utf8 => {
+                    let mut builder = BinaryArrayBuilder::new(1);
+                    for j in 0..entries.len() {
+                        match &entries[j].k[i] {
+                            GroupByScalar::Utf8(s) => builder.push_string(&s).unwrap(),
+                            _ => {}
+                        }
+                    }
+                    Ok(Arc::new(builder.finish()) as ArrayRef)
+                }
                 _ => Err(ExecutionError::ExecutionError(
                     "Unsupported group by expr".to_string(),
                 )),
