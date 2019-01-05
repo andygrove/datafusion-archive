@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Execution of an aggregate relation
+//! Execution of a simple aggregate relation containing MIN, MAX, COUNT, SUM aggregate functions
+//! with optional GROUP BY columns
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -32,6 +33,8 @@ use super::relation::Relation;
 
 use fnv::FnvHashMap;
 
+/// An aggregate relation is made up of zero or more grouping expressions and one
+/// or more aggregate expressions
 pub struct AggregateRelation {
     schema: Arc<Schema>,
     input: Rc<RefCell<Relation>>,
@@ -56,7 +59,8 @@ impl AggregateRelation {
     }
 }
 
-/// Enumeration of types that can be used in a GROUP BY expression
+/// Enumeration of types that can be used in a GROUP BY expression (all primitives except for
+/// floating point numerics)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum GroupByScalar {
     Boolean(bool),
@@ -71,6 +75,7 @@ enum GroupByScalar {
     Utf8(String),
 }
 
+/// Common trait for all aggregation functions
 trait AggregateFunction {
     fn accumulate_scalar(&mut self, value: &Option<ScalarValue>);
     fn accumulate_array(&mut self, array: ArrayRef);
@@ -96,9 +101,17 @@ impl AggregateFunction for MinFunction {
             self.value = value.clone();
         } else if value.is_some() {
             self.value = match (&self.value, value) {
+                (Some(ScalarValue::UInt8(a)), Some(ScalarValue::UInt8(b))) => Some(ScalarValue::UInt8(*a.min(b))),
+                (Some(ScalarValue::UInt16(a)), Some(ScalarValue::UInt16(b))) => Some(ScalarValue::UInt16(*a.min(b))),
+                (Some(ScalarValue::UInt32(a)), Some(ScalarValue::UInt32(b))) => Some(ScalarValue::UInt32(*a.min(b))),
+                (Some(ScalarValue::UInt64(a)), Some(ScalarValue::UInt64(b))) => Some(ScalarValue::UInt64(*a.min(b))),
+                (Some(ScalarValue::Int8(a)), Some(ScalarValue::Int8(b))) => Some(ScalarValue::Int8(*a.min(b))),
+                (Some(ScalarValue::Int16(a)), Some(ScalarValue::Int16(b))) => Some(ScalarValue::Int16(*a.min(b))),
+                (Some(ScalarValue::Int32(a)), Some(ScalarValue::Int32(b))) => Some(ScalarValue::Int32(*a.min(b))),
+                (Some(ScalarValue::Int64(a)), Some(ScalarValue::Int64(b))) => Some(ScalarValue::Int64(*a.min(b))),
                 (Some(ScalarValue::Float32(a)), Some(ScalarValue::Float32(b))) => Some(ScalarValue::Float32(a.min(*b))),
                 (Some(ScalarValue::Float64(a)), Some(ScalarValue::Float64(b))) => Some(ScalarValue::Float64(a.min(*b))),
-                _ => panic!()
+                _ => panic!("unsupported data type for MIN")
             }
         }
     }
@@ -133,9 +146,17 @@ impl AggregateFunction for MaxFunction {
             self.value = value.clone();
         } else if value.is_some() {
             self.value = match (&self.value, value) {
+                (Some(ScalarValue::UInt8(a)), Some(ScalarValue::UInt8(b))) => Some(ScalarValue::UInt8(*a.max(b))),
+                (Some(ScalarValue::UInt16(a)), Some(ScalarValue::UInt16(b))) => Some(ScalarValue::UInt16(*a.max(b))),
+                (Some(ScalarValue::UInt32(a)), Some(ScalarValue::UInt32(b))) => Some(ScalarValue::UInt32(*a.max(b))),
+                (Some(ScalarValue::UInt64(a)), Some(ScalarValue::UInt64(b))) => Some(ScalarValue::UInt64(*a.max(b))),
+                (Some(ScalarValue::Int8(a)), Some(ScalarValue::Int8(b))) => Some(ScalarValue::Int8(*a.max(b))),
+                (Some(ScalarValue::Int16(a)), Some(ScalarValue::Int16(b))) => Some(ScalarValue::Int16(*a.max(b))),
+                (Some(ScalarValue::Int32(a)), Some(ScalarValue::Int32(b))) => Some(ScalarValue::Int32(*a.max(b))),
+                (Some(ScalarValue::Int64(a)), Some(ScalarValue::Int64(b))) => Some(ScalarValue::Int64(*a.max(b))),
                 (Some(ScalarValue::Float32(a)), Some(ScalarValue::Float32(b))) => Some(ScalarValue::Float32(a.max(*b))),
                 (Some(ScalarValue::Float64(a)), Some(ScalarValue::Float64(b))) => Some(ScalarValue::Float64(a.max(*b))),
-                _ => panic!()
+                _ => panic!("unsupported data type for MAX")
             }
         }
     }
@@ -166,19 +187,15 @@ impl AccumulatorSet {
 
 /// Create an initial aggregate entry
 fn create_accumulators(aggr_expr: &Vec<RuntimeExpr>) -> AccumulatorSet {
-    //println!("Creating new aggregate entry");
-
     let functions = aggr_expr
         .iter()
         .map(|e| match e {
             RuntimeExpr::AggregateFunction { ref f, ref t, .. } => match f {
                 AggregateType::Min => Rc::new(RefCell::new(MinFunction::new(t))) as Rc<RefCell<AggregateFunction>>,
                 AggregateType::Max => Rc::new(RefCell::new(MaxFunction::new(t))) as Rc<RefCell<AggregateFunction>>,
-//                AggregateType::Count => Box::new(CountFunction::new()) as Box<AggregateFunction>,
-//                AggregateType::Sum => Box::new(SumFunction::new(t)) as Box<AggregateFunction>,
-                _ => panic!(),
+                _ => panic!("unsupported aggregate function"),
             },
-            _ => panic!(),
+            _ => panic!("invalid aggregate expression"),
         })
         .collect();
 
