@@ -94,10 +94,10 @@ mod tests {
         let relation = Rc::new(RefCell::new(DataSourceRelation::new(Rc::new(
             RefCell::new(ds),
         ))));
-        let context = Rc::new(ExecutionContext::new());
+        let context = ExecutionContext::new();
 
         let projection_expr =
-            vec![expression::compile_expr(context, &Expr::Column(0), schema.as_ref()).unwrap()];
+            vec![expression::compile_expr(&context, &Expr::Column(0), schema.as_ref()).unwrap()];
 
         let mut projection = ProjectRelation::new(relation, projection_expr, schema);
         let batch = projection.next().unwrap().unwrap();

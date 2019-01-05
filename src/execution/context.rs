@@ -22,6 +22,7 @@ use arrow::datatypes::{Field, Schema};
 use super::super::dfparser::{DFASTNode, DFParser};
 use super::super::logicalplan::*;
 use super::super::sqlplanner::{SchemaProvider, SqlToRel};
+use super::aggregate::AggregateRelation;
 use super::datasource::DataSource;
 use super::error::{ExecutionError, Result};
 use super::expression::*;
@@ -158,6 +159,38 @@ impl ExecutionContext {
 
                 Ok(Rc::new(RefCell::new(rel)))
             }
+            LogicalPlan::Aggregate {
+                ref input,
+                ref group_expr,
+                ref aggr_expr,
+                ..
+            } => {
+                let input_rel = self.execute(&input)?;
+
+                let input_schema = input_rel.as_ref().borrow().schema().clone();
+
+                let compiled_group_expr_result: Result<Vec<RuntimeExpr>> = group_expr
+                    .iter()
+                    .map(|e| compile_scalar_expr(&self, e, &input_schema))
+                    .collect();
+                let compiled_group_expr = compiled_group_expr_result?;
+
+                let compiled_aggr_expr_result: Result<Vec<RuntimeExpr>> = aggr_expr
+                    .iter()
+                    .map(|e| compile_expr(&self, e, &input_schema))
+                    .collect();
+                let compiled_aggr_expr = compiled_aggr_expr_result?;
+
+                let rel = AggregateRelation::new(
+                    Arc::new(Schema::empty()), //(expr_to_field(&compiled_group_expr, &input_schema))),
+                    input_rel,
+                    compiled_group_expr,
+                    compiled_aggr_expr,
+                );
+
+                Ok(Rc::new(RefCell::new(rel)))
+            }
+
             _ => unimplemented!(),
         }
     }

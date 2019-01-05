@@ -35,8 +35,8 @@ pub enum AggregateType {
     Max,
     Sum,
     Count,
+    CountDistinct,
     Avg,
-    //CountDistinct()
 }
 
 /// Runtime expression
@@ -79,7 +79,7 @@ impl RuntimeExpr {
 
 /// Compiles a scalar expression into a closure
 pub fn compile_expr(
-    ctx: Rc<ExecutionContext>,
+    ctx: &ExecutionContext,
     expr: &Expr,
     input_schema: &Schema,
 ) -> Result<RuntimeExpr> {
@@ -97,16 +97,19 @@ pub fn compile_expr(
                 .collect();
 
             let func = match name.to_lowercase().as_ref() {
-                "min" => AggregateType::Min,
-                "max" => AggregateType::Max,
-                "count" => AggregateType::Count,
-                "sum" => AggregateType::Sum,
-                _ => unimplemented!("Unsupported aggregate function '{}'", name),
+                "min" => Ok(AggregateType::Min),
+                "max" => Ok(AggregateType::Max),
+                "count" => Ok(AggregateType::Count),
+                "sum" => Ok(AggregateType::Sum),
+                _ => Err(ExecutionError::General(format!(
+                    "Unsupported aggregate function '{}'",
+                    name
+                ))),
             };
 
             Ok(RuntimeExpr::AggregateFunction {
                 name: name.to_string(),
-                f: func,
+                f: func?,
                 args: compiled_args?
                     .iter()
                     .map(|e| e.get_func().clone())
