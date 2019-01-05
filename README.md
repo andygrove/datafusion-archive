@@ -13,11 +13,42 @@ DataFusion is an attempt at building a modern distributed compute platform in Ru
 
 See my article [How To Build a Modern Distributed Compute Platform](https://andygrove.io/how_to_build_a_modern_distributed_compute_platform/) to learn about the design and my motivation for building this. The TL;DR is that this project is a great way to learn about building distributed systems but there are plenty of better choices if you need something mature and supported.
 
-# Status / Roadmap
+# Status
 
-The original POC no longer works due to changes in Rust nightly since 11/3/18 and since then I have been contributing more code to the Apache Arrow project and decided to start implementing DataFusion from scratch based on that latest Arrow code and incorporating lessons learned from the first attempt. The original POC code is is now on the [original_poc branch](https://github.com/andygrove/datafusion/tree/original_poc) and supports single threaded SQL execution against Parquet and CSV files using Apache Arrow as the memory model.
+The current code supports single-threaded execution of limited SQL queries (projection, selection, and aggregates) against CSV files. Parquet files will be supported shortly.
 
-The current code supports single-threaded execution of limited SQL queries (projection and selection) against CSV files.
+To use DataFusion as a crate dependency, add the following to your Cargo.toml:
+
+```toml
+[dependencies]
+version = "0.5.2"
+```
+
+Here is a brief example for running a SQL query against a CSV file. See the [examples](examples) directory for working examples.
+
+```rust
+// create local execution context
+let mut ctx = ExecutionContext::new();
+
+// define schema for data source (csv file)
+let schema = Arc::new(Schema::new(vec![
+    Field::new("city", DataType::Utf8, false),
+    Field::new("lat", DataType::Float64, false),
+    Field::new("lng", DataType::Float64, false),
+]));
+
+// register csv file with the execution context
+let csv_datasource = CsvDataSource::new("test/data/uk_cities.csv", schema.clone(), 1024);
+ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)));
+
+// simple projection and selection
+let sql = "SELECT city, lat, lng FROM cities WHERE lat > 51.0 AND lat < 53";
+
+// execute the query
+let results = ctx.sql(&sql).unwrap();
+```
+
+# Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
