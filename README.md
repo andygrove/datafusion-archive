@@ -21,10 +21,10 @@ To use DataFusion as a crate dependency, add the following to your Cargo.toml:
 
 ```toml
 [dependencies]
-version = "0.5.2"
+datafusion = "0.5.2"
 ```
 
-Here is a brief example for running a SQL query against a CSV file. See the [examples](examples) directory for working examples.
+Here is a brief example for running a SQL query against a CSV file. See the [examples](examples) directory for full examples.
 
 ```rust
 // create local execution context
