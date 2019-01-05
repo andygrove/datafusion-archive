@@ -76,12 +76,14 @@ enum GroupByScalar {
 
 /// Common trait for all aggregation functions
 trait AggregateFunction {
+    /// Get the function name (used for debugging)
+    fn name(&self) -> &str;
     fn accumulate_scalar(&mut self, value: &Option<ScalarValue>);
-    fn accumulate_array(&mut self, array: ArrayRef);
     fn result(&self) -> &Option<ScalarValue>;
     fn data_type(&self) -> &DataType;
 }
 
+#[derive(Debug)]
 struct MinFunction {
     data_type: DataType,
     value: Option<ScalarValue>,
@@ -97,6 +99,10 @@ impl MinFunction {
 }
 
 impl AggregateFunction for MinFunction {
+    fn name(&self) -> &str {
+        "min"
+    }
+
     fn accumulate_scalar(&mut self, value: &Option<ScalarValue>) {
         if self.value.is_none() {
             self.value = value.clone();
@@ -137,8 +143,6 @@ impl AggregateFunction for MinFunction {
         }
     }
 
-    fn accumulate_array(&mut self, array: ArrayRef) {}
-
     fn result(&self) -> &Option<ScalarValue> {
         &self.value
     }
@@ -148,6 +152,7 @@ impl AggregateFunction for MinFunction {
     }
 }
 
+#[derive(Debug)]
 struct MaxFunction {
     data_type: DataType,
     value: Option<ScalarValue>,
@@ -163,6 +168,10 @@ impl MaxFunction {
 }
 
 impl AggregateFunction for MaxFunction {
+    fn name(&self) -> &str {
+        "max"
+    }
+
     fn accumulate_scalar(&mut self, value: &Option<ScalarValue>) {
         if self.value.is_none() {
             self.value = value.clone();
@@ -203,8 +212,6 @@ impl AggregateFunction for MaxFunction {
         }
     }
 
-    fn accumulate_array(&mut self, array: ArrayRef) {}
-
     fn result(&self) -> &Option<ScalarValue> {
         &self.value
     }
@@ -220,8 +227,17 @@ struct AccumulatorSet {
 
 impl AccumulatorSet {
     fn accumulate_scalar(&mut self, i: usize, value: Option<ScalarValue>) {
-        println!("accumulate_scalar {:?}", value);
-        self.aggr_values[i].borrow_mut().accumulate_scalar(&value);
+        let mut accumulator = self.aggr_values[i].borrow_mut();
+        let before = accumulator.result().clone();
+        accumulator.accumulate_scalar(&value);
+        let after = accumulator.result().clone();
+        println!(
+            "{} accumulate_scalar {:?} changed value from {:?} to {:?}",
+            accumulator.name(),
+            value,
+            before,
+            after
+        );
     }
 
     fn values(&self) -> Vec<Option<ScalarValue>> {
@@ -232,6 +248,7 @@ impl AccumulatorSet {
     }
 }
 
+#[derive(Debug)]
 struct MapEntry {
     k: Vec<GroupByScalar>,
     v: Vec<Option<ScalarValue>>,
