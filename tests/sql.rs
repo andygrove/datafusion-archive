@@ -37,7 +37,7 @@ fn csv_query_with_predicate() {
 }
 
 #[test]
-fn csv_query_group_by_min_max() {
+fn csv_query_group_by_int_min_max() {
     let mut ctx = ExecutionContext::new();
     let schema = Arc::new(Schema::new(vec![
         Field::new("a", DataType::Int32, false),
@@ -48,6 +48,21 @@ fn csv_query_group_by_min_max() {
     let sql = "SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a";
     let actual = execute(&mut ctx, sql);
     let expected = "2\t3.3\t5.5\n3\t1.0\t2.0\n1\t1.1\t2.2\n".to_string();
+    assert_eq!(expected, actual);
+}
+
+#[test]
+fn csv_query_group_by_string_min_max() {
+    let mut ctx = ExecutionContext::new();
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("a", DataType::Utf8, false),
+        Field::new("b", DataType::Float64, false),
+    ]));
+    register_csv(&mut ctx, "t1", "test/data/aggregate_test_2.csv", &schema);
+    //TODO add ORDER BY once supported, to make this test determistic
+    let sql = "SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a";
+    let actual = execute(&mut ctx, sql);
+    let expected = "\"three\"\t1.0\t2.0\n\"two\"\t3.3\t5.5\n\"one\"\t1.1\t2.2\n".to_string();
     assert_eq!(expected, actual);
 }
 
@@ -76,7 +91,6 @@ fn result_str(results: &Rc<RefCell<Relation>>) -> String {
     let mut relation = results.borrow_mut();
     let mut str = String::new();
     while let Some(batch) = relation.next().unwrap() {
-        println!("batch");
         for row_index in 0..batch.num_rows() {
             for column_index in 0..batch.num_columns() {
                 if column_index > 0 {
