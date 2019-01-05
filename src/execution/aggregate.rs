@@ -40,6 +40,7 @@ pub struct AggregateRelation {
     input: Rc<RefCell<Relation>>,
     group_expr: Vec<RuntimeExpr>,
     aggr_expr: Vec<RuntimeExpr>,
+    end_of_results: bool,
 }
 
 impl AggregateRelation {
@@ -54,6 +55,7 @@ impl AggregateRelation {
             input,
             group_expr,
             aggr_expr,
+            end_of_results: false,
         }
     }
 }
@@ -228,16 +230,7 @@ struct AccumulatorSet {
 impl AccumulatorSet {
     fn accumulate_scalar(&mut self, i: usize, value: Option<ScalarValue>) {
         let mut accumulator = self.aggr_values[i].borrow_mut();
-        let before = accumulator.result().clone();
         accumulator.accumulate_scalar(&value);
-        let after = accumulator.result().clone();
-        println!(
-            "{} accumulate_scalar {:?} changed value from {:?} to {:?}",
-            accumulator.name(),
-            value,
-            before,
-            after
-        );
     }
 
     fn values(&self) -> Vec<Option<ScalarValue>> {
@@ -353,10 +346,15 @@ fn update_accumulators(
 
 impl Relation for AggregateRelation {
     fn next(&mut self) -> Result<Option<RecordBatch>> {
-        if self.group_expr.is_empty() {
-            self.without_group_by()
+        if self.end_of_results {
+            Ok(None)
         } else {
-            self.with_group_by()
+            self.end_of_results = true;
+            if self.group_expr.is_empty() {
+                self.without_group_by()
+            } else {
+                self.with_group_by()
+            }
         }
     }
 
