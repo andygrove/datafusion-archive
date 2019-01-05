@@ -420,9 +420,41 @@ fn update_accumulators(
                 match args[0](&batch) {
                     Ok(array) => {
                         let value: Option<ScalarValue> = match t {
+                            DataType::UInt8 => {
+                                let z = array.as_any().downcast_ref::<UInt8Array>().unwrap();
+                                Some(ScalarValue::UInt8(z.value(row)))
+                            }
+                            DataType::UInt16 => {
+                                let z = array.as_any().downcast_ref::<UInt16Array>().unwrap();
+                                Some(ScalarValue::UInt16(z.value(row)))
+                            }
+                            DataType::UInt32 => {
+                                let z = array.as_any().downcast_ref::<UInt32Array>().unwrap();
+                                Some(ScalarValue::UInt32(z.value(row)))
+                            }
+                            DataType::UInt64 => {
+                                let z = array.as_any().downcast_ref::<UInt64Array>().unwrap();
+                                Some(ScalarValue::UInt64(z.value(row)))
+                            }
+                            DataType::Int8 => {
+                                let z = array.as_any().downcast_ref::<Int8Array>().unwrap();
+                                Some(ScalarValue::Int8(z.value(row)))
+                            }
+                            DataType::Int16 => {
+                                let z = array.as_any().downcast_ref::<Int16Array>().unwrap();
+                                Some(ScalarValue::Int16(z.value(row)))
+                            }
                             DataType::Int32 => {
                                 let z = array.as_any().downcast_ref::<Int32Array>().unwrap();
                                 Some(ScalarValue::Int32(z.value(row)))
+                            }
+                            DataType::Int64 => {
+                                let z = array.as_any().downcast_ref::<Int64Array>().unwrap();
+                                Some(ScalarValue::Int64(z.value(row)))
+                            }
+                            DataType::Float32 => {
+                                let z = array.as_any().downcast_ref::<Float32Array>().unwrap();
+                                Some(ScalarValue::Float32(z.value(row)))
                             }
                             DataType::Float64 => {
                                 let z = array.as_any().downcast_ref::<Float64Array>().unwrap();
@@ -479,21 +511,51 @@ macro_rules! array_from_scalar {
                 "unexpected type when creating array from scalar value".to_string(),
             ))
         } else {
-            Ok(Arc::new(b.finish()))
+            Ok(Arc::new(b.finish()) as ArrayRef)
         }
     }};
 }
 
-macro_rules! array_from_map_entries {
+/// Create array from `key` attribute in map entry (representing a grouping scalar value)
+macro_rules! group_array_from_map_entries {
     ($BUILDER:ident, $TY:ident, $ENTRIES:expr, $COL_INDEX:expr) => {{
         let mut builder = $BUILDER::new($ENTRIES.len());
+        let mut err = false;
         for j in 0..$ENTRIES.len() {
             match $ENTRIES[j].k[$COL_INDEX] {
                 GroupByScalar::$TY(n) => builder.push(n).unwrap(),
-                _ => panic!("unexpected type when creating array from aggregate map"),
+                _ => err = true,
             }
         }
-        Ok(Arc::new(builder.finish()))
+        if err {
+            Err(ExecutionError::ExecutionError(
+                "unexpected type when creating array from aggregate map".to_string(),
+            ))
+        } else {
+            Ok(Arc::new(builder.finish()) as ArrayRef)
+        }
+    }};
+}
+
+/// Create array from `value` attribute in map entry (representing an aggregate scalar value)
+macro_rules! aggr_array_from_map_entries {
+    ($BUILDER:ident, $TY:ident, $ENTRIES:expr, $COL_INDEX:expr) => {{
+        let mut builder = $BUILDER::new($ENTRIES.len());
+        let mut err = false;
+        for j in 0..$ENTRIES.len() {
+            match $ENTRIES[j].v[$COL_INDEX] {
+                Some(ScalarValue::$TY(n)) => builder.push(n).unwrap(),
+                None => builder.push_null().unwrap(),
+                _ => err = true,
+            }
+        }
+        if err {
+            Err(ExecutionError::ExecutionError(
+                "unexpected type when creating array from aggregate map".to_string(),
+            ))
+        } else {
+            Ok(Arc::new(builder.finish()) as ArrayRef)
+        }
     }};
 }
 
@@ -689,14 +751,20 @@ impl AggregateRelation {
         // grouping values
         for i in 0..self.group_expr.len() {
             let array: Result<ArrayRef> = match self.group_expr[i].get_type() {
-                DataType::UInt8 => array_from_map_entries!(UInt8Builder, UInt8, entries, i),
-                DataType::UInt16 => array_from_map_entries!(UInt16Builder, UInt16, entries, i),
-                DataType::UInt32 => array_from_map_entries!(UInt32Builder, UInt32, entries, i),
-                DataType::UInt64 => array_from_map_entries!(UInt64Builder, UInt64, entries, i),
-                DataType::Int8 => array_from_map_entries!(Int8Builder, Int8, entries, i),
-                DataType::Int16 => array_from_map_entries!(Int16Builder, Int16, entries, i),
-                DataType::Int32 => array_from_map_entries!(Int32Builder, Int32, entries, i),
-                DataType::Int64 => array_from_map_entries!(Int64Builder, Int64, entries, i),
+                DataType::UInt8 => group_array_from_map_entries!(UInt8Builder, UInt8, entries, i),
+                DataType::UInt16 => {
+                    group_array_from_map_entries!(UInt16Builder, UInt16, entries, i)
+                }
+                DataType::UInt32 => {
+                    group_array_from_map_entries!(UInt32Builder, UInt32, entries, i)
+                }
+                DataType::UInt64 => {
+                    group_array_from_map_entries!(UInt64Builder, UInt64, entries, i)
+                }
+                DataType::Int8 => group_array_from_map_entries!(Int8Builder, Int8, entries, i),
+                DataType::Int16 => group_array_from_map_entries!(Int16Builder, Int16, entries, i),
+                DataType::Int32 => group_array_from_map_entries!(Int32Builder, Int32, entries, i),
+                DataType::Int64 => group_array_from_map_entries!(Int64Builder, Int64, entries, i),
                 _ => Err(ExecutionError::ExecutionError(
                     "Unsupported group by expr".to_string(),
                 )),
@@ -706,43 +774,26 @@ impl AggregateRelation {
 
         // aggregate values
         for i in 0..self.aggr_expr.len() {
-            match self.aggr_expr[i].get_type() {
-                //TODO: macros, all types
-                DataType::Int16 => {
-                    let mut builder = Int16Builder::new(entries.len());
-                    for j in 0..entries.len() {
-                        match entries[j].v[i] {
-                            Some(ScalarValue::Int16(n)) => builder.push(n).unwrap(),
-                            None => builder.push_null().unwrap(),
-                            _ => panic!(),
-                        }
-                    }
-                    result_arrays.push(Arc::new(builder.finish()));
-                }
-                DataType::Int32 => {
-                    let mut builder = Int32Builder::new(entries.len());
-                    for j in 0..entries.len() {
-                        match entries[j].v[i] {
-                            Some(ScalarValue::Int32(n)) => builder.push(n).unwrap(),
-                            None => builder.push_null().unwrap(),
-                            _ => panic!(),
-                        }
-                    }
-                    result_arrays.push(Arc::new(builder.finish()));
+            let array = match self.aggr_expr[i].get_type() {
+                DataType::UInt8 => aggr_array_from_map_entries!(UInt8Builder, UInt8, entries, i),
+                DataType::UInt16 => aggr_array_from_map_entries!(UInt16Builder, UInt16, entries, i),
+                DataType::UInt32 => aggr_array_from_map_entries!(UInt32Builder, UInt32, entries, i),
+                DataType::UInt64 => aggr_array_from_map_entries!(UInt64Builder, UInt64, entries, i),
+                DataType::Int8 => group_array_from_map_entries!(Int8Builder, Int8, entries, i),
+                DataType::Int16 => aggr_array_from_map_entries!(Int16Builder, Int16, entries, i),
+                DataType::Int32 => aggr_array_from_map_entries!(Int32Builder, Int32, entries, i),
+                DataType::Int64 => aggr_array_from_map_entries!(Int64Builder, Int64, entries, i),
+                DataType::Float32 => {
+                    aggr_array_from_map_entries!(Float32Builder, Float32, entries, i)
                 }
                 DataType::Float64 => {
-                    let mut builder = Float64Builder::new(entries.len());
-                    for j in 0..entries.len() {
-                        match entries[j].v[i] {
-                            Some(ScalarValue::Float64(n)) => builder.push(n).unwrap(),
-                            None => builder.push_null().unwrap(),
-                            _ => panic!(),
-                        }
-                    }
-                    result_arrays.push(Arc::new(builder.finish()));
+                    aggr_array_from_map_entries!(Float64Builder, Float64, entries, i)
                 }
-                _ => unimplemented!(),
-            }
+                _ => Err(ExecutionError::ExecutionError(
+                    "Unsupported aggregate expr".to_string(),
+                )),
+            };
+            result_arrays.push(array?);
         }
 
         Ok(Some(RecordBatch::new(self.schema.clone(), result_arrays)))
