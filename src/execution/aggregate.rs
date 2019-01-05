@@ -20,10 +20,10 @@ use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
 
-use arrow::array::{Array, ArrayRef, BinaryArray, Float64Array, Int32Array};
+use arrow::array::*;
 use arrow::array_ops;
-use arrow::builder::{ArrayBuilder, Float64Builder, Int16Builder, Int32Builder, ListArrayBuilder};
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::builder::*;
+use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
 
 use super::error::{ExecutionError, Result};
@@ -64,7 +64,6 @@ impl AggregateRelation {
 /// floating point numerics)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum GroupByScalar {
-    Boolean(bool),
     UInt8(u8),
     UInt16(u16),
     UInt32(u32),
@@ -248,44 +247,92 @@ struct MapEntry {
 }
 
 /// Create an initial aggregate entry
-fn create_accumulators(aggr_expr: &Vec<RuntimeExpr>) -> AccumulatorSet {
-    let functions = aggr_expr
-        .iter()
-        .map(|e| match e {
-            RuntimeExpr::AggregateFunction { ref f, ref t, .. } => match f {
-                AggregateType::Min => {
-                    Rc::new(RefCell::new(MinFunction::new(t))) as Rc<RefCell<AggregateFunction>>
-                }
-                AggregateType::Max => {
-                    Rc::new(RefCell::new(MaxFunction::new(t))) as Rc<RefCell<AggregateFunction>>
-                }
-                _ => panic!("unsupported aggregate function"),
-            },
-            _ => panic!("invalid aggregate expression"),
-        })
-        .collect();
+fn create_accumulators(aggr_expr: &Vec<RuntimeExpr>) -> Result<AccumulatorSet> {
+    let aggr_values: Vec<Rc<RefCell<AggregateFunction>>> =
+        aggr_expr
+            .iter()
+            .map(|e| match e {
+                RuntimeExpr::AggregateFunction { ref f, ref t, .. } => match f {
+                    AggregateType::Min => Ok(Rc::new(RefCell::new(MinFunction::new(t)))
+                        as Rc<RefCell<AggregateFunction>>),
+                    AggregateType::Max => Ok(Rc::new(RefCell::new(MaxFunction::new(t)))
+                        as Rc<RefCell<AggregateFunction>>),
+                    _ => Err(ExecutionError::ExecutionError(
+                        "unsupported aggregate function".to_string(),
+                    )),
+                },
+                _ => Err(ExecutionError::ExecutionError(
+                    "invalid aggregate expression".to_string(),
+                )),
+            })
+            .collect::<Result<Vec<Rc<RefCell<AggregateFunction>>>>>()?;
 
-    AccumulatorSet {
-        aggr_values: functions,
-    }
+    Ok(AccumulatorSet { aggr_values })
 }
-
-//TODO macros to make this code less verbose
 
 fn array_min(array: ArrayRef, dt: &DataType) -> Result<Option<ScalarValue>> {
     match dt {
-        //        DataType::Int32 => {
-        //            let value = array_ops::min(array.as_any().downcast_ref::<Int32Array>().unwrap());
-        //            Ok(Arc::new(Int32Array::from(vec![value])) as ArrayRef)
-        //        }
+        DataType::UInt8 => {
+            match array_ops::min(array.as_any().downcast_ref::<UInt8Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt8(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt16 => {
+            match array_ops::min(array.as_any().downcast_ref::<UInt16Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt16(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt32 => {
+            match array_ops::min(array.as_any().downcast_ref::<UInt32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt32(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt64 => {
+            match array_ops::min(array.as_any().downcast_ref::<UInt64Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt64(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int8 => {
+            match array_ops::min(array.as_any().downcast_ref::<Int8Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int8(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int16 => {
+            match array_ops::min(array.as_any().downcast_ref::<Int16Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int16(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int32 => {
+            match array_ops::min(array.as_any().downcast_ref::<Int32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int32(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int64 => {
+            match array_ops::min(array.as_any().downcast_ref::<Int64Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int64(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Float32 => {
+            match array_ops::min(array.as_any().downcast_ref::<Float32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Float32(n))),
+                None => Ok(None),
+            }
+        }
         DataType::Float64 => {
             match array_ops::min(array.as_any().downcast_ref::<Float64Array>().unwrap()) {
                 Some(n) => Ok(Some(ScalarValue::Float64(n))),
                 None => Ok(None),
             }
         }
-        //TODO support all types
-        _ => Err(ExecutionError::NotImplemented(
+        _ => Err(ExecutionError::ExecutionError(
             "Unsupported data type for MIN".to_string(),
         )),
     }
@@ -293,18 +340,67 @@ fn array_min(array: ArrayRef, dt: &DataType) -> Result<Option<ScalarValue>> {
 
 fn array_max(array: ArrayRef, dt: &DataType) -> Result<Option<ScalarValue>> {
     match dt {
-        //        DataType::Int32 => {
-        //            let value = array_ops::max(array.as_any().downcast_ref::<Int32Array>().unwrap());
-        //            Ok(Arc::new(Int32Array::from(vec![value])) as ArrayRef)
-        //        }
+        DataType::UInt8 => {
+            match array_ops::max(array.as_any().downcast_ref::<UInt8Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt8(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt16 => {
+            match array_ops::max(array.as_any().downcast_ref::<UInt16Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt16(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt32 => {
+            match array_ops::max(array.as_any().downcast_ref::<UInt32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt32(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt64 => {
+            match array_ops::max(array.as_any().downcast_ref::<UInt64Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt64(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int8 => {
+            match array_ops::max(array.as_any().downcast_ref::<Int8Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int8(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int16 => {
+            match array_ops::max(array.as_any().downcast_ref::<Int16Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int16(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int32 => {
+            match array_ops::max(array.as_any().downcast_ref::<Int32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int32(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int64 => {
+            match array_ops::max(array.as_any().downcast_ref::<Int64Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int64(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Float32 => {
+            match array_ops::max(array.as_any().downcast_ref::<Float32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Float32(n))),
+                None => Ok(None),
+            }
+        }
         DataType::Float64 => {
             match array_ops::max(array.as_any().downcast_ref::<Float64Array>().unwrap()) {
                 Some(n) => Ok(Some(ScalarValue::Float64(n))),
                 None => Ok(None),
             }
         }
-        //TODO support all types
-        _ => Err(ExecutionError::NotImplemented(
+        _ => Err(ExecutionError::ExecutionError(
             "Unsupported data type for MAX".to_string(),
         )),
     }
@@ -319,7 +415,7 @@ fn update_accumulators(
     // update the accumulators
     for j in 0..accumulator_set.aggr_values.len() {
         match &aggr_expr[j] {
-            RuntimeExpr::AggregateFunction { f, args, t, .. } => {
+            RuntimeExpr::AggregateFunction { args, t, .. } => {
                 // evaluate argument to aggregate function
                 match args[0](&batch) {
                     Ok(array) => {
@@ -363,11 +459,23 @@ impl Relation for AggregateRelation {
     }
 }
 
+macro_rules! array_from_scalar {
+    ($BUILDER:ident, $TY:ident, $ACCUM:expr) => {{
+        let mut b = $BUILDER::new(1);
+        match $ACCUM.result() {
+            Some(ScalarValue::$TY(n)) => b.push(*n)?,
+            Some(_) => panic!("unexpected type when creating array from scalar value"),
+            None => b.push_null()?,
+        };
+        Arc::new(b.finish())
+    }};
+}
+
 impl AggregateRelation {
     /// perform simple aggregate on entire columns without grouping logic
     fn without_group_by(&mut self) -> Result<Option<RecordBatch>> {
         let aggr_expr_count = self.aggr_expr.len();
-        let mut accumulator_set = create_accumulators(&self.aggr_expr);
+        let mut accumulator_set = create_accumulators(&self.aggr_expr)?;
 
         while let Some(batch) = self.input.borrow_mut().next()? {
             for i in 0..aggr_expr_count {
@@ -388,7 +496,7 @@ impl AggregateRelation {
                                     ))
                                 }
                             },
-                            Err(e) => {
+                            Err(_) => {
                                 return Err(ExecutionError::ExecutionError(
                                     "Failed to evaluate argument to aggregate function".to_string(),
                                 ))
@@ -407,22 +515,37 @@ impl AggregateRelation {
         let mut result_columns: Vec<ArrayRef> = vec![];
 
         for i in 0..aggr_expr_count {
-            let mut accum = accumulator_set.aggr_values[i].borrow();
+            let accum = accumulator_set.aggr_values[i].borrow();
             match accum.data_type() {
+                DataType::UInt8 => {
+                    result_columns.push(array_from_scalar!(UInt8Builder, UInt8, accum))
+                }
+                DataType::UInt16 => {
+                    result_columns.push(array_from_scalar!(UInt16Builder, UInt16, accum))
+                }
+                DataType::UInt32 => {
+                    result_columns.push(array_from_scalar!(UInt32Builder, UInt32, accum))
+                }
+                DataType::UInt64 => {
+                    result_columns.push(array_from_scalar!(UInt64Builder, UInt64, accum))
+                }
+                DataType::Int8 => result_columns.push(array_from_scalar!(Int8Builder, Int8, accum)),
+                DataType::Int16 => {
+                    result_columns.push(array_from_scalar!(Int16Builder, Int16, accum))
+                }
                 DataType::Int32 => {
-                    let b = Int32Builder::new(1);
-                    result_columns.push(Arc::new(b.finish()));
+                    result_columns.push(array_from_scalar!(Int32Builder, Int32, accum))
+                }
+                DataType::Int64 => {
+                    result_columns.push(array_from_scalar!(Int64Builder, Int64, accum))
+                }
+                DataType::Float32 => {
+                    result_columns.push(array_from_scalar!(Float32Builder, Float32, accum))
                 }
                 DataType::Float64 => {
-                    let mut b = Float64Builder::new(1);
-                    match accum.result() {
-                        Some(ScalarValue::Float64(n)) => b.push(*n)?,
-                        Some(_) => panic!(),
-                        None => b.push_null()?,
-                    };
-                    result_columns.push(Arc::new(b.finish()));
+                    result_columns.push(array_from_scalar!(Float64Builder, Float64, accum))
                 }
-                _ => unimplemented!(),
+                _ => return Err(ExecutionError::NotImplemented("tbd".to_string())),
             }
         }
 
@@ -451,24 +574,50 @@ impl AggregateRelation {
                 // create key
                 let key: Vec<GroupByScalar> = group_by_keys
                     .iter()
-                    .map(|col| {
-                        //TODO: use macro to make this less verbose
-                        match col.data_type() {
-                            DataType::Int32 => {
-                                let array = col.as_any().downcast_ref::<Int32Array>().unwrap();
-                                GroupByScalar::Int32(array.value(row))
-                            }
-                            DataType::Utf8 => {
-                                let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
-                                GroupByScalar::Utf8(String::from(
-                                    str::from_utf8(array.get_value(row)).unwrap(),
-                                ))
-                            }
-                            //TODO add all types
-                            _ => unimplemented!(),
+                    .map(|col| match col.data_type() {
+                        DataType::UInt8 => {
+                            let array = col.as_any().downcast_ref::<UInt8Array>().unwrap();
+                            Ok(GroupByScalar::UInt8(array.value(row)))
                         }
+                        DataType::UInt16 => {
+                            let array = col.as_any().downcast_ref::<UInt16Array>().unwrap();
+                            Ok(GroupByScalar::UInt16(array.value(row)))
+                        }
+                        DataType::UInt32 => {
+                            let array = col.as_any().downcast_ref::<UInt32Array>().unwrap();
+                            Ok(GroupByScalar::UInt32(array.value(row)))
+                        }
+                        DataType::UInt64 => {
+                            let array = col.as_any().downcast_ref::<UInt64Array>().unwrap();
+                            Ok(GroupByScalar::UInt64(array.value(row)))
+                        }
+                        DataType::Int8 => {
+                            let array = col.as_any().downcast_ref::<Int8Array>().unwrap();
+                            Ok(GroupByScalar::Int8(array.value(row)))
+                        }
+                        DataType::Int16 => {
+                            let array = col.as_any().downcast_ref::<Int16Array>().unwrap();
+                            Ok(GroupByScalar::Int16(array.value(row)))
+                        }
+                        DataType::Int32 => {
+                            let array = col.as_any().downcast_ref::<Int32Array>().unwrap();
+                            Ok(GroupByScalar::Int32(array.value(row)))
+                        }
+                        DataType::Int64 => {
+                            let array = col.as_any().downcast_ref::<Int64Array>().unwrap();
+                            Ok(GroupByScalar::Int64(array.value(row)))
+                        }
+                        DataType::Utf8 => {
+                            let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
+                            Ok(GroupByScalar::Utf8(String::from(
+                                str::from_utf8(array.get_value(row)).unwrap(),
+                            )))
+                        }
+                        _ => Err(ExecutionError::ExecutionError(
+                            "Unsupported GROUP BY data type".to_string(),
+                        )),
                     })
-                    .collect();
+                    .collect::<Result<Vec<GroupByScalar>>>()?;
 
                 //TODO: find more elegant way to write this instead of hacking around ownership issues
 
@@ -483,7 +632,7 @@ impl AggregateRelation {
 
                 if !updated {
                     let accumulator_set =
-                        Rc::new(RefCell::new(create_accumulators(&self.aggr_expr)));
+                        Rc::new(RefCell::new(create_accumulators(&self.aggr_expr)?));
                     {
                         let mut entry_mut = accumulator_set.borrow_mut();
                         update_accumulators(&batch, row, &mut entry_mut, &self.aggr_expr);
@@ -590,9 +739,7 @@ mod tests {
     use super::super::expression;
     use super::super::relation::DataSourceRelation;
     use super::*;
-    use arrow::csv;
     use arrow::datatypes::{DataType, Field, Schema};
-    use std::fs::File;
 
     #[test]
     fn min_lat() {
@@ -725,17 +872,17 @@ mod tests {
             .downcast_ref::<Float64Array>()
             .unwrap();
 
-        assert_eq!(3, a.value(0));
-        assert_eq!(1.0, min.value(0));
-        assert_eq!(2.0, max.value(0));
+        assert_eq!(2, a.value(0));
+        assert_eq!(3.3, min.value(0));
+        assert_eq!(5.5, max.value(0));
 
-        assert_eq!(1, a.value(1));
-        assert_eq!(1.1, min.value(1));
-        assert_eq!(2.2, max.value(1));
+        assert_eq!(3, a.value(1));
+        assert_eq!(1.0, min.value(1));
+        assert_eq!(2.0, max.value(1));
 
-        assert_eq!(2, a.value(2));
-        assert_eq!(3.3, min.value(2));
-        assert_eq!(5.5, max.value(2));
+        assert_eq!(1, a.value(2));
+        assert_eq!(1.1, min.value(2));
+        assert_eq!(2.2, max.value(2));
     }
 
     fn uk_cities_schema() -> Arc<Schema> {
@@ -754,9 +901,7 @@ mod tests {
     }
 
     fn load_csv(filename: &str, schema: &Arc<Schema>) -> Rc<RefCell<Relation>> {
-        let file = File::open(filename).unwrap();
-        let arrow_csv_reader = csv::Reader::new(file, schema.clone(), true, 1024, None);
-        let ds = CsvDataSource::new(schema.clone(), arrow_csv_reader);
+        let ds = CsvDataSource::new(filename, schema.clone(), 1024);
         Rc::new(RefCell::new(DataSourceRelation::new(Rc::new(
             RefCell::new(ds),
         ))))

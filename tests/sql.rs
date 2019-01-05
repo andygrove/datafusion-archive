@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cell::RefCell;
-use std::fs::File;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -21,7 +20,6 @@ extern crate arrow;
 extern crate datafusion;
 
 use arrow::array::*;
-use arrow::csv;
 use arrow::datatypes::{DataType, Field, Schema};
 
 use datafusion::execution::context::ExecutionContext;
@@ -46,9 +44,10 @@ fn csv_query_group_by_min_max() {
         Field::new("b", DataType::Float64, false),
     ]));
     register_csv(&mut ctx, "t1", "test/data/aggregate_test_1.csv", &schema);
+    //TODO add ORDER BY once supported, to make this test determistic
     let sql = "SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a";
     let actual = execute(&mut ctx, sql);
-    let expected = "3\t1.0\t2.0\n1\t1.1\t2.2\n2\t3.3\t5.5\n".to_string();
+    let expected = "2\t3.3\t5.5\n3\t1.0\t2.0\n1\t1.1\t2.2\n".to_string();
     assert_eq!(expected, actual);
 }
 
@@ -63,12 +62,7 @@ fn register_cities_csv(ctx: &mut ExecutionContext) {
 }
 
 fn register_csv(ctx: &mut ExecutionContext, name: &str, filename: &str, schema: &Arc<Schema>) {
-    let file = File::open(filename).unwrap();
-
-    let arrow_csv_reader = csv::Reader::new(file, schema.clone(), true, 1024, None);
-
-    let csv_datasource = CsvDataSource::new(schema.clone(), arrow_csv_reader);
-
+    let csv_datasource = CsvDataSource::new(filename, schema.clone(), 1024);
     ctx.register_datasource(name, Rc::new(RefCell::new(csv_datasource)));
 }
 

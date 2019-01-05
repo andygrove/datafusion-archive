@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Logical query plan
+//! Data sources
 
+use std::fs::File;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -28,13 +29,20 @@ pub trait DataSource {
     fn next(&mut self) -> Result<Option<RecordBatch>>;
 }
 
+/// CSV data source
 pub struct CsvDataSource {
     schema: Arc<Schema>,
     reader: csv::Reader,
 }
 
 impl CsvDataSource {
-    pub fn new(schema: Arc<Schema>, reader: csv::Reader) -> Self {
+    pub fn new(filename: &str, schema: Arc<Schema>, batch_size: usize) -> Self {
+        let file = File::open(filename).unwrap();
+        let reader = csv::Reader::new(file, schema.clone(), true, batch_size, None);
+        Self { schema, reader }
+    }
+
+    pub fn from_reader(schema: Arc<Schema>, reader: csv::Reader) -> Self {
         Self { schema, reader }
     }
 }

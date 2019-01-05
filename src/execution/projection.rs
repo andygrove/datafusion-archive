@@ -78,9 +78,7 @@ mod tests {
     use super::super::expression;
     use super::super::relation::DataSourceRelation;
     use super::*;
-    use arrow::csv;
     use arrow::datatypes::{DataType, Field, Schema};
-    use std::fs::File;
 
     #[test]
     fn project_all_columns() {
@@ -88,9 +86,7 @@ mod tests {
             Field::new("id", DataType::Int32, false),
             Field::new("first_name", DataType::Utf8, false),
         ]));
-        let file = File::open("test/data/people.csv").unwrap();
-        let arrow_csv_reader = csv::Reader::new(file, schema.clone(), true, 1024, None);
-        let ds = CsvDataSource::new(schema.clone(), arrow_csv_reader);
+        let ds = CsvDataSource::new("test/data/people.csv", schema.clone(), 1024);
         let relation = Rc::new(RefCell::new(DataSourceRelation::new(Rc::new(
             RefCell::new(ds),
         ))));
