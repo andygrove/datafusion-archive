@@ -25,7 +25,7 @@ use arrow::datatypes::{DataType, Field, Schema};
 use datafusion::execution::context::ExecutionContext;
 use datafusion::execution::datasource::CsvDataSource;
 
-/// This example shows the steps to parse, plan, and execute simple SQL in the current process
+/// This example demonstrates executing a simple query against an Arrow data source and fetching results
 fn main() {
     // create local execution context
     let mut ctx = ExecutionContext::new();
@@ -45,45 +45,46 @@ fn main() {
     let sql = "SELECT city, lat, lng FROM cities WHERE lat > 51.0 AND lat < 53";
 
     // execute the query
-    let results = ctx.sql(&sql).unwrap();
+    let relation = ctx.sql(&sql).unwrap();
 
-    // display the results
-    let mut ref_mut = results.borrow_mut();
-    match ref_mut.next().unwrap() {
-        Some(batch) => {
+    // display the relation
+    let mut results = relation.borrow_mut();
+
+    while let Some(batch) = results.next().unwrap() {
+
+        println!(
+            "RecordBatch has {} rows and {} columns",
+            batch.num_rows(),
+            batch.num_columns()
+        );
+
+        let city = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<BinaryArray>()
+            .unwrap();
+
+        let lat = batch
+            .column(1)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .unwrap();
+
+        let lng = batch
+            .column(2)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .unwrap();
+
+        for i in 0..batch.num_rows() {
+            let city_name: String = String::from_utf8(city.get_value(i).to_vec()).unwrap();
+
             println!(
-                "First batch has {} rows and {} columns",
-                batch.num_rows(),
-                batch.num_columns()
+                "City: {}, Latitude: {}, Longitude: {}",
+                city_name,
+                lat.value(i),
+                lng.value(i),
             );
-
-            let city = batch
-                .column(0)
-                .as_any()
-                .downcast_ref::<BinaryArray>()
-                .unwrap();
-            let lat = batch
-                .column(1)
-                .as_any()
-                .downcast_ref::<Float64Array>()
-                .unwrap();
-            let lng = batch
-                .column(2)
-                .as_any()
-                .downcast_ref::<Float64Array>()
-                .unwrap();
-
-            for i in 0..batch.num_rows() {
-                let city_name: String = String::from_utf8(city.get_value(i).to_vec()).unwrap();
-
-                println!(
-                    "City: {}, Latitude: {}, Longitude: {}",
-                    city_name,
-                    lat.value(i),
-                    lng.value(i),
-                );
-            }
         }
-        _ => println!("No results"),
     }
 }

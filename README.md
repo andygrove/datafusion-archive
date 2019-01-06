@@ -9,9 +9,9 @@
 
 <img src="img/datafusion-logo.png" width="256" />
 
-DataFusion is an attempt at building a modern distributed compute platform in Rust, leveraging [Apache Arrow](https://arrow.apache.org/) as the memory model and execution engine.
+DataFusion is an attempt at building a modern distributed compute platform in Rust, leveraging [Apache Arrow](https://arrow.apache.org/) as the memory model.
 
-See my article [How To Build a Modern Distributed Compute Platform](https://andygrove.io/how_to_build_a_modern_distributed_compute_platform/) to learn about the design and my motivation for building this. The TL;DR is that this project is a great way to learn about building distributed systems but there are plenty of better choices if you need something mature and supported.
+See my article [How To Build a Modern Distributed Compute Platform](https://andygrove.io/how_to_build_a_modern_distributed_compute_platform/) to learn about the design and my motivation for building this. The TL;DR is that this project is a great way to learn about building a query engine but this is quite early and not usable for any real world work just yet.
 
 # Status
 
@@ -27,25 +27,68 @@ datafusion = "0.5.2"
 Here is a brief example for running a SQL query against a CSV file. See the [examples](examples) directory for full examples.
 
 ```rust
-// create local execution context
-let mut ctx = ExecutionContext::new();
+fn main() {
+    // create local execution context
+    let mut ctx = ExecutionContext::new();
 
-// define schema for data source (csv file)
-let schema = Arc::new(Schema::new(vec![
-    Field::new("city", DataType::Utf8, false),
-    Field::new("lat", DataType::Float64, false),
-    Field::new("lng", DataType::Float64, false),
-]));
+    // define schema for data source (csv file)
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("city", DataType::Utf8, false),
+        Field::new("lat", DataType::Float64, false),
+        Field::new("lng", DataType::Float64, false),
+    ]));
 
-// register csv file with the execution context
-let csv_datasource = CsvDataSource::new("test/data/uk_cities.csv", schema.clone(), 1024);
-ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)));
+    // register csv file with the execution context
+    let csv_datasource = CsvDataSource::new("test/data/uk_cities.csv", schema.clone(), 1024);
+    ctx.register_datasource("cities", Rc::new(RefCell::new(csv_datasource)));
 
-// simple projection and selection
-let sql = "SELECT city, lat, lng FROM cities WHERE lat > 51.0 AND lat < 53";
+    // simple projection and selection
+    let sql = "SELECT city, lat, lng FROM cities WHERE lat > 51.0 AND lat < 53";
 
-// execute the query
-let results = ctx.sql(&sql).unwrap();
+    // execute the query
+    let relation = ctx.sql(&sql).unwrap();
+
+    // display the relation
+    let mut results = relation.borrow_mut();
+
+    while let Some(batch) = results.next().unwrap() {
+
+        println!(
+            "RecordBatch has {} rows and {} columns",
+            batch.num_rows(),
+            batch.num_columns()
+        );
+
+        let city = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<BinaryArray>()
+            .unwrap();
+
+        let lat = batch
+            .column(1)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .unwrap();
+
+        let lng = batch
+            .column(2)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .unwrap();
+
+        for i in 0..batch.num_rows() {
+            let city_name: String = String::from_utf8(city.get_value(i).to_vec()).unwrap();
+
+            println!(
+                "City: {}, Latitude: {}, Longitude: {}",
+                city_name,
+                lat.value(i),
+                lng.value(i),
+            );
+        }
+    }
+}
 ```
 
 # Roadmap
