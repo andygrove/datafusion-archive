@@ -700,7 +700,7 @@ impl AggregateRelation {
                         DataType::Utf8 => {
                             let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
                             Ok(GroupByScalar::Utf8(String::from(
-                                str::from_utf8(array.get_value(row)).unwrap(),
+                                str::from_utf8(array.value(row)).unwrap(),
                             )))
                         }
                         _ => Err(ExecutionError::ExecutionError(

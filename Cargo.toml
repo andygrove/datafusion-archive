@@ -22,47 +22,18 @@ path = "src/lib.rs"
 name = "console"
 path = "src/bin/console/main.rs"
 
-#[[bin]]
-#name = "worker"
-#path = "src/bin/worker/main.rs"
-
 [dependencies]
-#byteorder = "1"
-#bytes = "0.4"
 clap = "2.31.2"
-#csv = "1.0.0"
 fnv = "1.0.3"
-#datafusion-arrow = { path = "../datafusion-arrow" }
-datafusion-arrow = "0.12.4"
+
+arrow = { path = "../arrow/rust/arrow" }
+parquet = { path = "../arrow/rust/parquet" }
+
 datafusion-rustyline = "2.0.0-alpha-20180628"
-#json = "0.11.13"
-#lazy_static = "1.0"
-#parquet = "0.4.1"
 serde = { version = "1.0.80", features = ["alloc", "rc"] }
 serde_derive = "1.0.80"
 serde_json = "1.0.33"
-
 sqlparser = "0.1.9"
 
 [dev-dependencies]
 criterion = "0.2.0"
-
-#[[bench]]
-#name = "dataframe_bench"
-#harness = false
-
-#[[bench]]
-#name = "sql_bench"
-#harness = false
-
-#[[bench]]
-#name = "read_csv"
-#harness = false
-
-#[[bench]]
-#name = "filter_primitive"
-#harness = false
-#
-#[[bench]]
-#name = "udf_udt"
-#harness = false

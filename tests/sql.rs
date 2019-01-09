@@ -113,7 +113,7 @@ fn result_str(results: &Rc<RefCell<Relation>>) -> String {
                     }
                     DataType::Utf8 => {
                         let array = column.as_any().downcast_ref::<BinaryArray>().unwrap();
-                        let s = String::from_utf8(array.get_value(row_index).to_vec()).unwrap();
+                        let s = String::from_utf8(array.value(row_index).to_vec()).unwrap();
 
                         str.push_str(&format!("{:?}", s));
                     }
