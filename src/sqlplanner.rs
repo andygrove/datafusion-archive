@@ -170,7 +170,7 @@ impl SqlToRel {
                                 _ => {
                                     return Err(ExecutionError::General(String::from(
                                         "LIMIT parameter is not a number",
-                                    )))
+                                    )));
                                 }
                             };
                             LogicalPlan::Limit {
@@ -292,7 +292,7 @@ impl SqlToRel {
                             "No common supertype found for binary operator {:?} \
                              with input types {:?} and {:?}",
                             operator, left_type, right_type
-                        )))
+                        )));
                     }
                 }
             }

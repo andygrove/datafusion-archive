@@ -247,35 +247,35 @@ impl AggregateFunction for SumFunction {
             self.value = value.clone();
         } else if value.is_some() {
             self.value = match (&self.value, value) {
-                (Some(ScalarValue::UInt8(a)), Some(ScalarValue::UInt8( b))) => {
-                    Some(ScalarValue::UInt8(*a +  b))
+                (Some(ScalarValue::UInt8(a)), Some(ScalarValue::UInt8(b))) => {
+                    Some(ScalarValue::UInt8(*a + b))
                 }
-                (Some(ScalarValue::UInt16(a)), Some(ScalarValue::UInt16( b))) => {
+                (Some(ScalarValue::UInt16(a)), Some(ScalarValue::UInt16(b))) => {
                     Some(ScalarValue::UInt16(*a + b))
                 }
-                (Some(ScalarValue::UInt32(a)), Some(ScalarValue::UInt32( b))) => {
-                    Some(ScalarValue::UInt32(*a +  b))
+                (Some(ScalarValue::UInt32(a)), Some(ScalarValue::UInt32(b))) => {
+                    Some(ScalarValue::UInt32(*a + b))
                 }
-                (Some(ScalarValue::UInt64(a)), Some(ScalarValue::UInt64( b))) => {
-                    Some(ScalarValue::UInt64(*a +  b))
+                (Some(ScalarValue::UInt64(a)), Some(ScalarValue::UInt64(b))) => {
+                    Some(ScalarValue::UInt64(*a + b))
                 }
-                (Some(ScalarValue::Int8(a)), Some(ScalarValue::Int8( b))) => {
-                    Some(ScalarValue::Int8(*a +  b))
+                (Some(ScalarValue::Int8(a)), Some(ScalarValue::Int8(b))) => {
+                    Some(ScalarValue::Int8(*a + b))
                 }
-                (Some(ScalarValue::Int16(a)), Some(ScalarValue::Int16( b))) => {
-                    Some(ScalarValue::Int16(*a +  b))
+                (Some(ScalarValue::Int16(a)), Some(ScalarValue::Int16(b))) => {
+                    Some(ScalarValue::Int16(*a + b))
                 }
-                (Some(ScalarValue::Int32(a)), Some(ScalarValue::Int32( b))) => {
-                    Some(ScalarValue::Int32(*a +  b))
+                (Some(ScalarValue::Int32(a)), Some(ScalarValue::Int32(b))) => {
+                    Some(ScalarValue::Int32(*a + b))
                 }
-                (Some(ScalarValue::Int64(a)), Some(ScalarValue::Int64( b))) => {
-                    Some(ScalarValue::Int64(*a +  b))
+                (Some(ScalarValue::Int64(a)), Some(ScalarValue::Int64(b))) => {
+                    Some(ScalarValue::Int64(*a + b))
                 }
-                (Some(ScalarValue::Float32(a)), Some(ScalarValue::Float32( b))) => {
-                    Some(ScalarValue::Float32(a + * b))
+                (Some(ScalarValue::Float32(a)), Some(ScalarValue::Float32(b))) => {
+                    Some(ScalarValue::Float32(a + *b))
                 }
-                (Some(ScalarValue::Float64(a)), Some(ScalarValue::Float64( b))) => {
-                    Some(ScalarValue::Float64(a + * b))
+                (Some(ScalarValue::Float64(a)), Some(ScalarValue::Float64(b))) => {
+                    Some(ScalarValue::Float64(a + *b))
                 }
                 _ => panic!("unsupported data type for SUM"),
             }
@@ -723,20 +723,20 @@ impl AggregateRelation {
                                 _ => {
                                     return Err(ExecutionError::NotImplemented(
                                         "Unsupported aggregate function".to_string(),
-                                    ))
+                                    ));
                                 }
                             },
                             Err(_) => {
                                 return Err(ExecutionError::ExecutionError(
                                     "Failed to evaluate argument to aggregate function".to_string(),
-                                ))
+                                ));
                             }
                         }
                     }
                     _ => {
                         return Err(ExecutionError::General(
                             "Invalid aggregate expression".to_string(),
-                        ))
+                        ));
                     }
                 }
             }
@@ -1070,7 +1070,7 @@ mod tests {
             },
             &schema,
         )
-            .unwrap();
+        .unwrap();
 
         let aggr_schema = Arc::new(Schema::new(vec![
             Field::new("a", DataType::Int32, false),
