@@ -170,7 +170,7 @@ impl SqlToRel {
                                 _ => {
                                     return Err(ExecutionError::General(String::from(
                                         "LIMIT parameter is not a number",
-                                    )))
+                                    )));
                                 }
                             };
                             LogicalPlan::Limit {
@@ -273,7 +273,9 @@ impl SqlToRel {
                     &SQLOperator::Modulus => Operator::Modulus,
                     &SQLOperator::And => Operator::And,
                     &SQLOperator::Or => Operator::Or,
+                    &SQLOperator::Not => Operator::Not,
                     &SQLOperator::Like => Operator::Like,
+                    &SQLOperator::NotLike => Operator::NotLike,
                 };
 
                 let left_expr = self.sql_to_rex(&left, &schema)?;
@@ -292,7 +294,7 @@ impl SqlToRel {
                             "No common supertype found for binary operator {:?} \
                              with input types {:?} and {:?}",
                             operator, left_type, right_type
-                        )))
+                        )));
                     }
                 }
             }

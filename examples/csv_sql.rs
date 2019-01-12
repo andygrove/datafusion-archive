@@ -51,7 +51,6 @@ fn main() {
     let mut results = relation.borrow_mut();
 
     while let Some(batch) = results.next().unwrap() {
-
         println!(
             "RecordBatch has {} rows and {} columns",
             batch.num_rows(),
