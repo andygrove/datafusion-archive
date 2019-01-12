@@ -85,7 +85,7 @@ fn filter(array: &Arc<Array>, filter: &BooleanArray) -> Result<ArrayRef> {
             let mut builder = Float64Array::builder(b.len());
             for i in 0..b.len() {
                 if filter.value(i) {
-                    builder.push(b.value(i))?;
+                    builder.append_value(b.value(i))?;
                 }
             }
             Ok(Arc::new(builder.finish()))

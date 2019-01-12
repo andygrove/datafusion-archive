@@ -232,7 +232,7 @@ macro_rules! literal_array {
                 let capacity = batch.num_rows();
                 let mut builder = $ARRAY_TYPE::builder(capacity);
                 for _ in 0..capacity {
-                    builder.push(nn)?;
+                    builder.append_value(nn)?;
                 }
                 let array = builder.finish();
                 Ok(Arc::new(array) as ArrayRef)
@@ -253,9 +253,9 @@ macro_rules! cast_column {
                     let mut builder = $TO_TYPE::builder(batch.num_rows());
                     for i in 0..batch.num_rows() {
                         if array.is_null(i) {
-                            builder.push_null()?;
+                            builder.append_null()?;
                         } else {
-                            builder.push(array.value(i) as $DT)?;
+                            builder.append_value(array.value(i) as $DT)?;
                         }
                     }
                     Ok(Arc::new(builder.finish()) as ArrayRef)
@@ -354,7 +354,7 @@ pub fn compile_scalar_expr(
                                 f: Rc::new(move |batch: &RecordBatch| {
                                     let mut b = Float64Array::builder(batch.num_rows());
                                     for _ in 0..batch.num_rows() {
-                                        b.push(nn as f64)?;
+                                        b.append_value(nn as f64)?;
                                     }
                                     Ok(Arc::new(b.finish()) as ArrayRef)
                                 }),

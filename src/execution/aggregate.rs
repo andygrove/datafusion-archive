@@ -636,10 +636,10 @@ macro_rules! array_from_scalar {
         let mut err = false;
         match $ACCUM.result() {
             Some(ScalarValue::$TY(n)) => {
-                b.push(*n)?;
+                b.append_value(*n)?;
             }
             None => {
-                b.push_null()?;
+                b.append_null()?;
             }
             Some(_) => {
                 err = true;
@@ -662,7 +662,7 @@ macro_rules! group_array_from_map_entries {
         let mut err = false;
         for j in 0..$ENTRIES.len() {
             match $ENTRIES[j].k[$COL_INDEX] {
-                GroupByScalar::$TY(n) => builder.push(n).unwrap(),
+                GroupByScalar::$TY(n) => builder.append_value(n).unwrap(),
                 _ => err = true,
             }
         }
@@ -683,8 +683,8 @@ macro_rules! aggr_array_from_map_entries {
         let mut err = false;
         for j in 0..$ENTRIES.len() {
             match $ENTRIES[j].v[$COL_INDEX] {
-                Some(ScalarValue::$TY(n)) => builder.push(n).unwrap(),
-                None => builder.push_null().unwrap(),
+                Some(ScalarValue::$TY(n)) => builder.append_value(n).unwrap(),
+                None => builder.append_null().unwrap(),
                 _ => err = true,
             }
         }
@@ -908,10 +908,10 @@ impl AggregateRelation {
                 DataType::Int32 => group_array_from_map_entries!(Int32Builder, Int32, entries, i),
                 DataType::Int64 => group_array_from_map_entries!(Int64Builder, Int64, entries, i),
                 DataType::Utf8 => {
-                    let mut builder = BinaryArrayBuilder::new(1);
+                    let mut builder = BinaryBuilder::new(1);
                     for j in 0..entries.len() {
                         match &entries[j].k[i] {
-                            GroupByScalar::Utf8(s) => builder.push_string(&s).unwrap(),
+                            GroupByScalar::Utf8(s) => builder.append_string(&s).unwrap(),
                             _ => {}
                         }
                     }
