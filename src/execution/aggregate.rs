@@ -581,20 +581,20 @@ impl AggregateRelation {
                                 _ => {
                                     return Err(ExecutionError::NotImplemented(
                                         "Unsupported aggregate function".to_string(),
-                                    ))
+                                    ));
                                 }
                             },
                             Err(_) => {
                                 return Err(ExecutionError::ExecutionError(
                                     "Failed to evaluate argument to aggregate function".to_string(),
-                                ))
+                                ));
                             }
                         }
                     }
                     _ => {
                         return Err(ExecutionError::General(
                             "Invalid aggregate expression".to_string(),
-                        ))
+                        ));
                     }
                 }
             }

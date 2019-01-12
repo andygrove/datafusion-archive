@@ -78,7 +78,9 @@ pub enum Operator {
     Modulus,
     And,
     Or,
+    Not,
     Like,
+    NotLike,
 }
 
 impl Operator {
