@@ -25,8 +25,8 @@ path = "src/bin/console/main.rs"
 [dependencies]
 clap = "2.31.2"
 fnv = "1.0.3"
-arrow = { path = "../arrow/rust/arrow" }
-parquet = { path = "../arrow/rust/parquet" }
+arrow = "0.12.0"
+parquet = "0.12.0"
 datafusion-rustyline = "2.0.0-alpha-20180628"
 serde = { version = "1.0.80", features = ["alloc", "rc"] }
 serde_derive = "1.0.80"
