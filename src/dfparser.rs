@@ -107,7 +107,7 @@ impl DFParser {
                 Some(Token::Identifier(id)) => {
                     // parse optional column list (schema)
                     let mut columns = vec![];
-                    if self.parser.consume_token(&Token::LParen)? {
+                    if self.parser.consume_token(&Token::LParen) {
                         loop {
                             if let Some(Token::Identifier(column_name)) = self.parser.next_token() {
                                 if let Ok(data_type) = self.parser.parse_data_type() {
