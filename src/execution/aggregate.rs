@@ -222,6 +222,75 @@ impl AggregateFunction for MaxFunction {
     }
 }
 
+#[derive(Debug)]
+struct SumFunction {
+    data_type: DataType,
+    value: Option<ScalarValue>,
+}
+
+impl SumFunction {
+    fn new(data_type: &DataType) -> Self {
+        Self {
+            data_type: data_type.clone(),
+            value: None,
+        }
+    }
+}
+
+impl AggregateFunction for SumFunction {
+    fn name(&self) -> &str {
+        "sum"
+    }
+
+    fn accumulate_scalar(&mut self, value: &Option<ScalarValue>) {
+        if self.value.is_none() {
+            self.value = value.clone();
+        } else if value.is_some() {
+            self.value = match (&self.value, value) {
+                (Some(ScalarValue::UInt8(a)), Some(ScalarValue::UInt8(b))) => {
+                    Some(ScalarValue::UInt8(*a + b))
+                }
+                (Some(ScalarValue::UInt16(a)), Some(ScalarValue::UInt16(b))) => {
+                    Some(ScalarValue::UInt16(*a + b))
+                }
+                (Some(ScalarValue::UInt32(a)), Some(ScalarValue::UInt32(b))) => {
+                    Some(ScalarValue::UInt32(*a + b))
+                }
+                (Some(ScalarValue::UInt64(a)), Some(ScalarValue::UInt64(b))) => {
+                    Some(ScalarValue::UInt64(*a + b))
+                }
+                (Some(ScalarValue::Int8(a)), Some(ScalarValue::Int8(b))) => {
+                    Some(ScalarValue::Int8(*a + b))
+                }
+                (Some(ScalarValue::Int16(a)), Some(ScalarValue::Int16(b))) => {
+                    Some(ScalarValue::Int16(*a + b))
+                }
+                (Some(ScalarValue::Int32(a)), Some(ScalarValue::Int32(b))) => {
+                    Some(ScalarValue::Int32(*a + b))
+                }
+                (Some(ScalarValue::Int64(a)), Some(ScalarValue::Int64(b))) => {
+                    Some(ScalarValue::Int64(*a + b))
+                }
+                (Some(ScalarValue::Float32(a)), Some(ScalarValue::Float32(b))) => {
+                    Some(ScalarValue::Float32(a + *b))
+                }
+                (Some(ScalarValue::Float64(a)), Some(ScalarValue::Float64(b))) => {
+                    Some(ScalarValue::Float64(a + *b))
+                }
+                _ => panic!("unsupported data type for SUM"),
+            }
+        }
+    }
+
+    fn result(&self) -> &Option<ScalarValue> {
+        &self.value
+    }
+
+    fn data_type(&self) -> &DataType {
+        &self.data_type
+    }
+}
+
 struct AccumulatorSet {
     aggr_values: Vec<Rc<RefCell<AggregateFunction>>>,
 }
@@ -256,6 +325,8 @@ fn create_accumulators(aggr_expr: &Vec<RuntimeExpr>) -> Result<AccumulatorSet> {
                     AggregateType::Min => Ok(Rc::new(RefCell::new(MinFunction::new(t)))
                         as Rc<RefCell<AggregateFunction>>),
                     AggregateType::Max => Ok(Rc::new(RefCell::new(MaxFunction::new(t)))
+                        as Rc<RefCell<AggregateFunction>>),
+                    AggregateType::Sum => Ok(Rc::new(RefCell::new(SumFunction::new(t)))
                         as Rc<RefCell<AggregateFunction>>),
                     _ => Err(ExecutionError::ExecutionError(
                         "unsupported aggregate function".to_string(),
@@ -406,6 +477,74 @@ fn array_max(array: ArrayRef, dt: &DataType) -> Result<Option<ScalarValue>> {
     }
 }
 
+fn array_sum(array: ArrayRef, dt: &DataType) -> Result<Option<ScalarValue>> {
+    match dt {
+        DataType::UInt8 => {
+            match array_ops::sum(array.as_any().downcast_ref::<UInt8Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt8(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt16 => {
+            match array_ops::sum(array.as_any().downcast_ref::<UInt16Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt16(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt32 => {
+            match array_ops::sum(array.as_any().downcast_ref::<UInt32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt32(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::UInt64 => {
+            match array_ops::sum(array.as_any().downcast_ref::<UInt64Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::UInt64(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int8 => {
+            match array_ops::sum(array.as_any().downcast_ref::<Int8Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int8(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int16 => {
+            match array_ops::sum(array.as_any().downcast_ref::<Int16Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int16(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int32 => {
+            match array_ops::sum(array.as_any().downcast_ref::<Int32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int32(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Int64 => {
+            match array_ops::sum(array.as_any().downcast_ref::<Int64Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Int64(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Float32 => {
+            match array_ops::sum(array.as_any().downcast_ref::<Float32Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Float32(n))),
+                None => Ok(None),
+            }
+        }
+        DataType::Float64 => {
+            match array_ops::sum(array.as_any().downcast_ref::<Float64Array>().unwrap()) {
+                Some(n) => Ok(Some(ScalarValue::Float64(n))),
+                None => Ok(None),
+            }
+        }
+        _ => Err(ExecutionError::ExecutionError(
+            "Unsupported data type for SUM".to_string(),
+        )),
+    }
+}
+
 fn update_accumulators(
     batch: &RecordBatch,
     row: usize,
@@ -497,10 +636,10 @@ macro_rules! array_from_scalar {
         let mut err = false;
         match $ACCUM.result() {
             Some(ScalarValue::$TY(n)) => {
-                b.push(*n)?;
+                b.append_value(*n)?;
             }
             None => {
-                b.push_null()?;
+                b.append_null()?;
             }
             Some(_) => {
                 err = true;
@@ -523,7 +662,7 @@ macro_rules! group_array_from_map_entries {
         let mut err = false;
         for j in 0..$ENTRIES.len() {
             match $ENTRIES[j].k[$COL_INDEX] {
-                GroupByScalar::$TY(n) => builder.push(n).unwrap(),
+                GroupByScalar::$TY(n) => builder.append_value(n).unwrap(),
                 _ => err = true,
             }
         }
@@ -544,8 +683,8 @@ macro_rules! aggr_array_from_map_entries {
         let mut err = false;
         for j in 0..$ENTRIES.len() {
             match $ENTRIES[j].v[$COL_INDEX] {
-                Some(ScalarValue::$TY(n)) => builder.push(n).unwrap(),
-                None => builder.push_null().unwrap(),
+                Some(ScalarValue::$TY(n)) => builder.append_value(n).unwrap(),
+                None => builder.append_null().unwrap(),
                 _ => err = true,
             }
         }
@@ -577,6 +716,9 @@ impl AggregateRelation {
                                 }
                                 AggregateType::Max => {
                                     accumulator_set.accumulate_scalar(i, array_max(array, &t)?)
+                                }
+                                AggregateType::Sum => {
+                                    accumulator_set.accumulate_scalar(i, array_sum(array, &t)?)
                                 }
                                 _ => {
                                     return Err(ExecutionError::NotImplemented(
@@ -700,7 +842,7 @@ impl AggregateRelation {
                         DataType::Utf8 => {
                             let array = col.as_any().downcast_ref::<BinaryArray>().unwrap();
                             Ok(GroupByScalar::Utf8(String::from(
-                                str::from_utf8(array.get_value(row)).unwrap(),
+                                str::from_utf8(array.value(row)).unwrap(),
                             )))
                         }
                         _ => Err(ExecutionError::ExecutionError(
@@ -766,10 +908,10 @@ impl AggregateRelation {
                 DataType::Int32 => group_array_from_map_entries!(Int32Builder, Int32, entries, i),
                 DataType::Int64 => group_array_from_map_entries!(Int64Builder, Int64, entries, i),
                 DataType::Utf8 => {
-                    let mut builder = BinaryArrayBuilder::new(1);
+                    let mut builder = BinaryBuilder::new(1);
                     for j in 0..entries.len() {
                         match &entries[j].k[i] {
-                            GroupByScalar::Utf8(s) => builder.push_string(&s).unwrap(),
+                            GroupByScalar::Utf8(s) => builder.append_string(&s).unwrap(),
                             _ => {}
                         }
                     }
@@ -889,7 +1031,7 @@ mod tests {
     }
 
     #[test]
-    fn test_min_max_group_by() {
+    fn test_min_max_sum_group_by() {
         let schema = aggr_test_schema();
         let relation = load_csv("test/data/aggregate_test_1.csv", &schema);
 
@@ -919,20 +1061,32 @@ mod tests {
         )
         .unwrap();
 
+        let sum_expr = expression::compile_expr(
+            &context,
+            &Expr::AggregateFunction {
+                name: String::from("sum"),
+                args: vec![Expr::Column(1)],
+                return_type: DataType::Float64,
+            },
+            &schema,
+        )
+        .unwrap();
+
         let aggr_schema = Arc::new(Schema::new(vec![
             Field::new("a", DataType::Int32, false),
             Field::new("min", DataType::Float64, false),
             Field::new("max", DataType::Float64, false),
+            Field::new("sum", DataType::Float64, false),
         ]));
 
         let mut projection = AggregateRelation::new(
             aggr_schema,
             relation,
             vec![group_by_expr],
-            vec![min_expr, max_expr],
+            vec![min_expr, max_expr, sum_expr],
         );
         let batch = projection.next().unwrap().unwrap();
-        assert_eq!(3, batch.num_columns());
+        assert_eq!(4, batch.num_columns());
         assert_eq!(3, batch.num_rows());
 
         let a = batch
@@ -950,18 +1104,26 @@ mod tests {
             .as_any()
             .downcast_ref::<Float64Array>()
             .unwrap();
+        let sum = batch
+            .column(3)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .unwrap();
 
         assert_eq!(2, a.value(0));
         assert_eq!(3.3, min.value(0));
         assert_eq!(5.5, max.value(0));
+        assert_eq!(13.2, sum.value(0));
 
         assert_eq!(3, a.value(1));
         assert_eq!(1.0, min.value(1));
         assert_eq!(2.0, max.value(1));
+        assert_eq!(3.0, sum.value(1));
 
         assert_eq!(1, a.value(2));
         assert_eq!(1.1, min.value(2));
         assert_eq!(2.2, max.value(2));
+        assert_eq!(3.3000000000000003, sum.value(2));
     }
 
     fn uk_cities_schema() -> Arc<Schema> {

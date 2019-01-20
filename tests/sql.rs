@@ -66,6 +66,16 @@ fn csv_query_group_by_string_min_max() {
     assert_eq!(expected, actual);
 }
 
+#[test]
+fn csv_query_cast() {
+    let mut ctx = ExecutionContext::new();
+    register_cities_csv(&mut ctx);
+    let sql = "SELECT CAST(lat AS int) FROM cities";
+    let actual = execute(&mut ctx, sql);
+    let expected= "53\n52\n51\n50\n51\n51\n51\n51\n52\n52\n52\n51\n57\n51\n53\n55\n51\n50\n52\n53\n50\n53\n55\n50\n52\n51\n51\n54\n50\n50\n53\n54\n50\n52\n52\n57\n".to_string();
+    assert_eq!(expected, actual);
+}
+
 fn register_cities_csv(ctx: &mut ExecutionContext) {
     let schema = Arc::new(Schema::new(vec![
         Field::new("city", DataType::Utf8, false),
@@ -113,7 +123,7 @@ fn result_str(results: &Rc<RefCell<Relation>>) -> String {
                     }
                     DataType::Utf8 => {
                         let array = column.as_any().downcast_ref::<BinaryArray>().unwrap();
-                        let s = String::from_utf8(array.get_value(row_index).to_vec()).unwrap();
+                        let s = String::from_utf8(array.value(row_index).to_vec()).unwrap();
 
                         str.push_str(&format!("{:?}", s));
                     }

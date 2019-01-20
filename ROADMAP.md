@@ -14,7 +14,7 @@ I recently updated the code to use my fork of Arrow and this required considerab
 - [x] Selection
 - [x] Simple aggregate queries with optional GROUP BY
 - [x] Support for MIN/MAX
-- [ ] Support for SUM
+- [x] Support for SUM
 - [ ] Support for COUNT
 - [ ] Support for COUNT(DISTINCT)
 - [ ] ORDER BY
