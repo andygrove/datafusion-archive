@@ -252,7 +252,7 @@ impl AggregateFunction for SumFunction {
                 (Null, _) => panic!("Cannot SUM() Null values"),
                 (Boolean(_), _) => panic!("Cannot SUM() Boolean values"),
 
-                /currently can only SUM() like types
+                //currently can only SUM() like types
                 //in the future this could be relaxed using Into() or similar
                 (UInt8(a), UInt8(b)) => Some(UInt8(*a + b)),
                 (UInt16(a), UInt16(b)) => Some(UInt16(*a + b)),
