@@ -11,6 +11,8 @@
 
 DataFusion is an attempt at building a modern distributed compute platform in Rust, leveraging [Apache Arrow](https://arrow.apache.org/) as the memory model.
 
+<b>NOTE: DataFusion was donated to the Apache Arrow project in February 2019. Source is [here](https://github.com/apache/arrow/tree/master/rust/datafusion).</b>
+
 See my article [How To Build a Modern Distributed Compute Platform](https://andygrove.io/how_to_build_a_modern_distributed_compute_platform/) to learn about the design and my motivation for building this. The TL;DR is that this project is a great way to learn about building a query engine but this is quite early and not usable for any real world work just yet.
 
 # Status
